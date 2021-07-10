@@ -48,3 +48,6 @@ default = [ "std", "parallel" ]
 std = ["ark-serialize/std", "ark-ff/std", "ark-poly/std", "ark-sponge/std", "ark-crypto-primitives/std", "ark-std/std", "ark-relations/std", "ark-r1cs-std/std"]
 r1cs = ["ark-relations", "ark-r1cs-std", "ark-sponge/r1cs"]
 parallel = ["std", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon"]
+
+[patch.crates-io]
+ark-crypto-primitives = {git = "https://github.com/tsunrise/crypto-primitives.git", branch="mt_refactor2"}

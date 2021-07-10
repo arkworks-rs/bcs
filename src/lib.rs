@@ -8,3 +8,15 @@
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
+
+/// A public coin, leaf handling, interactive oracle proof protocol.
+pub mod iop;
+
+/// A public coin interactive protocol where prover sends RS-code.
+/// This module also includes a compiler to convert any RS-IOP to IOP.
+pub mod rs_iop;
+
+/// A compiler to convert any public coin IOP to non-interactive one using BCS transform.
+/// Source: [BCS16](https://eprint.iacr.org/2016/116)
+pub mod bcs;
+
