@@ -20,3 +20,6 @@ pub mod rs_iop;
 /// Source: [BCS16](https://eprint.iacr.org/2016/116)
 pub mod bcs;
 
+/// Universal Error Type
+pub type Error = Box<dyn ark_std::error::Error>;
+
