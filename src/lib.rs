@@ -22,4 +22,3 @@ pub mod bcs;
 
 /// Universal Error Type
 pub type Error = Box<dyn ark_std::error::Error>;
-
