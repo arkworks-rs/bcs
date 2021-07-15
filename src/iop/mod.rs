@@ -1,6 +1,9 @@
 /// Public Coin IOP Prover
 pub mod prover;
+/// TODO doc
 pub mod transcript;
+/// TODO doc
+pub mod verifier;
 
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOneParam};
@@ -8,6 +11,7 @@ use ark_crypto_primitives::MerkleTree;
 use ark_sponge::CryptographicSponge;
 use ark_std::borrow::Borrow;
 use ark_std::collections::BTreeMap;
+use ark_std::iter::FromIterator;
 
 /// Specify the merkle tree hash parameters used for this protocol.
 #[derive(Clone)]
@@ -39,7 +43,7 @@ pub trait IOPProverMessage<P: MTConfig> {
             &mt_param.leaf_hash_param,
             &mt_param.inner_hash_param,
             leaves.iter().map(|x| x.borrow()),
-        )?; // TODO: can we remove this clone here?
+        )?;
         Ok(EncodedProverMessage {
             leaves,
             merkle_tree,
@@ -66,12 +70,15 @@ pub trait IOPVerifierMessage<S: CryptographicSponge>: Clone {
 pub trait SubprotocolMessage<T: IOPVerifierMessage<S>, S: CryptographicSponge>:
     IOPVerifierMessage<S>
 {
-    fn into_parent_message(self) -> T;
+    /// TODO doc
+    fn to_parent_message(&self) -> T;
+    /// TODO doc
     fn from_parent_message(parent_message: T) -> Self;
 }
 
 /// A tree-based data structure for storing protocol and subprotocol messages.
 /// Can store either message or oracle, either prover message or verifier message.
+#[derive(Clone)]
 pub struct MessageTree<T> {
     /// Non-subprotocol messages.
     pub direct: Vec<T>,
@@ -106,5 +113,21 @@ impl<T> MessageTree<T> {
             panic!("messages with same subprotocol id already received")
         }
         self.subprotocol.insert(subprotocol_id, messages);
+    }
+
+    /// TODO doc
+    pub fn from_subprotocol_message<S, V>(msg: MessageTree<V>) -> Self
+        where S: CryptographicSponge,
+              V: IOPVerifierMessage<S> + SubprotocolMessage<T, S>,
+              T: IOPVerifierMessage<S>
+    {
+        let direct: Vec<_> = msg.direct.into_iter().map(|x|x.to_parent_message()).collect();
+        let subprotocol_msg_iter = msg.subprotocol.into_iter()
+            .map(|(i, v)|(i, Self::from_subprotocol_message(v)));
+        let subprotocol_msg = BTreeMap::from_iter(subprotocol_msg_iter);
+        Self{
+            direct,
+            subprotocol: subprotocol_msg
+        }
     }
 }

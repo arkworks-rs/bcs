@@ -8,7 +8,7 @@ use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::borrow::Borrow;
 use ark_std::marker::PhantomData;
 
-/// `Transcript` serves as a communication protocol for **prover** to interact with verifier.
+/// `Transcript` serves as a communication protocol for **prover** to interact with verifier during commit phase..
 /// User do not need to implement `Transcript` by themselves. There are two implementations in the crate:
 /// * `BCSTranscript`: transcript used for BCS
 /// * `SubprotocolTranscript`: a wrapper transcript used for subprotocol.
@@ -26,7 +26,7 @@ where
     type VerifierMessage: IOPVerifierMessage<S>;
     /// The state of the transcript without sponge. `Self` can be recovered from
     /// `StateWithoutSponge` and a correct sponge state.
-    type StateWithoutSponge: Clone;
+    type StateWithoutSponge;
 
     /// Send prover message to the protocol. Do not send subprotocol message using this method.
     fn send_prover_message(
@@ -43,21 +43,15 @@ where
     fn into_subprotocol<VM>(
         self,
         subprotocol_id: usize,
-    ) -> (
-        SubprotocolTranscript<P, S, Self, VM>,
-        Self::StateWithoutSponge,
-    )
+    ) -> SubprotocolTranscript<P, S, Self, VM>
     where
         VM: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>;
 
     /// Convert current transcript back from subprotocol transcript with a possibly different verifier
     /// message type.
-    fn recover_from_subprotocol<VM>(subprotocol: SubprotocolTranscript<P, S, Self, VM>) -> Self;
-
-    // TODO: Add transform to subprotocol transcript
-    // TODO: if current transcript is subprotocol transcript, all stored message will be transformed to parent.
-
-    // some way: define a wrapper transcript. Return the wrapper transcript.
+    fn recover_from_subprotocol<VM>(subprotocol: SubprotocolTranscript<P, S, Self, VM>) -> Self
+        where
+            VM: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>;
 }
 
 /// SubprotocolTranscript stores the message for subprotocol. When the subprotocol ends,
@@ -78,7 +72,7 @@ where
     /// Subprotocol ID of `self`.
     pub(crate) id: usize,
     pub(crate) verifier_messages: MessageTree<Parent::VerifierMessage>,
-    pub(crate) prover_messages: MessageTree<EncodedProverMessage<MT, Parent::Leaf>>,
+    pub(crate) encoded_prover_messages: MessageTree<EncodedProverMessage<MT, Parent::Leaf>>,
     pub(crate) sponge_from_parent: S,
     _current_round_vm: PhantomData<VM>,
 }
@@ -91,6 +85,7 @@ where
     VM: IOPVerifierMessage<S> + SubprotocolMessage<Parent::VerifierMessage, S>,
     MT::InnerDigest: Absorb,
 {
+    /// Create a new subprotocol transcript
     pub fn new(
         subprotocol_id: usize,
         parent_state: Parent::StateWithoutSponge,
@@ -100,7 +95,7 @@ where
             parent_state,
             id: subprotocol_id,
             verifier_messages: MessageTree::new(),
-            prover_messages: MessageTree::new(),
+            encoded_prover_messages: MessageTree::new(),
             sponge_from_parent,
             _current_round_vm: PhantomData,
         }
@@ -112,9 +107,8 @@ where
     MT: MTConfig,
     S: CryptographicSponge,
     Parent: Transcript<MT, S>,
-    VM: IOPVerifierMessage<S>,
+    VM: IOPVerifierMessage<S> + SubprotocolMessage<Parent::VerifierMessage, S>,
     MT::InnerDigest: Absorb,
-    Parent::VerifierMessage: Wrap<S, VM>,
 {
     type Leaf = Parent::Leaf;
     type VerifierMessage = VM;
@@ -135,7 +129,7 @@ where
         // calculate the mt root
         let mt_root = encoded.merkle_tree.root();
         // absorb the mt root
-        self.sponge.absorb(&mt_root);
+        self.sponge_from_parent.absorb(&mt_root);
         // store the encoded prover message for generating proof
         self.encoded_prover_messages
             .push_current_protocol_message(encoded);
@@ -144,10 +138,12 @@ where
     }
 
     fn squeeze_verifier_message(&mut self) -> Result<Self::VerifierMessage, Error> {
-        let vm = Self::VerifierMessage::from_sponge(&mut self.sponge);
+        let vm = Self::VerifierMessage::from_sponge(&mut self.sponge_from_parent);
+        // wrap the message
+        let vm_wrapped = vm.to_parent_message();
         // store the verifier message for later decision phase
         self.verifier_messages
-            .push_current_protocol_message(vm.clone());
+            .push_current_protocol_message(vm_wrapped);
         Ok(vm)
     }
 
@@ -162,29 +158,33 @@ where
             self.parent_state,
             self.id,
             self.verifier_messages,
-            self.prover_messages,
+            self.encoded_prover_messages,
         );
         SubprotocolTranscript::new(subprotocol_id, state_without_sponge, sponge)
     }
 
-    fn recover_from_subprotocol<V>(subprotocol: SubprotocolTranscript<MT, S, Self, V>) -> Self {
+    fn recover_from_subprotocol<V>(subprotocol: SubprotocolTranscript<MT, S, Self, V>) -> Self
+        where
+            V: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>{
         let sponge = subprotocol.sponge_from_parent;
         let (parent_state, id, verifier_messages, prover_messages) = subprotocol.parent_state;
         let mut transcript = Self {
             parent_state,
             id,
             verifier_messages,
-            prover_messages,
+            encoded_prover_messages: prover_messages,
             sponge_from_parent: sponge,
             _current_round_vm: PhantomData,
         };
         // append subprotocol message
         transcript
             .encoded_prover_messages
-            .receive_subprotocol_messages(subprotocol.id, subprotocol.prover_messages);
+            .receive_subprotocol_messages(subprotocol.id, subprotocol.encoded_prover_messages);
+        // wrap subprotocol message to parent message
+        let subprotocol_vm_wrapped = MessageTree::from_subprotocol_message(subprotocol.verifier_messages);
         transcript
             .verifier_messages
-            .receive_subprotocol_messages(subprotocol.id, subprotocol.verifier_messages);
+            .receive_subprotocol_messages(subprotocol.id, subprotocol_vm_wrapped);
         transcript
     }
 }

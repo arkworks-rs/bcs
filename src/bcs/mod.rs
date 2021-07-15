@@ -91,8 +91,8 @@ where
     }
 
     fn recover_from_subprotocol<VM>(subprotocol: SubprotocolTranscript<P, S, Self, VM>) -> Self
-    where
-        VM: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>,
+        where
+            VM: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>
     {
         let sponge = subprotocol.sponge_from_parent;
         let parent_state = subprotocol.parent_state;
@@ -105,7 +105,7 @@ where
         // append subprotocol message
         transcript
             .encoded_prover_messages
-            .receive_subprotocol_messages(subprotocol.id, subprotocol.prover_messages);
+            .receive_subprotocol_messages(subprotocol.id, subprotocol.encoded_prover_messages);
         transcript
             .verifier_messages
             .receive_subprotocol_messages(subprotocol.id, subprotocol.verifier_messages);
