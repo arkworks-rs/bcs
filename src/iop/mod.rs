@@ -7,7 +7,7 @@ pub mod verifier;
 
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOneParam};
-use ark_crypto_primitives::MerkleTree;
+use ark_crypto_primitives::{MerkleTree, Path};
 use ark_sponge::CryptographicSponge;
 use ark_std::borrow::Borrow;
 use ark_std::collections::BTreeMap;
@@ -22,11 +22,11 @@ pub struct MTParameters<P: MTConfig> {
     pub inner_hash_param: TwoToOneParam<P>,
 }
 
-/// Prover message for leaf-handling IOP prover.
+/// Prover message for leaf-handling IOP prover/
 /// TODO: For prover that wants to send polynomial, implement the trait `RSIOPProverMessage` instead.
-pub trait IOPProverMessage<P: MTConfig> {
+pub trait IOPProverMessage<P: MTConfig>: Sized {
     /// A reference type to possibly unsized leaf.
-    type Leaf: Borrow<P::Leaf>;
+    type Leaf: Borrow<P::Leaf> + Clone;
     /// list of `Leaf`
     type Leaves: IntoIterator<Item = Self::Leaf>;
     /// Encode the prover message to merkle tree leaves.
@@ -51,8 +51,20 @@ pub trait IOPProverMessage<P: MTConfig> {
     }
 }
 
+/// An Oracle of encoded prover message.
+/// IOP Verifier will use this oracle to query prover message.
+pub trait ProverMessageOracle<P: MTConfig, L: Borrow<P::Leaf> + Clone>: Sized {
+    /// Query prover message at `position`. Returns answer and proof.
+    ///
+    /// `query` should return error if oracle cannot fetch value at that position.
+    /// For example, in message oracle constructed from BCS proof, if query answer does not present
+    /// in proof, this function will return an error.
+    fn query(&self, position: &[usize]) -> Result<(Vec<L>, Vec<Path<P>>), Error>;
+}
+
 /// Prover message encoded to a merkle tree.
-pub struct EncodedProverMessage<P: MTConfig, L: Borrow<P::Leaf>> {
+#[derive(Clone)]
+pub struct EncodedProverMessage<P: MTConfig, L: Borrow<P::Leaf> + Clone> {
     /// Prover message encoded to leaves.
     pub leaves: Vec<L>,
     /// Merkle tree for leaves.
@@ -115,19 +127,27 @@ impl<T> MessageTree<T> {
         self.subprotocol.insert(subprotocol_id, messages);
     }
 
-    /// TODO doc
+    /// If `Self` represent verifier messages, recursively convert subprotocol message type to
+    /// current message type by adding a wrapper.
     pub fn from_subprotocol_message<S, V>(msg: MessageTree<V>) -> Self
-        where S: CryptographicSponge,
-              V: IOPVerifierMessage<S> + SubprotocolMessage<T, S>,
-              T: IOPVerifierMessage<S>
+    where
+        S: CryptographicSponge,
+        V: IOPVerifierMessage<S> + SubprotocolMessage<T, S>,
+        T: IOPVerifierMessage<S>,
     {
-        let direct: Vec<_> = msg.direct.into_iter().map(|x|x.to_parent_message()).collect();
-        let subprotocol_msg_iter = msg.subprotocol.into_iter()
-            .map(|(i, v)|(i, Self::from_subprotocol_message(v)));
+        let direct: Vec<_> = msg
+            .direct
+            .into_iter()
+            .map(|x| x.to_parent_message())
+            .collect();
+        let subprotocol_msg_iter = msg
+            .subprotocol
+            .into_iter()
+            .map(|(i, v)| (i, Self::from_subprotocol_message(v)));
         let subprotocol_msg = BTreeMap::from_iter(subprotocol_msg_iter);
-        Self{
+        Self {
             direct,
-            subprotocol: subprotocol_msg
+            subprotocol: subprotocol_msg,
         }
     }
 }

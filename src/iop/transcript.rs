@@ -40,18 +40,15 @@ where
 
     /// Convert current transcript to subprotocol transcript with a possibly different
     /// verifier message type.
-    fn into_subprotocol<VM>(
-        self,
-        subprotocol_id: usize,
-    ) -> SubprotocolTranscript<P, S, Self, VM>
+    fn into_subprotocol<VM>(self, subprotocol_id: usize) -> SubprotocolTranscript<P, S, Self, VM>
     where
         VM: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>;
 
     /// Convert current transcript back from subprotocol transcript with a possibly different verifier
     /// message type.
     fn recover_from_subprotocol<VM>(subprotocol: SubprotocolTranscript<P, S, Self, VM>) -> Self
-        where
-            VM: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>;
+    where
+        VM: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>;
 }
 
 /// SubprotocolTranscript stores the message for subprotocol. When the subprotocol ends,
@@ -164,8 +161,9 @@ where
     }
 
     fn recover_from_subprotocol<V>(subprotocol: SubprotocolTranscript<MT, S, Self, V>) -> Self
-        where
-            V: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>{
+    where
+        V: IOPVerifierMessage<S> + SubprotocolMessage<Self::VerifierMessage, S>,
+    {
         let sponge = subprotocol.sponge_from_parent;
         let (parent_state, id, verifier_messages, prover_messages) = subprotocol.parent_state;
         let mut transcript = Self {
@@ -181,7 +179,8 @@ where
             .encoded_prover_messages
             .receive_subprotocol_messages(subprotocol.id, subprotocol.encoded_prover_messages);
         // wrap subprotocol message to parent message
-        let subprotocol_vm_wrapped = MessageTree::from_subprotocol_message(subprotocol.verifier_messages);
+        let subprotocol_vm_wrapped =
+            MessageTree::from_subprotocol_message(subprotocol.verifier_messages);
         transcript
             .verifier_messages
             .receive_subprotocol_messages(subprotocol.id, subprotocol_vm_wrapped);
