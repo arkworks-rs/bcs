@@ -1,5 +1,7 @@
 /// Defines a prover message oracle.
 pub mod oracle;
+/// TODO doc
+pub mod prover;
 
 use crate::iop::transcript::{SubprotocolTranscript, Transcript};
 use crate::iop::{
@@ -18,8 +20,11 @@ pub struct BCSTranscript<
     L: Borrow<P::Leaf> + Clone,
     V: IOPVerifierMessage<S>,
 > {
+    /// Message sent by prover in commit phase.
     encoded_prover_messages: MessageTree<EncodedProverMessage<P, L>>,
+    /// Sampled Message sent by verifier in commit phase.
     verifier_messages: MessageTree<V>,
+    /// Random Oracle to sample verifier messages.
     sponge: S,
 }
 

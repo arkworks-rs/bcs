@@ -12,12 +12,16 @@ where
     MT::InnerDigest: Absorb,
 {
     /// TODO doc
-    type Leaf: Borrow<MT::Leaf>;
+    type ProverParameter: ?Sized;
+    /// TODO doc
+    type Leaf: Borrow<MT::Leaf> + Clone;
     /// TODO doc
     type VerifierMessage: IOPVerifierMessage<S>;
 
     /// TODO doc
-    fn prove<T>(transcript: T)
-    where
+    fn prove<T, Parameter: Borrow<Self::ProverParameter>>(
+        transcript: &mut T,
+        prover_parameter: Parameter,
+    ) where
         T: Transcript<MT, S, Leaf = Self::Leaf, VerifierMessage = Self::VerifierMessage>;
 }
