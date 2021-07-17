@@ -52,17 +52,6 @@ pub trait IOPProverMessage<P: MTConfig>: Sized {
     }
 }
 
-/// An Oracle of encoded prover message.
-/// IOP Verifier will use this oracle to query prover message.
-pub trait ProverMessageOracle<P: MTConfig, L: Borrow<P::Leaf> + Clone>: Sized {
-    /// Query prover message at `position`. Returns answer and proof.
-    ///
-    /// `query` should return error if oracle cannot fetch value at that position.
-    /// For example, in message oracle constructed from BCS proof, if query answer does not present
-    /// in proof, this function will return an error.
-    fn query(&mut self, position: &[usize]) -> Result<Vec<(L, Path<P>)>, Error>;
-}
-
 /// Prover message encoded to a merkle tree.
 #[derive(Clone)]
 pub struct EncodedProverMessage<P: MTConfig, L: Borrow<P::Leaf> + Clone> {
@@ -80,6 +69,17 @@ impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> EncodedProverMessage<P, L> {
             query_responses: BTreeMap::new(),
         }
     }
+}
+
+/// An Oracle of encoded prover message.
+/// IOP Verifier will use this oracle to query prover message.
+pub trait ProverMessageOracle<P: MTConfig, L: Borrow<P::Leaf> + Clone>: Sized {
+    /// Query prover message at `position`. Returns answer and proof.
+    ///
+    /// `query` should return error if oracle cannot fetch value at that position.
+    /// For example, in message oracle constructed from BCS proof, if query answer does not present
+    /// in proof, this function will return an error.
+    fn query(&mut self, position: &[usize]) -> Result<Vec<(L, Path<P>)>, Error>;
 }
 
 /// Verifier message that is uniformly sampled from sponge.
@@ -101,7 +101,8 @@ pub trait SubprotocolMessage<T: IOPVerifierMessage<S>, S: CryptographicSponge>:
 
 /// A tree-based data structure for storing protocol and subprotocol messages.
 /// Can store either message or oracle, either prover message or verifier message.
-#[derive(Clone)]
+#[derive(Derivative)]
+#[derivative(Clone(bound = "T: Clone"))]
 pub struct MessageTree<T> {
     /// Non-subprotocol messages.
     pub direct: Vec<T>,
@@ -138,27 +139,28 @@ impl<T> MessageTree<T> {
         self.subprotocol.insert(subprotocol_id, messages);
     }
 
-    /// If `Self` represent verifier messages, recursively convert subprotocol message type to
-    /// current message type by adding a wrapper.
-    pub fn from_subprotocol_message<S, V>(msg: MessageTree<V>) -> Self
-    where
-        S: CryptographicSponge,
-        V: IOPVerifierMessage<S> + SubprotocolMessage<T, S>,
-        T: IOPVerifierMessage<S>,
-    {
-        let direct: Vec<_> = msg
-            .direct
-            .into_iter()
-            .map(|x| x.to_parent_message())
-            .collect();
-        let subprotocol_msg_iter = msg
+    /// Convert type of message.
+    pub fn map_into<T2>(self, func: fn(T) -> T2) -> MessageTree<T2> {
+        let direct: Vec<_> = self.direct.into_iter().map(|x| func(x)).collect();
+        let subprotocol_msg_iter = self
             .subprotocol
             .into_iter()
-            .map(|(i, v)| (i, Self::from_subprotocol_message(v)));
-        let subprotocol_msg = BTreeMap::from_iter(subprotocol_msg_iter);
-        Self {
+            .map(|(i, v)| (i, v.map_into(func)));
+        let subprotocol = BTreeMap::from_iter(subprotocol_msg_iter);
+        MessageTree {
             direct,
-            subprotocol: subprotocol_msg,
+            subprotocol,
+        }
+    }
+
+    /// Convert type of message.
+    pub fn map<T2>(&self, func: fn(&T) -> T2) -> MessageTree<T2> {
+        let direct: Vec<_> = self.direct.iter().map(|x| func(x)).collect();
+        let subprotocol_msg_iter = self.subprotocol.iter().map(|(&i, v)| (i, v.map(func)));
+        let subprotocol = BTreeMap::from_iter(subprotocol_msg_iter);
+        MessageTree {
+            direct,
+            subprotocol,
         }
     }
 }

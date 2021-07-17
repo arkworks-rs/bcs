@@ -179,8 +179,9 @@ where
             .encoded_prover_messages
             .receive_subprotocol_messages(subprotocol.id, subprotocol.encoded_prover_messages);
         // wrap subprotocol message to parent message
-        let subprotocol_vm_wrapped =
-            MessageTree::from_subprotocol_message(subprotocol.verifier_messages);
+        let subprotocol_vm_wrapped = subprotocol
+            .verifier_messages
+            .map_into(|x| x.to_parent_message());
         transcript
             .verifier_messages
             .receive_subprotocol_messages(subprotocol.id, subprotocol_vm_wrapped);

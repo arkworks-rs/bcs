@@ -9,6 +9,9 @@
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
 
+#[macro_use]
+extern crate derivative;
+
 use ark_std::fmt::Formatter;
 
 /// A public coin, leaf handling, interactive oracle proof protocol.

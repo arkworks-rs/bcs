@@ -24,6 +24,8 @@ ark-std = { version = "^0.3.0", default-features = false }
 ark-relations = { version = "^0.3.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.3.0", default-features = false, optional = true }
 
+derivative = { version = "2.0", features = ["use_core"] }
+
 rayon = { version = "1", optional = true }
 
 [dev-dependencies]
