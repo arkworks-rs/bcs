@@ -21,7 +21,7 @@ where
     P::InnerDigest: Absorb,
 {
     /// Type of leaf used for merkle tree.
-    type Leaf: Borrow<P::Leaf>;
+    type Leaf: Borrow<P::Leaf> + Clone;
     /// Type of public coin verifier message that can be squeezed from sponge.
     type VerifierMessage: IOPVerifierMessage<S>;
     /// The state of the transcript without sponge. `Self` can be recovered from

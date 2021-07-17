@@ -9,6 +9,8 @@
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
 
+use ark_std::fmt::Formatter;
+
 /// A public coin, leaf handling, interactive oracle proof protocol.
 pub mod iop;
 
@@ -22,3 +24,19 @@ pub mod bcs;
 
 /// Universal Error Type
 pub type Error = Box<dyn ark_std::error::Error>;
+#[derive(Debug)]
+/// doc TODO
+pub enum BCSError {
+    /// doc TODO
+    InvalidQuery,
+}
+
+impl ark_std::fmt::Display for BCSError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            BCSError::InvalidQuery => write!(f, "Oracle does not contain answer to query."),
+        }
+    }
+}
+
+impl ark_std::error::Error for BCSError {}

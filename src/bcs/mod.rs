@@ -1,3 +1,6 @@
+/// Defines a prover message oracle.
+pub mod oracle;
+
 use crate::iop::transcript::{SubprotocolTranscript, Transcript};
 use crate::iop::{
     EncodedProverMessage, IOPProverMessage, IOPVerifierMessage, MTParameters, MessageTree,
@@ -12,7 +15,7 @@ use ark_std::borrow::Borrow;
 pub struct BCSTranscript<
     P: MTConfig,
     S: CryptographicSponge,
-    L: Borrow<P::Leaf>,
+    L: Borrow<P::Leaf> + Clone,
     V: IOPVerifierMessage<S>,
 > {
     encoded_prover_messages: MessageTree<EncodedProverMessage<P, L>>,
@@ -24,7 +27,7 @@ impl<P, S, L, V> BCSTranscript<P, S, L, V>
 where
     P: MTConfig,
     S: CryptographicSponge,
-    L: Borrow<P::Leaf>,
+    L: Borrow<P::Leaf> + Clone,
     V: IOPVerifierMessage<S>,
     P::InnerDigest: Absorb,
 {
@@ -36,15 +39,13 @@ where
             sponge,
         }
     }
-
-    // TODO: add a function to generate proof.
 }
 
 impl<P, S, L, V> Transcript<P, S> for BCSTranscript<P, S, L, V>
 where
     P: MTConfig,
     S: CryptographicSponge,
-    L: Borrow<P::Leaf>,
+    L: Borrow<P::Leaf> + Clone,
     V: IOPVerifierMessage<S>,
     P::InnerDigest: Absorb,
 {

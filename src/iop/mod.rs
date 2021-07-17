@@ -5,6 +5,7 @@ pub mod transcript;
 /// TODO doc
 pub mod verifier;
 
+use crate::bcs::oracle::MessageRecordingOracle;
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOneParam};
 use ark_crypto_primitives::{MerkleTree, Path};
@@ -59,7 +60,7 @@ pub trait ProverMessageOracle<P: MTConfig, L: Borrow<P::Leaf> + Clone>: Sized {
     /// `query` should return error if oracle cannot fetch value at that position.
     /// For example, in message oracle constructed from BCS proof, if query answer does not present
     /// in proof, this function will return an error.
-    fn query(&self, position: &[usize]) -> Result<(Vec<L>, Vec<Path<P>>), Error>;
+    fn query(&mut self, position: &[usize]) -> Result<Vec<(L, Path<P>)>, Error>;
 }
 
 /// Prover message encoded to a merkle tree.
@@ -69,6 +70,16 @@ pub struct EncodedProverMessage<P: MTConfig, L: Borrow<P::Leaf> + Clone> {
     pub leaves: Vec<L>,
     /// Merkle tree for leaves.
     pub merkle_tree: MerkleTree<P>,
+}
+
+impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> EncodedProverMessage<P, L> {
+    /// Convert `Self` to a oracle that can be queried.
+    pub fn into_oracle(self) -> MessageRecordingOracle<P, L> {
+        MessageRecordingOracle {
+            encoded_message: self,
+            query_responses: BTreeMap::new(),
+        }
+    }
 }
 
 /// Verifier message that is uniformly sampled from sponge.
