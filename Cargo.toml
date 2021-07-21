@@ -20,6 +20,7 @@ ark-poly = {version = "^0.3.0", default-features = false }
 ark-sponge = {version = "^0.3.0", default-feautres = false}
 ark-crypto-primitives = {version = "^0.3.0", default-features = false}
 ark-std = { version = "^0.3.0", default-features = false }
+ark-ldt = {git = "https://github.com/arkworks-rs/ldt", branch="experimental", default-features = false}
 
 ark-relations = { version = "^0.3.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.3.0", default-features = false, optional = true }
@@ -47,7 +48,8 @@ debug = true
 
 [features]
 default = [ "std", "parallel" ]
-std = ["ark-serialize/std", "ark-ff/std", "ark-poly/std", "ark-sponge/std", "ark-crypto-primitives/std", "ark-std/std", "ark-relations/std", "ark-r1cs-std/std"]
+std = ["ark-serialize/std", "ark-ff/std", "ark-poly/std", "ark-sponge/std", "ark-crypto-primitives/std",
+    "ark-std/std", "ark-relations/std", "ark-r1cs-std/std", "ark-ldt/std"]
 r1cs = ["ark-relations", "ark-r1cs-std", "ark-sponge/r1cs", "ark-crypto-primitives/r1cs"]
 parallel = ["std", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon"]
 

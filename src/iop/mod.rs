@@ -16,7 +16,7 @@ pub type SubprotocolID = usize;
 
 /// Specify the merkle tree hash parameters used for this protocol.
 #[derive(Clone)]
-pub struct MTParameters<P: MTConfig> {
+pub struct MTHashParameters<P: MTConfig> {
     /// Leaf hash parameter of merkle tree.
     pub leaf_hash_param: LeafParam<P>,
     /// Inner hash (TwoToOneHash) parameter of merkle tree.
@@ -32,7 +32,7 @@ pub trait IOPProverMessage<P: MTConfig<Leaf = F>, F: PrimeField>: Sized {
     fn to_oracle_messages(&self) -> Result<Self::OracleMessages, Error>;
 
     /// Encode the prover message to merkle tree.
-    fn encode(&self, mt_param: &MTParameters<P>) -> Result<EncodedProverMessage<P, F>, Error> {
+    fn encode(&self, mt_param: &MTHashParameters<P>) -> Result<EncodedProverMessage<P, F>, Error> {
         let leaves: Vec<_> = self.to_oracle_messages()?.into_iter().collect();
         let merkle_tree = MerkleTree::new(
             &mt_param.leaf_hash_param,
@@ -103,8 +103,10 @@ impl<T> MessageTree<T> {
     }
 
     /// Add a message from current protocol to history.
-    pub fn push_current_protocol_message(&mut self, message: T) {
-        self.direct.push(message)
+    /// Return the index of current message.
+    pub fn push_current_protocol_message(&mut self, message: T) -> usize {
+        self.direct.push(message);
+        self.direct.len() - 1
     }
 
     /// Add a message from subprotocol to history.

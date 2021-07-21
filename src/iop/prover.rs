@@ -1,4 +1,4 @@
-use crate::bcs::Transcript;
+use crate::bcs::transcript::Transcript;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
