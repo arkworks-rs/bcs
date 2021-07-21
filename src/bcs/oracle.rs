@@ -2,31 +2,30 @@ use crate::iop::{EncodedProverMessage, ProverMessageOracle};
 use crate::{BCSError, Error};
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::Path;
-use ark_std::borrow::Borrow;
+use ark_ff::PrimeField;
 use ark_std::collections::BTreeMap;
 
 /// An oracle used when generating BCS proof. This oracle has access to
 /// all bits, and will record all queries requested by verifier and responses.
-pub struct MessageRecordingOracle<P: MTConfig, L: Borrow<P::Leaf> + Clone> {
+pub struct MessageRecordingOracle<P: MTConfig, F: PrimeField> {
     /// stores the prover message used for query
-    pub encoded_message: EncodedProverMessage<P, L>,
+    pub encoded_message: EncodedProverMessage<P, F>,
     /// stores the responses
-    pub query_responses: BTreeMap<usize, (L, Path<P>)>,
+    pub query_responses: BTreeMap<usize, (F, Path<P>)>,
 }
 
-impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> MessageRecordingOracle<P, L> {
+impl<P: MTConfig, F: PrimeField> MessageRecordingOracle<P, F> {
     /// Convert `Self` to message fetching oracle, which will then be included in BCS Proof.
-    pub fn into_message_fetching_oracle(self) -> MessageFetchingOracle<P, L> {
+    pub fn into_message_fetching_oracle(self) -> MessageFetchingOracle<P, F> {
         MessageFetchingOracle {
             query_responses: self.query_responses,
+            mt_root: self.encoded_message.merkle_tree.root(),
         }
     }
 }
 
-impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> ProverMessageOracle<P, L>
-    for MessageRecordingOracle<P, L>
-{
-    fn query(&mut self, position: &[usize]) -> Result<Vec<(L, Path<P>)>, Error> {
+impl<P: MTConfig, F: PrimeField> ProverMessageOracle<P, F> for MessageRecordingOracle<P, F> {
+    fn query(&mut self, position: &[usize]) -> Result<Vec<(F, Path<P>)>, Error> {
         position
             .iter()
             .map(|&pos| {
@@ -44,17 +43,20 @@ impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> ProverMessageOracle<P, L>
             })
             .collect()
     }
+
+    fn mt_root(&self) -> P::InnerDigest {
+        self.encoded_message.merkle_tree.root()
+    }
 }
 
 /// An oracle used when verifying BCS proof. This oracle only has access to queried bits.
-pub struct MessageFetchingOracle<P: MTConfig, L: Borrow<P::Leaf> + Clone> {
-    query_responses: BTreeMap<usize, (L, Path<P>)>,
+pub struct MessageFetchingOracle<P: MTConfig, F: PrimeField> {
+    query_responses: BTreeMap<usize, (F, Path<P>)>,
+    mt_root: P::InnerDigest,
 }
 
-impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> ProverMessageOracle<P, L>
-    for MessageFetchingOracle<P, L>
-{
-    fn query(&mut self, position: &[usize]) -> Result<Vec<(L, Path<P>)>, Error> {
+impl<P: MTConfig, F: PrimeField> ProverMessageOracle<P, F> for MessageFetchingOracle<P, F> {
+    fn query(&mut self, position: &[usize]) -> Result<Vec<(F, Path<P>)>, Error> {
         let mut result = Vec::with_capacity(position.len());
         for pos in position {
             match self.query_responses.get(pos) {
@@ -63,5 +65,9 @@ impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> ProverMessageOracle<P, L>
             }
         }
         Ok(result)
+    }
+
+    fn mt_root(&self) -> P::InnerDigest {
+        self.mt_root.clone()
     }
 }

@@ -1,47 +1,48 @@
 use crate::bcs::oracle::MessageFetchingOracle;
-use crate::bcs::BCSTranscript;
+use crate::bcs::Transcript;
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
 use crate::iop::MessageTree;
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
+use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
-use ark_std::borrow::Borrow;
 
 /// TODO doc
-pub struct BCSProof<MT, S, P, FinalHash>
+pub struct BCSProof<MT, F, FinalHash>
 where
     MT: MTConfig,
-    S: CryptographicSponge,
-    P: IOPProver<MT, S>,
+    F: PrimeField,
     MT::InnerDigest: Absorb,
     FinalHash: Clone,
 {
-    prover_message_oracle: MessageTree<MessageFetchingOracle<MT, P::Leaf>>,
+    prover_message_oracle: MessageTree<MessageFetchingOracle<MT, F>>,
     final_hash: FinalHash,
 }
 
-impl<MT, S, P, FinalHash> BCSProof<MT, S, P, FinalHash>
+impl<MT, F, FinalHash> BCSProof<MT, F, FinalHash>
 where
-    MT: MTConfig,
-    S: CryptographicSponge,
-    P: IOPProver<MT, S>,
+    MT: MTConfig<Leaf = F>,
+    F: PrimeField,
     MT::InnerDigest: Absorb,
     FinalHash: Clone,
 {
     /// Generate proof
-    pub fn generate<
-        V: IOPVerifier<MT, S, Leaf = P::Leaf, VerifierMessage = P::VerifierMessage>,
-        PP: Borrow<P::ProverParameter>,
-    >(
-        param: PP,
+    pub fn generate<V, S, P>(
         sponge: S,
+        prover_parameter: &P::ProverParameter,
+        verifier_parameter: &P::VerifierParameter,
         final_hasher: fn(&mut S) -> FinalHash,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Error>
+    where
+        V: IOPVerifier<MT, S, F, VerifierParameter = P::VerifierParameter>,
+        S: CryptographicSponge,
+        P: IOPProver<MT, S, F>,
+    {
         // create a BCS transcript
-        let mut transcript = BCSTranscript::new(sponge);
+        let mut transcript = Transcript::new(sponge);
         // run prover code
-        P::prove(&mut transcript, param);
+        transcript = P::prove(transcript, prover_parameter, verifier_parameter);
         // convert transcript to prover message oracle
         let mut recording_oracle = transcript
             .encoded_prover_messages

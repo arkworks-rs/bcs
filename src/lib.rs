@@ -15,11 +15,8 @@ extern crate derivative;
 use ark_std::fmt::Formatter;
 
 /// A public coin, leaf handling, interactive oracle proof protocol.
+/// Prover sends out messages that can be encoded to field elements. Verifier sample field element as message.
 pub mod iop;
-
-/// A public coin interactive protocol where prover sends RS-code.
-/// This module also includes a compiler to convert any RS-IOP to IOP.
-pub mod rs_iop;
 
 /// A compiler to convert any public coin IOP to non-interactive one using BCS transform.
 /// Source: [BCS16](https://eprint.iacr.org/2016/116)

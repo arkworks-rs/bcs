@@ -1,18 +1,18 @@
 /// Public Coin IOP Prover
 pub mod prover;
 /// TODO doc
-pub mod transcript;
-/// TODO doc
 pub mod verifier;
 
 use crate::bcs::oracle::MessageRecordingOracle;
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOneParam};
 use ark_crypto_primitives::{MerkleTree, Path};
-use ark_sponge::CryptographicSponge;
-use ark_std::borrow::Borrow;
+use ark_ff::PrimeField;
 use ark_std::collections::BTreeMap;
 use ark_std::iter::FromIterator;
+
+/// Subprotocol ID
+pub type SubprotocolID = usize;
 
 /// Specify the merkle tree hash parameters used for this protocol.
 #[derive(Clone)]
@@ -23,27 +23,21 @@ pub struct MTParameters<P: MTConfig> {
     pub inner_hash_param: TwoToOneParam<P>,
 }
 
-/// Prover message for leaf-handling IOP prover/
-/// TODO: For prover that wants to send polynomial, implement the trait `RSIOPProverMessage` instead.
-pub trait IOPProverMessage<P: MTConfig>: Sized {
-    /// A reference type to possibly unsized leaf.
-    type Leaf: Borrow<P::Leaf> + Clone;
+/// Prover message for leaf-handling IOP prover.
+pub trait IOPProverMessage<P: MTConfig<Leaf = F>, F: PrimeField>: Sized {
     /// list of `Leaf`
-    type Leaves: IntoIterator<Item = Self::Leaf>;
+    type OracleMessages: IntoIterator<Item = F>;
     /// Encode the prover message to merkle tree leaves.
     /// Make sure to pad the leaf size fo power of 2.
-    fn to_leaves(&self) -> Result<Self::Leaves, Error>;
+    fn to_oracle_messages(&self) -> Result<Self::OracleMessages, Error>;
 
     /// Encode the prover message to merkle tree.
-    fn encode(
-        &self,
-        mt_param: &MTParameters<P>,
-    ) -> Result<EncodedProverMessage<P, Self::Leaf>, Error> {
-        let leaves: Vec<_> = self.to_leaves()?.into_iter().collect();
+    fn encode(&self, mt_param: &MTParameters<P>) -> Result<EncodedProverMessage<P, F>, Error> {
+        let leaves: Vec<_> = self.to_oracle_messages()?.into_iter().collect();
         let merkle_tree = MerkleTree::new(
             &mt_param.leaf_hash_param,
             &mt_param.inner_hash_param,
-            leaves.iter().map(|x| x.borrow()),
+            leaves.clone(),
         )?;
         Ok(EncodedProverMessage {
             leaves,
@@ -52,18 +46,18 @@ pub trait IOPProverMessage<P: MTConfig>: Sized {
     }
 }
 
-/// Prover message encoded to a merkle tree.
+/// Prover oracle messages encoded to a merkle tree.
 #[derive(Clone)]
-pub struct EncodedProverMessage<P: MTConfig, L: Borrow<P::Leaf> + Clone> {
+pub struct EncodedProverMessage<P: MTConfig, F: PrimeField> {
     /// Prover message encoded to leaves.
-    pub leaves: Vec<L>,
+    pub leaves: Vec<F>,
     /// Merkle tree for leaves.
     pub merkle_tree: MerkleTree<P>,
 }
 
-impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> EncodedProverMessage<P, L> {
+impl<P: MTConfig, F: PrimeField> EncodedProverMessage<P, F> {
     /// Convert `Self` to a oracle that can be queried.
-    pub fn into_oracle(self) -> MessageRecordingOracle<P, L> {
+    pub fn into_oracle(self) -> MessageRecordingOracle<P, F> {
         MessageRecordingOracle {
             encoded_message: self,
             query_responses: BTreeMap::new(),
@@ -73,30 +67,16 @@ impl<P: MTConfig, L: Borrow<P::Leaf> + Clone> EncodedProverMessage<P, L> {
 
 /// An Oracle of encoded prover message.
 /// IOP Verifier will use this oracle to query prover message.
-pub trait ProverMessageOracle<P: MTConfig, L: Borrow<P::Leaf> + Clone>: Sized {
+pub trait ProverMessageOracle<P: MTConfig, F: PrimeField>: Sized {
     /// Query prover message at `position`. Returns answer and proof.
     ///
     /// `query` should return error if oracle cannot fetch value at that position.
     /// For example, in message oracle constructed from BCS proof, if query answer does not present
     /// in proof, this function will return an error.
-    fn query(&mut self, position: &[usize]) -> Result<Vec<(L, Path<P>)>, Error>;
-}
+    fn query(&mut self, position: &[usize]) -> Result<Vec<(F, Path<P>)>, Error>;
 
-/// Verifier message that is uniformly sampled from sponge.
-pub trait IOPVerifierMessage<S: CryptographicSponge>: Clone {
-    /// Sample the verifier message from sponge.
-    fn from_sponge(sponge: &mut S) -> Self;
-}
-
-/// `SubprotocolMessage<T>` is the verifier message used by subprotocol, whose parent protocol
-/// has verifier message `T`.
-pub trait SubprotocolMessage<T: IOPVerifierMessage<S>, S: CryptographicSponge>:
-    IOPVerifierMessage<S>
-{
-    /// TODO doc
-    fn to_parent_message(&self) -> T;
-    /// TODO doc
-    fn from_parent_message(parent_message: T) -> Self;
+    /// Obtain the merkle tree root of the message.
+    fn mt_root(&self) -> P::InnerDigest;
 }
 
 /// A tree-based data structure for storing protocol and subprotocol messages.
@@ -110,7 +90,7 @@ pub struct MessageTree<T> {
     /// Key is subprotocol id. Value is messages for subprotocols.
     /// Messages for different subprotocols may have different types, but they will
     /// are need to be wrapped by `T`.
-    pub subprotocol: BTreeMap<usize, MessageTree<T>>,
+    pub subprotocol: BTreeMap<SubprotocolID, MessageTree<T>>,
 }
 
 impl<T> MessageTree<T> {
@@ -130,7 +110,7 @@ impl<T> MessageTree<T> {
     /// Add a message from subprotocol to history.
     pub fn receive_subprotocol_messages(
         &mut self,
-        subprotocol_id: usize,
+        subprotocol_id: SubprotocolID,
         messages: MessageTree<T>,
     ) {
         if self.subprotocol.contains_key(&subprotocol_id) {

@@ -1,27 +1,24 @@
-use crate::iop::transcript::Transcript;
-use crate::iop::IOPVerifierMessage;
+use crate::bcs::Transcript;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
+use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
-use ark_std::borrow::Borrow;
 
 /// A leaf-handling prover for public-coin IOP. This prover does not include low
 /// degree test. Use RS-IOP Prover instead if the prover sends
 /// polynomial using RS-code.
-pub trait IOPProver<MT: MTConfig, S: CryptographicSponge>
+pub trait IOPProver<MT: MTConfig, S: CryptographicSponge, F: PrimeField>
 where
     MT::InnerDigest: Absorb,
 {
     /// TODO doc
     type ProverParameter: ?Sized;
-    /// TODO doc
-    type Leaf: Borrow<MT::Leaf> + Clone;
-    /// TODO doc
-    type VerifierMessage: IOPVerifierMessage<S>;
+    /// Verifier Parameter
+    type VerifierParameter: ?Sized;
 
     /// TODO doc
-    fn prove<T, Parameter: Borrow<Self::ProverParameter>>(
-        transcript: &mut T,
-        prover_parameter: Parameter,
-    ) where
-        T: Transcript<MT, S, Leaf = Self::Leaf, VerifierMessage = Self::VerifierMessage>;
+    fn prove(
+        transcript: Transcript<MT, S, F>,
+        prover_parameter: &Self::ProverParameter,
+        verifier_parameter: &Self::VerifierParameter,
+    ) -> Transcript<MT, S, F>;
 }
