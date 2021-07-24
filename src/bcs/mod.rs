@@ -1,5 +1,5 @@
 /// Defines a prover message oracle.
-pub mod oracle;
+pub mod message;
 /// TODO doc
 pub mod prover;
 /// TODO doc
