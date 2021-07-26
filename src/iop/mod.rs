@@ -1,9 +1,9 @@
-use ark_crypto_primitives::MerkleTree;
 use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOneParam};
+use ark_crypto_primitives::MerkleTree;
 use ark_ff::PrimeField;
 
-use crate::Error;
 use crate::bcs::message::MessageRecordingOracle;
+use crate::Error;
 use std::collections::BTreeMap;
 
 /// Public Coin IOP Prover
@@ -32,7 +32,10 @@ pub trait IOPProverMessage<P: MTConfig<Leaf = F>, F: PrimeField>: Sized {
     fn to_oracle_messages(&self) -> Result<Self::OracleMessages, Error>;
 
     /// Encode the prover message to merkle tree.
-    fn encode(&self, mt_param: &MTHashParameters<P>) -> Result<MessageRecordingOracle<P, F>, Error> {
+    fn encode(
+        &self,
+        mt_param: &MTHashParameters<P>,
+    ) -> Result<MessageRecordingOracle<P, F>, Error> {
         let leaves: Vec<_> = self.to_oracle_messages()?.into_iter().collect();
         let merkle_tree = MerkleTree::new(
             &mt_param.leaf_hash_param,
@@ -42,10 +45,7 @@ pub trait IOPProverMessage<P: MTConfig<Leaf = F>, F: PrimeField>: Sized {
         Ok(MessageRecordingOracle {
             leaves,
             merkle_tree,
-            query_responses: BTreeMap::new()
+            query_responses: BTreeMap::new(),
         })
     }
 }
-
-
-

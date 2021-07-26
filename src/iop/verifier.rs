@@ -1,4 +1,6 @@
-
+use crate::bcs::message::{MessageOracle, ProverMessage, VerifierMessage};
+use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
+use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::CryptographicSponge;
@@ -25,12 +27,17 @@ pub trait IOPVerifier<P: MTConfig, S: CryptographicSponge, F: PrimeField> {
     //     verifier_parameter: &Self::VerifierParameter
     // ) -> MessageTree<Self::VerifierMessage>;
 
-    // /// Query the oracle using the random oracle. Run the verifier code, and return verifier output that
-    // /// is valid if prover claim is true. Verifier will return an error if prover message is obviously false,
-    // /// or oracle cannot answer the query.
-    // fn query_and_decision(
-    //     random_oracle: &mut S,
-    //     prover_message_oracle: &mut MessageTree<impl ProverMessageOracle<P, F>>,
-    //     previous_verifier_messages: MessageTree<Vec<F>>,
-    // ) -> Result<Self::VerifierOutput, Error>;
+    /// Query the oracle using the random oracle. Run the verifier code, and return verifier output that
+    /// is valid if prover claim is true. Verifier will return an error if prover message is obviously false,
+    /// or oracle cannot answer the query.
+    ///
+    /// To access prover message oracle and previous verifier messages of current namespace, use bookkeeper.
+    fn query_and_decision<Oracle: MessageOracle<P, F>>(
+        namespace: &NameSpace,
+        verifier_parameter: &Self::VerifierParameter,
+        random_oracle: &mut S,
+        prover_message_oracle: &mut [ProverMessage<P, F, Oracle>],
+        previous_verifier_messages: &mut [VerifierMessage<F>],
+        bookkeeper: &MessageBookkeeper,
+    ) -> Result<Self::VerifierOutput, Error>;
 }

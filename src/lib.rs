@@ -21,7 +21,7 @@ pub mod iop;
 /// A compiler to convert any public coin IOP to non-interactive one using BCS transform.
 /// Source: [BCS16](https://eprint.iacr.org/2016/116)
 pub mod bcs;
-/// Defines trait for performing LDT. 
+/// Defines trait for performing LDT.
 /// TODO: move this to `ark-ldt`
 pub mod ldt_trait;
 

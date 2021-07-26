@@ -1,36 +1,49 @@
-
 use crate::{BCSError, Error};
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
-use ark_crypto_primitives::{Path, MerkleTree};
+use ark_crypto_primitives::{MerkleTree, Path};
 use ark_ff::PrimeField;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::collections::BTreeMap;
 use ark_std::marker::PhantomData;
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, Read, Write, SerializationError};
 
 /// A generalized RS-IOP message.
 
 #[derive(Derivative)]
-#[derivative(Clone(bound="P: MTConfig, F: PrimeField, Oracle: MessageOracle<P, F>"))]
-pub enum ProverMessage<P: MTConfig, F: PrimeField, Oracle: MessageOracle<P, F>>{
+#[derivative(Clone(bound = "P: MTConfig, F: PrimeField, Oracle: MessageOracle<P, F>"))]
+pub enum ProverMessage<P: MTConfig, F: PrimeField, Oracle: MessageOracle<P, F>> {
     /// Oracle evaluations
-    ReedSolomonCode{degree_bound: usize, oracle: Oracle, _mt_config: PhantomData<P>},
+    ReedSolomonCode {
+        degree_bound: usize,
+        oracle: Oracle,
+        _mt_config: PhantomData<P>,
+    },
     /// Message Oracle without degree bound
-    MessageOracle{oracle: Oracle, _mt_config: PhantomData<P>},
+    MessageOracle {
+        oracle: Oracle,
+        _mt_config: PhantomData<P>,
+    },
     /// IP Message: Message without oracle
-    IP{message: Vec<F>},
+    IP { message: Vec<F> },
 }
 
-impl<P: MTConfig, F: PrimeField> ProverMessage<P, F, MessageRecordingOracle<P, F>>{
+impl<P: MTConfig, F: PrimeField> ProverMessage<P, F, MessageRecordingOracle<P, F>> {
     /// If `self` contains an oracle, remove all entries not queried to make
-    pub fn into_succinct(self) -> ProverMessage<P, F, SuccinctOracle<P, F>>{
+    pub fn into_succinct(self) -> ProverMessage<P, F, SuccinctOracle<P, F>> {
         match self {
-            ProverMessage::ReedSolomonCode {degree_bound, oracle,..} => ProverMessage::ReedSolomonCode {
-                degree_bound, oracle: oracle.into_succinct_oracle(), _mt_config: PhantomData
+            ProverMessage::ReedSolomonCode {
+                degree_bound,
+                oracle,
+                ..
+            } => ProverMessage::ReedSolomonCode {
+                degree_bound,
+                oracle: oracle.into_succinct_oracle(),
+                _mt_config: PhantomData,
             },
-            ProverMessage::MessageOracle {oracle, ..} => ProverMessage::MessageOracle {
-                oracle: oracle.into_succinct_oracle(), _mt_config: PhantomData
+            ProverMessage::MessageOracle { oracle, .. } => ProverMessage::MessageOracle {
+                oracle: oracle.into_succinct_oracle(),
+                _mt_config: PhantomData,
             },
-            ProverMessage::IP{message} => ProverMessage::IP {message}
+            ProverMessage::IP { message } => ProverMessage::IP { message },
         }
     }
 }
@@ -143,5 +156,5 @@ pub enum VerifierMessage<F: PrimeField> {
     /// bits
     Bits(Vec<bool>),
     /// bytes
-    Bytes(Vec<u8>)
+    Bytes(Vec<u8>),
 }
