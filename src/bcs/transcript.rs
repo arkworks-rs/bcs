@@ -4,9 +4,12 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 
-use crate::bcs::message::{MessageRecordingOracle, ProverMessage, VerifierMessage};
+use crate::bcs::message::{
+    MessageOracle, MessageRecordingOracle, ProverMessage, SuccinctOracle, VerifierMessage,
+};
+use crate::bcs::prover::BCSProof;
 use crate::ldt_trait::LDT;
-use crate::Error;
+use crate::{BCSError, Error};
 use ark_crypto_primitives::MerkleTree;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::univariate::DensePolynomial;
@@ -311,5 +314,113 @@ where
             .expect("namespace not found")
             .verifier_message_locations
             .push(index);
+    }
+}
+
+/// A communication protocol for IOP verifier, which is used to reconstruct verifier messages.
+/// This transcript includes merkle tree roots, which acts as a simulation of prover in commit phase.
+pub struct SimulationTranscript<
+    'a,
+    P: MTConfig,
+    S: CryptographicSponge,
+    F: PrimeField,
+    L: LDT<P, F, S>,
+> where
+    P::InnerDigest: Absorb,
+{
+    /// Prover message oracles extracted from proof.
+    pub prover_message_oracles: &'a [ProverMessage<P, F, SuccinctOracle<P, F>>],
+    /// Sampled message sent by verifier in commit phase.
+    /// Generated during prover simulation.
+    pub verifier_messages: Vec<VerifierMessage<F>>,
+    /// Bookkeeper for messages in different subprotocols.
+    /// Generated during prover simulation.
+    ///
+    /// **Note**: A simple sanity check to make sure prover simulation in `reconstruct_verifier_messages` is consistent with prover
+    /// function, is to check if the two bookkeepers are consistent.
+    pub bookkeeper: MessageBookkeeper,
+    /// random oracle
+    pub sponge: S,
+    num_prover_messages_sent: usize,
+    _ldt: PhantomData<L>,
+}
+
+impl<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField, L: LDT<P, F, S>>
+    SimulationTranscript<'a, P, S, F, L>
+where
+    P::InnerDigest: Absorb,
+{
+    /// Returns a new simulation transcript that can be used to reconstruct verifier message.
+    pub fn new(proof: &'a BCSProof<P, F, S, L>, sponge: S) -> Self {
+        let prover_message_oracles = proof.prover_message.as_slice();
+        let verifier_messages = Vec::new();
+        let bookkeeper = MessageBookkeeper {
+            map: BTreeMap::new(),
+        };
+        Self {
+            prover_message_oracles,
+            verifier_messages,
+            bookkeeper,
+            sponge,
+            num_prover_messages_sent: 0,
+            _ldt: PhantomData,
+        }
+    }
+
+    /// Simulate sending a univariate polynomial with LDT. The function does not send anything. Instead, this function
+    /// absorb the merkle tree root of the next prover message as provided in proof. If the next prover message is not
+    /// a univariate polynomial or the degree bound is different, the function will return an error.
+    ///
+    /// Returns enforced degree bound
+    pub fn send_univariate_polynomial(
+        &mut self,
+        namespace: &NameSpace,
+        degree_bound: usize,
+    ) -> Result<usize, BCSError> {
+        // get the current message oracle
+        let current_msg = &self.prover_message_oracles[self.num_prover_messages_sent];
+        self.num_prover_messages_sent += 1;
+        // add message to namespace and get message index in namespace
+        let index_in_namespace = self.attach_latest_prover_message_to_namespace(namespace)?;
+
+        // absorb to sponge
+        match current_msg {
+            ProverMessage::ReedSolomonCode {
+                degree_bound: expected_degree_bound,
+                oracle,
+                ..
+            } => {
+                if degree_bound != *expected_degree_bound {
+                    return Err(BCSError::TypeMismatch(
+                        namespace.clone(),
+                        index_in_namespace,
+                    ));
+                }
+                self.sponge.absorb(&oracle.mt_root());
+            }
+            _ => {
+                return Err(BCSError::TypeMismatch(
+                    namespace.clone(),
+                    index_in_namespace,
+                ))
+            }
+        };
+
+        Ok(L::ldt_info(degree_bound).0)
+    }
+
+    /// returns the index of current message in namespace
+    fn attach_latest_prover_message_to_namespace(
+        &mut self,
+        namespace: &NameSpace,
+    ) -> Result<usize, BCSError> {
+        let node = self
+            .bookkeeper
+            .fetch_node_mut(namespace)
+            .ok_or(BCSError::NamespaceNotFound(namespace.clone()))?;
+        let index = node.prover_message_locations.len();
+        node.prover_message_locations
+            .push(self.num_prover_messages_sent - 1);
+        Ok(index)
     }
 }

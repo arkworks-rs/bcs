@@ -12,6 +12,7 @@
 #[macro_use]
 extern crate derivative;
 
+use crate::bcs::transcript::NameSpace;
 use ark_std::fmt::Formatter;
 
 /// A public coin, leaf handling, interactive oracle proof protocol.
@@ -32,12 +33,26 @@ pub type Error = Box<dyn ark_std::error::Error>;
 pub enum BCSError {
     /// doc TODO
     InvalidQuery,
+    /// When verifier is simulating prover to reconstruct verifier messages, the simulation prover sends
+    /// message type (e.g. polynomial, message oracle, or IP message) that is inconsistent with message as indicated
+    /// in proof.
+    /// (Namespace, message index in namespace, expected type, actual type)
+    TypeMismatch(NameSpace, usize),
+    /// namespace not created
+    NamespaceNotFound(NameSpace),
 }
 
 impl ark_std::fmt::Display for BCSError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
             BCSError::InvalidQuery => write!(f, "Oracle does not contain answer to query."),
+            BCSError::NamespaceNotFound(ns) => write!(f, "Missing namespace {:?}", ns),
+            BCSError::TypeMismatch(ns, index) => write!(
+                f,
+                "On simulating prover message for namespace {:?}:{}: \
+            prover message type is inconsistent with message in proof. ",
+                ns, index
+            ),
         }
     }
 }

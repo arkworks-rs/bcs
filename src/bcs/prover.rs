@@ -22,8 +22,11 @@ where
     L: LDT<MT, F, S>,
     MT::InnerDigest: Absorb,
 {
-    prover_message: Vec<ProverMessage<MT, F, SuccinctOracle<MT, F>>>,
+    /// Prover succinct oracle message
+    pub prover_message: Vec<ProverMessage<MT, F, SuccinctOracle<MT, F>>>,
+    /// Proof of low-degree bound
     ldt_proof: L::LDTProof,
+    /// Final hash
     final_hash: Vec<F>,
 }
 
