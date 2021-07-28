@@ -1,31 +1,52 @@
-use crate::bcs::message::{MessageOracle, ProverMessage, VerifierMessage};
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
-use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
-use ark_sponge::CryptographicSponge;
+use ark_sponge::{CryptographicSponge, Absorb};
+
+use crate::bcs::message::{MessageOracle, ProverMessage, VerifierMessage};
+use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript};
+use crate::ldt_trait::LDT;
+use crate::Error;
 
 /// The verifier for public coin IOP has two phases.
 /// * **Commit Phase**: Verifier send message that is uniformly sampled from a random oracle. Verifier
 /// will receive prover oracle, that can use used to query later. Commit phase is already done in IOP
 /// prover because this protocol is public coin and we have a random oracle.
 /// * **Query And Decision Phase**: Verifier sends query and receive answer from message oracle.
-pub trait IOPVerifier<P: MTConfig, S: CryptographicSponge, F: PrimeField> {
+pub trait IOPVerifier<P: MTConfig, S: CryptographicSponge, F: PrimeField>:
+where P::InnerDigest: Absorb
+{
     /// TODO doc
     type VerifierOutput;
     /// Verifier Parameter
     type VerifierParameter: ?Sized;
 
-    // /// Given access to prover merkle tree root given in `prover_message_oracle`, and a random oracle,
-    // /// reconstruct sent verifier messages. In case of subprotocol, simply call `SubprotocolVerifier::reconstruct_verifier_messages`,
-    // /// and Convert subprotocol message to current message using `map_into`.
-    // ///
-    // /// This building block should be same as
-    // fn reconstruct_verifier_messages(
-    //     random_oracle: &mut S,
-    //     prover_message_oracle: &MessageTree<impl ProverMessageOracle<P, Self::Leaf>>,
-    //     verifier_parameter: &Self::VerifierParameter
-    // ) -> MessageTree<Self::VerifierMessage>;
+    /// Simulate interaction with prover in commit phase, reconstruct verifier messages using the sponge
+    /// provided in the simulation transcript.
+    ///
+    /// ## Example
+    /// Suppose the prover code in commit phase is as follows:
+    /// ```ignore
+    /// let msg1 = self.calculate_msg1();
+    /// transcript.send_univariate_polynomial(ns, bound, &msg1);
+    /// let vmsg = transcript.squeeze_verifier_bytes(...);
+    /// let msg2 = self.calculate_msg2(vmsg);
+    /// transcript.send_oracle_evaluations(ns, &msg2, domain, bound);
+    /// let msg3 = self.calculate_msg3(vmsg, msg2);
+    /// transcript.send_ip_message(ns, &msg3);
+    /// ```
+    ///
+    /// Then, the corresponding simulation code should be
+    /// ```ignore
+    /// transcript.receive_oracle_evaluation(ns, bound);
+    /// transcript.squeeze_verifier_bytes(...);
+    /// transcript.receive_oracle_evaluation(ns, bound);
+    /// transcript.receive_ip_message(ns)
+    /// ```
+    fn reconstruct_verifier_messages<L: LDT<P, F, S>>(
+        namespace: &NameSpace,
+        transcript: &mut SimulationTranscript<P, S, F, L>,
+        verifier_parameter: &Self::VerifierParameter
+    );
 
     /// Query the oracle using the random oracle. Run the verifier code, and return verifier output that
     /// is valid if prover claim is true. Verifier will return an error if prover message is obviously false,
