@@ -1,10 +1,12 @@
-use crate::{BCSError, Error};
+use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::{MerkleTree, Path};
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::collections::BTreeMap;
+use ark_std::fmt::Display;
 use ark_std::marker::PhantomData;
+use std::fmt::Formatter;
 
 /// A generalized RS-IOP message.
 
@@ -24,6 +26,20 @@ pub enum ProverMessage<P: MTConfig, F: PrimeField, Oracle: MessageOracle<P, F>> 
     },
     /// IP Message: Message without oracle
     IP { message: Vec<F> },
+}
+
+impl<P: MTConfig, F: PrimeField, Oracle: MessageOracle<P, F>> Display
+    for ProverMessage<P, F, Oracle>
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProverMessage::ReedSolomonCode { degree_bound, .. } => {
+                write!(f, "ReedSolomonCode(degree_bound={})", degree_bound)
+            }
+            ProverMessage::MessageOracle { .. } => write!(f, "MessageOracle"),
+            ProverMessage::IP { message } => write!(f, "IP(message.len() = {})", message.len()),
+        }
+    }
 }
 
 impl<P: MTConfig, F: PrimeField> ProverMessage<P, F, MessageRecordingOracle<P, F>> {
@@ -137,7 +153,7 @@ impl<P: MTConfig, F: PrimeField> MessageOracle<P, F> for SuccinctOracle<P, F> {
         for pos in position {
             match self.query_responses.get(pos) {
                 Some((leaf, path)) => result.push((leaf.clone(), (*path).clone())),
-                None => return Err(Box::new(BCSError::InvalidQuery)),
+                None => panic!("oracle does not contain answer to this query"),
             }
         }
         Ok(result)
