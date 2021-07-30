@@ -7,9 +7,7 @@ use ark_sponge::{Absorb, CryptographicSponge};
 /// A leaf-handling prover for public-coin IOP. This prover does not include low
 /// degree test. Use RS-IOP Prover instead if the prover sends
 /// polynomial using RS-code.
-pub trait IOPProver<MT: MTConfig, S: CryptographicSponge, F: PrimeField, L: LDT<MT, F, S>>
-where
-    MT::InnerDigest: Absorb,
+pub trait IOPProver<F: PrimeField>
 {
     /// TODO doc
     type ProverParameter: ?Sized;
@@ -22,10 +20,12 @@ where
     /// If the prover involves a subprotocol, consider create a separate namespace for them,
     /// using `create_subprotocol_namespace(namespace)`. Doing so, subprotocol messages will not
     /// pollute the current namespace.
-    fn prove(
+    fn prove<MT: MTConfig, S: CryptographicSponge, L: LDT<MT, F, S>>
+    (
         state: &mut Self::ProverState,
         namespace: &NameSpace,
         transcript: Transcript<MT, S, F, L>,
         prover_parameter: &Self::ProverParameter,
-    ) -> Transcript<MT, S, F, L>;
+    ) -> Transcript<MT, S, F, L> 
+    where MT::InnerDigest: Absorb;
 }

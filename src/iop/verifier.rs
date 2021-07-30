@@ -2,7 +2,7 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{CryptographicSponge, Absorb};
 
-use crate::bcs::message::{MessageOracle, ProverMessage, VerifierMessage};
+use crate::bcs::message::{MessageOracle, ProverMessagesInRound, VerifierMessage};
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript};
 use crate::ldt_trait::LDT;
 use crate::Error;
@@ -12,8 +12,7 @@ use crate::Error;
 /// will receive prover oracle, that can use used to query later. Commit phase is already done in IOP
 /// prover because this protocol is public coin and we have a random oracle.
 /// * **Query And Decision Phase**: Verifier sends query and receive answer from message oracle.
-pub trait IOPVerifier<P: MTConfig, S: CryptographicSponge, F: PrimeField>:
-where P::InnerDigest: Absorb
+pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField>
 {
     /// TODO doc
     type VerifierOutput;
@@ -42,22 +41,23 @@ where P::InnerDigest: Absorb
     /// transcript.receive_oracle_evaluation(ns, bound);
     /// transcript.receive_ip_message(ns)
     /// ```
-    fn reconstruct_verifier_messages<L: LDT<P, F, S>>(
-        namespace: &NameSpace,
-        transcript: &mut SimulationTranscript<P, S, F, L>,
-        verifier_parameter: &Self::VerifierParameter
-    );
+    // fn reconstruct_verifier_messages<L: LDT<P, F, S>>(
+    //     namespace: &NameSpace,
+    //     public_input: Self::PublicInput,
+    //     transcript: &mut SimulationTranscript<P, S, F, L>,
+    //     verifier_parameter: &Self::VerifierParameter
+    // );
 
     /// Query the oracle using the random oracle. Run the verifier code, and return verifier output that
     /// is valid if prover claim is true. Verifier will return an error if prover message is obviously false,
     /// or oracle cannot answer the query.
     ///
     /// To access prover message oracle and previous verifier messages of current namespace, use bookkeeper.
-    fn query_and_decision<Oracle: MessageOracle<P, F>>(
+    fn query_and_decision<Oracle: MessageOracle<F>>(
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         random_oracle: &mut S,
-        prover_message_oracle: &mut [ProverMessage<P, F, Oracle>],
+        prover_message_oracle: &mut [ProverMessagesInRound<F, Oracle>],
         previous_verifier_messages: &mut [VerifierMessage<F>],
         bookkeeper: &MessageBookkeeper,
     ) -> Result<Self::VerifierOutput, Error>;

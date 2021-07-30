@@ -1,4 +1,4 @@
-use crate::bcs::message::{ProverMessage, SuccinctOracle};
+use crate::bcs::message::{ProverMessagesInRound, SuccinctOracle};
 use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
@@ -12,34 +12,37 @@ use ark_sponge::{Absorb, CryptographicSponge};
 /// BCSProof contains all prover messages that use succinct oracle, and thus is itself succinct.
 #[derive(Derivative)]
 #[derivative(Clone(
-    bound = "MT: MTConfig, F: PrimeField,S: CryptographicSponge, L: LDT<MT, F, S>"
+    bound = "MT: MTConfig, F: PrimeField,S: CryptographicSponge"
 ))]
-pub struct BCSProof<MT, F, S, L>
+pub struct BCSProof<MT, F, S>
 where
     MT: MTConfig,
     F: PrimeField,
     S: CryptographicSponge,
-    L: LDT<MT, F, S>,
     MT::InnerDigest: Absorb,
 {
-    /// Prover succinct oracle message
-    pub prover_message: Vec<ProverMessage<MT, F, SuccinctOracle<MT, F>>>,
-    /// Proof of low-degree bound
-    ldt_proof: L::LDTProof,
-    /// Final hash
-    final_hash: Vec<F>,
+    /// Messages sent by prover in commit phase. Each item in the vector represents a list of
+    /// message oracles with same length. The length constraints do not hold for short messages (IP message).
+    /// All non-IP messages in the same prover round should share the same merkle tree. Each merkle tree leaf is
+    /// a vector which each element correspond to the same location of different oracles.
+    ///
+    /// Prover succinct oracle message. If the user uses RSIOP, the oracles in last `n` rounds will be used for LDT with
+    /// `n` queries.
+    pub prover_messages: Vec<Vec<ProverMessagesInRound<MT, F, SuccinctOracle<MT, F>>>>,
+
+    /// Prover messages used for LDT. If the prover is not RS-IOP, this vector should be empty.
+    pub ldt_prover_messages: Vec<ProverMessagesInRound<MT, F, SuccinctOracle<MT, F>>>,
 }
 
-impl<MT, F, S, L> BCSProof<MT, F, S, L>
+impl<MT, F, S> BCSProof<MT, F, S>
 where
     MT: MTConfig<Leaf = F>,
     F: PrimeField,
     S: CryptographicSponge,
-    L: LDT<MT, F, S>,
     MT::InnerDigest: Absorb,
 {
     /// Generate proof
-    pub fn generate<V, P>(
+    pub fn generate<V, P, L>(
         sponge: S,
         prover_initial_state: &mut P::ProverState,
         prover_parameter: &P::ProverParameter,
@@ -51,6 +54,7 @@ where
     where
         V: IOPVerifier<MT, S, F>,
         S: CryptographicSponge,
+        L: LDT<P, F, S>,
         P: IOPProver<MT, S, F, L>,
     {
         // create a BCS transcript
@@ -68,7 +72,7 @@ where
         let mut low_degree_oracles_ref = Vec::new();
         for msg in &mut transcript.prover_message_oracles {
             match msg {
-                ProverMessage::ReedSolomonCode {
+                ProverMessagesInRound::ReedSolomonCode {
                     degree_bound,
                     oracle,
                     ..
@@ -107,12 +111,12 @@ where
             .collect();
 
         // compute final hash
+        // TODO: may not needed
         let final_hash = final_hasher(&mut sponge);
 
         Ok(Self {
-            prover_message: succinct_prover_message_oracles,
-            ldt_proof,
-            final_hash,
+            prover_messages: succinct_prover_message_oracles,
+            ldt_prover_messages: ...,
         })
     }
 }
