@@ -2,15 +2,16 @@ use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOne
 
 /// Defines a prover message oracle.
 pub mod message;
-/// TODO refactor me
-// pub mod prover;
+
+pub mod prover;
 /// TODO doc
 pub mod transcript;
 // TODO refactor me
 // pub mod verifier;
 
 /// Specify the merkle tree hash parameters used for this protocol.
-#[derive(Clone)]
+#[derive(Derivative)]
+#[derivative(Clone(bound = "P: MTConfig"))]
 pub struct MTHashParameters<P: MTConfig> {
     /// Leaf hash parameter of merkle tree.
     pub leaf_hash_param: LeafParam<P>,

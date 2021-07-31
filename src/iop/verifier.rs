@@ -1,10 +1,8 @@
-use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
-use ark_sponge::{CryptographicSponge, Absorb};
+use ark_sponge::CryptographicSponge;
 
 use crate::bcs::message::{MessageOracle, ProverMessagesInRound, VerifierMessage};
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript};
-use crate::ldt_trait::LDT;
+use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 use crate::Error;
 
 /// The verifier for public coin IOP has two phases.
@@ -12,8 +10,7 @@ use crate::Error;
 /// will receive prover oracle, that can use used to query later. Commit phase is already done in IOP
 /// prover because this protocol is public coin and we have a random oracle.
 /// * **Query And Decision Phase**: Verifier sends query and receive answer from message oracle.
-pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField>
-{
+pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField> {
     /// TODO doc
     type VerifierOutput;
     /// Verifier Parameter
@@ -53,12 +50,12 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField>
     /// or oracle cannot answer the query.
     ///
     /// To access prover message oracle and previous verifier messages of current namespace, use bookkeeper.
-    fn query_and_decision<Oracle: MessageOracle<F>>(
+    fn query_and_decide<Oracle: MessageOracle<F>>(
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         random_oracle: &mut S,
-        prover_message_oracle: &mut [ProverMessagesInRound<F, Oracle>],
-        previous_verifier_messages: &mut [VerifierMessage<F>],
+        prover_message_oracle: &[&mut ProverMessagesInRound<F, Oracle>],
+        verifier_messages: &[Vec<VerifierMessage<F>>],
         bookkeeper: &MessageBookkeeper,
     ) -> Result<Self::VerifierOutput, Error>;
 }

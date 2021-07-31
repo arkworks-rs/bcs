@@ -1,38 +1,46 @@
-use crate::bcs::message::{MessageOracle, OracleWithCodewords, ProverMessagesInRound, SuccinctOracle};
+use crate::bcs::message::{MessageOracle, ProverMessagesInRound, VerifierMessage};
+use crate::bcs::transcript::Transcript;
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_sponge::CryptographicSponge;
+use ark_sponge::{Absorb, CryptographicSponge};
 
-/// Trait for LDT.
+/// Trait for LDT, which is an interactive oracle proof system.
 /// TODO: move this into `ark-ldt`
-pub trait LDT<MT: MTConfig, F: PrimeField, S: CryptographicSponge> {
+pub trait LDT<F: PrimeField + Absorb> {
     type LDTProof: Clone + CanonicalSerialize + CanonicalDeserialize;
     type LDTParameters;
 
-    /// Given the degree bound, reutnr the enforced bound and poly domain
+    /// Given the degree bound, return the enforced bound and poly domain used.
+    /// # Panics
+    /// `ldt_info` will panic if `degree_bound` is not supported by this LDT.
     fn ldt_info(degree_bound: usize) -> (usize, Radix2CosetDomain<F>);
 
-    /// Given the list of codewords along with its degree bound, generate the LDT proof, which is a vector of list of oracles.
-    /// Each list of oracles are all oracles sent in one query.
-    /// The LDT proof will not include the codeword oracle, but verifier will need to access the
-    /// oracle afterwords.
+    /// Given the list of codewords along with its degree bound, send LDT prover messages.
     ///
     /// **important**: when simulating verifier in LDT, make sure verifier can only access prover message
     /// though `oracle.query`.  
-    fn prove<P: OracleWithCodewords<MT, F>>(
+    fn prove<MT: MTConfig, S: CryptographicSponge>(
         param: &Self::LDTParameters,
-        sponge: &mut S,
-        codewords: &[(usize, &mut P)],
-    ) -> Result<Vec<Vec<SuccinctOracle<P, F>>>, Error>;
+        codewords: &[(usize, &[F])],
+        ldt_transcript: &mut Transcript<MT, S, F>,
+    ) -> Result<(), Error>
+    where
+        MT::InnerDigest: Absorb;
+
+    // fn reconstruct_ldt_verifier_messages(
+    //     param: &Self::LDTParameters,
+    //
+    // ); // TODO: need simulation transcript
 
     /// Verify `codewords` is low-degree, given the succinct codewords oracle and proof.
-    fn verify<P: MessageOracle<MT, F>>(
+    fn query_and_decide<S: CryptographicSponge, Oracle: MessageOracle<F>>(
         param: &Self::LDTParameters,
-        sponge: &mut S,
-        codewords: &[&mut P],
-        proof: &[Vec<ProverMessagesInRound<MT, F, SuccinctOracle<MT, F>>>],
+        random_oracle: &mut S,
+        codewords_oracles: &[&mut Oracle],
+        ldt_prover_message_oracles: &[&mut ProverMessagesInRound<F, Oracle>],
+        ldt_verifier_messages: &[Vec<VerifierMessage<F>>],
     ) -> Result<(), Error>;
 }

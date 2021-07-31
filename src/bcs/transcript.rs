@@ -2,10 +2,8 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 
-use crate::bcs::message::{
-    MessageOracle, MessageRecordingOracle, ProverMessagesInRound, SuccinctOracle, VerifierMessage,
-};
-use crate::bcs::prover::BCSProof;
+use crate::bcs::message::{MessageRecordingOracle, ProverMessagesInRound, VerifierMessage};
+use crate::bcs::MTHashParameters;
 use crate::ldt_trait::LDT;
 use crate::Error;
 use ark_crypto_primitives::MerkleTree;
@@ -13,9 +11,7 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::Polynomial;
 use ark_std::collections::BTreeMap;
-use ark_std::marker::PhantomData;
 use ark_std::mem::take;
-use crate::bcs::MTHashParameters;
 use std::collections::BTreeSet;
 
 /// # Namespace
@@ -116,23 +112,27 @@ pub struct MessageIndices {
     pub verifier_message_locations: Vec<usize>,
 }
 
-enum PendingMessage<F: PrimeField>{
+#[derive(Clone)]
+#[allow(variant_size_differences)]
+/// Pending message for current transcript. We allow `variant_size_differences` here because there will
+/// only be one `PendingMessage` per transcript.
+enum PendingMessage<F: PrimeField + Absorb> {
     ProverMessage(ProverMessagesInRound<F, MessageRecordingOracle<F>>),
     VerifierMessage(Vec<VerifierMessage<F>>),
-    None
+    None,
 }
 
-impl<F: PrimeField> Default for PendingMessage<F> {
+impl<F: PrimeField + Absorb> Default for PendingMessage<F> {
     fn default() -> Self {
         Self::None
     }
 }
 
-
 /// A communication protocol for IOP prover.
 #[derive(Clone)]
-pub struct Transcript<P: MTConfig, S: CryptographicSponge, F: PrimeField, L: LDT<P, F, S>>
-where P::InnerDigest: Absorb
+pub struct Transcript<P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
+where
+    P::InnerDigest: Absorb,
 {
     /// merkle tree hash parameters
     pub hash_params: MTHashParameters<P>,
@@ -150,17 +150,14 @@ where P::InnerDigest: Absorb
     pub bookkeeper: MessageBookkeeper,
     /// Random Oracle to sample verifier messages.
     pub sponge: S,
-    pending_message_for_current_round: PendingMessage<F> ,
-    _ldt: PhantomData<L>,
+    pending_message_for_current_round: PendingMessage<F>,
 }
 
-/// rename RS-IOP transcript
-impl<P, S, F, L> Transcript<P, S, F, L>
+impl<P, S, F> Transcript<P, S, F>
 where
     P: MTConfig<Leaf = Vec<F>>,
     S: CryptographicSponge,
-    F: PrimeField,
-    L: LDT<P, F, S>,
+    F: PrimeField + Absorb,
     P::InnerDigest: Absorb,
 {
     /// Return a new BCS transcript.
@@ -175,7 +172,6 @@ where
             sponge,
             hash_params,
             pending_message_for_current_round: PendingMessage::default(),
-            _ldt: PhantomData,
         }
     }
 
@@ -186,22 +182,25 @@ where
     /// Submit all prover oracles in this round, and set pending round message to `None`
     /// # Panic
     /// Panic if current prover round messages is `None` or `VerifierMessage`
-    pub fn submit_prover_current_round(&mut self, namespace: &NameSpace) -> Result<(), Error>{
+    pub fn submit_prover_current_round(&mut self, namespace: &NameSpace) -> Result<(), Error> {
         let pending_message = take(&mut self.pending_message_for_current_round);
-        if let PendingMessage::ProverMessage(round_msg) = pending_message{
+        if let PendingMessage::ProverMessage(round_msg) = pending_message {
             // generate merkle tree
-            let mt = self.generate_merkle_tree(&round_msg)?;
+            let mt = round_msg.generate_merkle_tree(&self.hash_params)?;
             // if this round prover message contains oracle messages, absorb merkle tree root
-            if let Some(mt) = &mt{
+            if let Some(mt) = &mt {
                 self.sponge.absorb(&mt.root());
             }
             // if this round prover message has non-oracle messages, absorb them in entirety
-            round_msg.short_messages.iter().for_each(|msg|self.sponge.absorb(msg));
+            round_msg
+                .short_messages
+                .iter()
+                .for_each(|msg| self.sponge.absorb(msg));
             self.prover_message_oracles.push(round_msg);
             self.merkle_tree_for_each_round.push(mt);
             self.attach_latest_prover_round_to_namespace(namespace);
             Ok(())
-        }else{
+        } else {
             panic!("Current pending message is not prover message!")
         }
     }
@@ -209,18 +208,18 @@ where
     /// Submit all verifier messages in this round, and set pending round message to `None`.
     /// # Panic
     /// Panic if current verifier round messages is `None` or `ProverMessage`
-    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace){
+    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace) {
         let pending_message = take(&mut self.pending_message_for_current_round);
-        if let PendingMessage::VerifierMessage(round_msg) = pending_message{
+        if let PendingMessage::VerifierMessage(round_msg) = pending_message {
             self.verifier_messages.push(round_msg);
             self.attach_latest_verifier_round_to_namespace(namespace);
-        }else{
+        } else {
             panic!("Current pending message is not prover message!")
         }
     }
 
     /// Send univariate polynomial with LDT.
-    pub fn send_univariate_polynomial(
+    pub fn send_univariate_polynomial<L: LDT<F>>(
         &mut self,
         degree_bound: usize,
         poly: &DensePolynomial<F>,
@@ -237,7 +236,7 @@ where
     }
 
     /// Send Reed-Solomon codes of a polynomial.
-    pub fn send_oracle_evaluations(
+    pub fn send_oracle_evaluations<L: LDT<F>>(
         &mut self,
         msg: impl IntoIterator<Item = F>,
         domain: Radix2CosetDomain<F>,
@@ -260,43 +259,42 @@ where
     ) -> Result<(), Error> {
         // encode the message
         let oracle = self.encode_message_oracle(msg)?;
-        self.current_prover_pending_message().reed_solomon_codes.push((oracle, degree_bound));
+        self.current_prover_pending_message()
+            .reed_solomon_codes
+            .push((oracle, degree_bound));
         Ok(())
     }
 
     /// Send prover message oracles.
     /// Note that transcript will not do low-degree test on this oracle.
     /// Returns the index of message.
-    pub fn send_message_oracle(
-        &mut self,
-        msg: impl IntoIterator<Item = F>,
-    ) -> Result<(), Error> {
+    pub fn send_message_oracle(&mut self, msg: impl IntoIterator<Item = F>) -> Result<(), Error> {
         // encode the message
         let oracle = self.encode_message_oracle(msg)?;
         // store the encoded prover message for generating proof
-        self.current_prover_pending_message().message_oracles.push(oracle);
+        self.current_prover_pending_message()
+            .message_oracles
+            .push(oracle);
 
         Ok(())
     }
 
     /// Send short message that does not need to be an oracle. The entire message will be included
     /// in BCS proof, and no merkle tree will be generated.
-    pub fn send_message(&mut self, namespace: &NameSpace, msg: impl IntoIterator<Item = F>)
+    pub fn send_message(&mut self, msg: impl IntoIterator<Item = F>)
     where
         F: Absorb,
     {
         let message: Vec<_> = msg.into_iter().collect();
         // store the message
-        self.current_prover_pending_message().short_messages.push(message);
+        self.current_prover_pending_message()
+            .short_messages
+            .push(message);
     }
-    
 
     /// Squeeze sampled verifier message as field elements. The squeezed elements is stored
     /// in transcript and will be later given to verifier in query and decision phase.
-    pub fn squeeze_verifier_field_elements(
-        &mut self,
-        field_size: &[FieldElementSize],
-    ) -> Vec<F> {
+    pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) -> Vec<F> {
         // squeeze message
         let msg = self.sponge.squeeze_field_elements_with_sizes(field_size);
         // store the verifier message for later decision phase
@@ -307,7 +305,7 @@ where
 
     /// Squeeze sampled verifier message as bytes. The squeezed elements is stored
     /// in transcript and will be later given to verifier in query and decision phase.
-    pub fn squeeze_verifier_bytes(&mut self, namespace: &NameSpace, num_bytes: usize) -> Vec<u8> {
+    pub fn squeeze_verifier_bytes(&mut self, num_bytes: usize) -> Vec<u8> {
         // squeeze message
         let msg = self.sponge.squeeze_bytes(num_bytes);
         // store the verifier message for later decision phase
@@ -318,39 +316,43 @@ where
 
     /// Squeeze sampled verifier message as bits The squeezed elements is stored
     /// in transcript and will be later given to verifier in query and decision phase.
-    pub fn squeeze_verifier_bits(&mut self, namespace: &NameSpace, num_bits: usize) -> Vec<bool> {
+    pub fn squeeze_verifier_bits(&mut self, num_bits: usize) -> Vec<bool> {
         // squeeze message
         let msg = self.sponge.squeeze_bits(num_bits);
         // store the verifier message for later decision phase
         self.current_verifier_pending_message()
+            .push(VerifierMessage::Bits(msg.clone()));
         msg
     }
 
     /// Get reference to current prover pending message.
     /// If current round pending message to `None`, current round message will become prover message type.
     /// Panic if current pending message is not prover message.
-    fn current_prover_pending_message(&mut self) -> &mut ProverMessagesInRound<F, MessageRecordingOracle<F>>{
-        match &mut self.pending_message_for_current_round{
+    fn current_prover_pending_message(
+        &mut self,
+    ) -> &mut ProverMessagesInRound<F, MessageRecordingOracle<F>> {
+        if let PendingMessage::None = &self.pending_message_for_current_round {
+            self.pending_message_for_current_round =
+                PendingMessage::ProverMessage(ProverMessagesInRound::empty());
+        }
+        match &mut self.pending_message_for_current_round {
             PendingMessage::ProverMessage(msg) => msg,
             PendingMessage::VerifierMessage(_) => panic!("Pending message is verifier message"),
-            PendingMessage::None => {
-                self.pending_message_for_current_round = PendingMessage::ProverMessage(ProverMessagesInRound::empty());
-                self.current_prover_pending_message()
-            }
+            _ => unreachable!(),
         }
     }
 
     /// Get reference to current verifier pending message.
     /// If current round pending message to `None`, current round message will become verifier message type.
     /// Panic if current pending message is not verifier message.
-    fn current_verifier_pending_message(&mut self) -> &mut Vec<VerifierMessage<F>>{
-        match &mut self.pending_message_for_current_round{
+    fn current_verifier_pending_message(&mut self) -> &mut Vec<VerifierMessage<F>> {
+        if let PendingMessage::None = &self.pending_message_for_current_round {
+            self.pending_message_for_current_round = PendingMessage::VerifierMessage(Vec::new());
+        }
+        match &mut self.pending_message_for_current_round {
             PendingMessage::VerifierMessage(msg) => msg,
             PendingMessage::ProverMessage(..) => panic!("Pending message is prover message"),
-            PendingMessage::None => {
-                self.pending_message_for_current_round = PendingMessage::VerifierMessage(Vec::new());
-                self.current_verifier_pending_message()
-            }
+            PendingMessage::None => unreachable!(),
         }
     }
 
@@ -364,33 +366,6 @@ where
             leaves,
             queries: BTreeSet::new(),
         })
-    }
-
-    /// Given a round message, convert the round message to merkle tree. 
-    fn generate_merkle_tree(&self, prover_round_message: &ProverMessagesInRound<F, MessageRecordingOracle<F>>) -> Result<Option<MerkleTree<P>>, Error> {
-        if !prover_round_message.oracle_length().is_power_of_two() {
-            panic!("oracle length need to be power of two")
-        }
-        if prover_round_message.oracle_length() == 0{
-            // oracle does not contain any message oracle
-            debug_assert!(prover_round_message.reed_solomon_codes.is_empty() && prover_round_message.message_oracles.is_empty())
-            return Ok(None)
-        }
-        let mut mt_leaves: Vec<_> = (0..prover_round_message.oracle_length()).map(|_|Vec::new()).collect();
-        let messages = prover_round_message.reed_solomon_codes
-            .iter()
-            .map(|(oracle, _)|oracle)
-            .chain(prover_round_message.message_oracles.iter());
-        for oracle in messages{
-            if oracle.leaves.len() != prover_round_message.oracle_length(){
-                panic!("invalid oracle leaves");
-            }
-            mt_leaves.iter_mut().zip(oracle.leaves.iter()).for_each(|(leaf, new)|{
-                leaf.push(*new);
-            })
-        }
-
-        Ok(Some(MerkleTree::<P>::new(&self.hash_params.leaf_hash_param, &self.hash_params.inner_hash_param, mt_leaves)?))
     }
 
     fn attach_latest_prover_round_to_namespace(&mut self, namespace: &NameSpace) {
@@ -413,7 +388,7 @@ where
             .push(index);
     }
 }
-// 
+//
 // /// A communication protocol for IOP verifier, which is used to reconstruct verifier messages.
 // /// This transcript includes merkle tree roots, which acts as a simulation of prover in commit phase.
 // pub struct SimulationTranscript<
@@ -441,7 +416,7 @@ where
 //     num_prover_messages_sent: usize,
 //     _ldt: PhantomData<L>,
 // }
-// 
+//
 // impl<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField, L: LDT<P, F, S>>
 //     SimulationTranscript<'a, P, S, F, L>
 // where
@@ -463,7 +438,7 @@ where
 //             _ldt: PhantomData,
 //         }
 //     }
-// 
+//
 //     /// Receive prover's next message as oracle evaluations and absorb merkle tree root to sponge.
 //     ///
 //     /// # Panics
@@ -479,7 +454,7 @@ where
 //         if domain != suggested_domain {
 //             panic!("invalid domain");
 //         }
-// 
+//
 //         // get the current message oracle
 //         let current_msg = &self.receive_prover_next_message(namespace);
 //         // absorb to sponge
@@ -505,10 +480,10 @@ where
 //                 );
 //             }
 //         };
-// 
+//
 //         enforced_bound
 //     }
-// 
+//
 //     /// Receive prover's next message as message oracle without LDT and absorb merkle tree root to sponge.
 //     ///
 //     /// # Panics
@@ -524,7 +499,7 @@ where
 //             _ => panic!("want to receive a message oracle, got {}", current_msg),
 //         }
 //     }
-// 
+//
 //     /// Receive prover's next message as short IP message and absorb entire message to sponge.
 //     ///
 //     /// # Panics
@@ -542,7 +517,7 @@ where
 //             _ => panic!("want to receive an IP message, got {}", current_msg),
 //         }
 //     }
-// 
+//
 //     /// Squeeze sampled verifier message as field elements. The squeezed elements is stored
 //     /// in simulation transcript and will be later given to verifier in query and decision phase.
 //     pub fn squeeze_verifier_field_elements(
@@ -557,7 +532,7 @@ where
 //             .push(VerifierMessage::FieldElements(msg));
 //         self.attach_latest_verifier_message_to_namespace(namespace);
 //     }
-// 
+//
 //     /// Squeeze sampled verifier message as bytes. The squeezed elements is stored
 //     /// in simulation transcript and will be later given to verifier in query and decision phase.
 //     pub fn squeeze_verifier_bytes(&mut self, namespace: &NameSpace, num_bytes: usize) {
@@ -567,7 +542,7 @@ where
 //         self.verifier_messages.push(VerifierMessage::Bytes(msg));
 //         self.attach_latest_verifier_message_to_namespace(namespace);
 //     }
-// 
+//
 //     /// Squeeze sampled verifier message as bits. The squeezed elements is stored
 //     /// in simulation transcript and will be later given to verifier in query and decision phase.
 //     pub fn squeeze_verifier_bits(&mut self, namespace: &NameSpace, num_bits: usize) {
@@ -577,7 +552,7 @@ where
 //         self.verifier_messages.push(VerifierMessage::Bits(msg));
 //         self.attach_latest_verifier_message_to_namespace(namespace);
 //     }
-// 
+//
 //     /// Receive prover next message oracle from proof.
 //     /// This function increment the prover message counter by 1, add current prover message to namespace,
 //     /// but does not absorb message to sponge.
@@ -594,7 +569,7 @@ where
 //         self.attach_latest_prover_message_to_namespace(namespace);
 //         current_msg
 //     }
-// 
+//
 //     /// returns the index of current message in namespace
 //     fn attach_latest_prover_message_to_namespace(&mut self, namespace: &NameSpace) {
 //         self.bookkeeper
@@ -603,7 +578,7 @@ where
 //             .prover_message_locations
 //             .push(self.num_prover_messages_sent - 1);
 //     }
-// 
+//
 //     fn attach_latest_verifier_message_to_namespace(&mut self, namespace: &NameSpace) {
 //         self.bookkeeper
 //             .fetch_node_mut(namespace)

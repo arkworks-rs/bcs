@@ -14,7 +14,7 @@ extern crate derivative;
 
 /// A public coin, leaf handling, interactive oracle proof protocol.
 /// Prover sends out messages that can be encoded to field elements. Verifier sample field element as message.
-pub mod iop; 
+pub mod iop;
 
 /// A compiler to convert any public coin IOP to non-interactive one using BCS transform.
 /// Source: [BCS16](https://eprint.iacr.org/2016/116)
