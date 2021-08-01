@@ -66,7 +66,7 @@ where
         // create a BCS transcript
         let mut transcript = Transcript::new(sponge, hash_params.clone());
 
-        // run prover code, using transcript as a simulated verifier
+        // run prover code, using transcript to sample verifier message
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(
             prover_initial_state,
@@ -75,7 +75,7 @@ where
             prover_parameter,
         );
 
-        // perform LDT proof
+        // perform LDT to enforce degree bound on oracles
         let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params);
         {
             let low_degree_messages_ref: Vec<_> = transcript
@@ -106,6 +106,7 @@ where
         let ldt_merkle_trees = ldt_transcript.merkle_tree_for_each_round;
         let ldt_verifier_messages = ldt_transcript.verifier_messages;
 
+        // run LDT verifier code to obtain all queries. We will use this query to generate succinct oracles from message recording oracle.
         {
             // get the mutable codeword oracle reference for LDT
             let low_degree_oracle_ref: Vec<_> = prover_message_oracles
@@ -114,7 +115,6 @@ where
                 .flatten()
                 .collect();
 
-            // run LDT verifier code
             let ldt_prover_message_oracles_ref: Vec<_> =
                 ldt_prover_message_oracles.iter_mut().collect();
             L::query_and_decide(
@@ -126,7 +126,7 @@ where
             )?;
         }
 
-        // run verifier code (we ignore verifier output)
+        // run main verifier code to obtain all queries
         {
             let prover_message_oracles_ref: Vec<_> = prover_message_oracles.iter_mut().collect();
             V::query_and_decide(
@@ -139,7 +139,7 @@ where
             )?;
         }
 
-        // convert oracles to succint oracle
+        // convert oracles to succinct oracle
         let (succinct_prover_message_oracles, queried_indices): (Vec<_>, Vec<_>) =
             prover_message_oracles
                 .into_iter()
