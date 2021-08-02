@@ -8,10 +8,14 @@ use ark_sponge::{Absorb, CryptographicSponge};
 /// polynomial using RS-code.
 pub trait IOPProver<F: PrimeField + Absorb> {
     /// TODO doc
+    /// Prover parameter should be a superset of verifier parameter.
     type ProverParameter: ?Sized;
-    /// Prover State
+
+    /// Prover State. May contain witness.
+    /// Prover state should be a superset of verifier state.
     type ProverState: ?Sized;
-    /// maybe a prover state struct
+    /// Public input
+    type PublicInput: ?Sized;
 
     /// TODO doc
     ///
@@ -19,8 +23,9 @@ pub trait IOPProver<F: PrimeField + Absorb> {
     /// using `create_subprotocol_namespace(namespace)`. Doing so, subprotocol messages will not
     /// pollute the current namespace.
     fn prove<MT: MTConfig, S: CryptographicSponge>(
-        state: &mut Self::ProverState,
         namespace: &NameSpace,
+        state: &mut Self::ProverState,
+        public_input: &Self::PublicInput,
         transcript: &mut Transcript<MT, S, F>,
         prover_parameter: &Self::ProverParameter,
     ) where

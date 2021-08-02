@@ -206,7 +206,7 @@ impl<F: PrimeField> MessageOracle<F> for SuccinctOracle<F> {
 }
 
 /// Verifier message used in transcript
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum VerifierMessage<F: PrimeField> {
     /// field elements
     FieldElements(Vec<F>),

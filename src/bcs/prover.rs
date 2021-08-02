@@ -51,7 +51,9 @@ where
     /// Generate proof
     pub fn generate<V, P, L, S>(
         sponge: S,
+        public_input: &P::PublicInput,
         prover_initial_state: &mut P::ProverState,
+        verifier_initial_state: &mut V::VerifierState,
         prover_parameter: &P::ProverParameter,
         verifier_parameter: &V::VerifierParameter,
         ldt_params: &L::LDTParameters,
@@ -69,13 +71,20 @@ where
         // run prover code, using transcript to sample verifier message
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(
-            prover_initial_state,
             &ROOT_NAMESPACE,
+            prover_initial_state,
+            public_input,
             &mut transcript,
             prover_parameter,
         );
 
-        // perform LDT to enforce degree bound on oracles
+        // sanity check: pending message should be None
+        debug_assert!(
+            !transcript.is_pending_message_available(),
+            "Sanity check failed: pending message not submitted."
+        );
+
+        // perform LDT to enforce degree bound on low-degree oracles
         let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params);
         {
             let low_degree_messages_ref: Vec<_> = transcript
@@ -93,6 +102,11 @@ where
             // run the ldt prover to generate LDT prover messages.
             L::prove(ldt_params, &low_degree_messages_ref, &mut ldt_transcript)?;
         }
+
+        debug_assert!(
+            !ldt_transcript.is_pending_message_available(),
+            "Sanity check failed: pending message not submitted."
+        );
 
         // extract things from main transcript
         let mut sponge = ldt_transcript.sponge;
@@ -132,6 +146,7 @@ where
             V::query_and_decide(
                 &ROOT_NAMESPACE,
                 verifier_parameter,
+                verifier_initial_state,
                 &mut sponge,
                 &prover_message_oracles_ref,
                 &verifier_messages,
