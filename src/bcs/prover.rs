@@ -5,7 +5,7 @@ use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
 use crate::ldt_trait::LDT;
 use crate::Error;
-use ark_crypto_primitives::merkle_tree::{Config as MTConfig, Config};
+use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::{MerkleTree, Path};
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
@@ -52,15 +52,14 @@ where
     pub fn generate<V, P, L, S>(
         sponge: S,
         public_input: &P::PublicInput,
-        prover_initial_state: &mut P::ProverState,
-        verifier_initial_state: &mut V::VerifierState,
+        private_input: &P::PrivateInput,
         prover_parameter: &P::ProverParameter,
         verifier_parameter: &V::VerifierParameter,
         ldt_params: &L::LDTParameters,
         hash_params: MTHashParameters<MT>,
     ) -> Result<Self, Error>
     where
-        V: IOPVerifier<S, F>,
+        V: IOPVerifier<S, F, PublicInput = P::PublicInput>,
         L: LDT<F>,
         P: IOPProver<F>,
         S: CryptographicSponge,
@@ -72,8 +71,7 @@ where
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(
             &ROOT_NAMESPACE,
-            prover_initial_state,
-            public_input,
+            &mut P::initial_state(public_input, private_input),
             &mut transcript,
             prover_parameter,
         );
@@ -87,7 +85,7 @@ where
         // perform LDT to enforce degree bound on low-degree oracles
         let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params);
         {
-            let low_degree_messages_ref: Vec<_> = transcript
+            let codeword_oracles_ref: Vec<_> = transcript
                 .prover_message_oracles
                 .iter()
                 .map(|msg| {
@@ -100,7 +98,7 @@ where
 
             // Given the entire codewords of all low-degree messages in the protocol,
             // run the ldt prover to generate LDT prover messages.
-            L::prove(ldt_params, &low_degree_messages_ref, &mut ldt_transcript)?;
+            L::prove(ldt_params, &codeword_oracles_ref, &mut ldt_transcript)?;
         }
 
         debug_assert!(
@@ -146,7 +144,7 @@ where
             V::query_and_decide(
                 &ROOT_NAMESPACE,
                 verifier_parameter,
-                verifier_initial_state,
+                &mut V::initial_state_for_query_and_decision_phase(public_input),
                 &mut sponge,
                 &prover_message_oracles_ref,
                 &verifier_messages,
@@ -190,7 +188,7 @@ where
     }
 }
 
-fn generate_mt_paths<P: Config>(
+fn generate_mt_paths<P: MTConfig>(
     queried_indices: Vec<BTreeSet<usize>>,
     merkle_trees: &[Option<MerkleTree<P>>],
 ) -> Vec<BTreeMap<usize, Path<P>>> {
@@ -213,13 +211,4 @@ fn generate_mt_paths<P: Config>(
             paths_curr_round
         })
         .collect()
-}
-
-fn le_bits_to_usize(bits: &[bool]) -> usize {
-    let mut result = 0;
-    bits.iter().for_each(|&x| {
-        result <<= 1;
-        result |= x as usize;
-    });
-    result
 }

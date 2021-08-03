@@ -20,12 +20,12 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// Verifier Parameter
     type VerifierParameter: ?Sized;
     /// Verifier state. May contain input.
-    type VerifierState: ?Sized;
+    type VerifierState;
     /// Public input
     type PublicInput: ?Sized;
 
-    /// Simulate interaction with prover in commit phase, reconstruct verifier messages using the sponge
-    /// provided in the simulation transcript.
+    /// Simulate interaction with prover in commit phase, reconstruct verifier messages and verifier state
+    /// using the sponge provided in the simulation transcript. Returns the verifier state for query and decision phase.
     ///
     /// When writing test, use `transcript.check_correctness` after calling this method to verify the correctness
     /// of this method.
@@ -36,6 +36,11 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
         verifier_parameter: &Self::VerifierParameter,
     ) where
         MT::InnerDigest: Absorb;
+
+    /// Returns the initial state for query and decision phase.
+    fn initial_state_for_query_and_decision_phase(
+        public_input: &Self::PublicInput,
+    ) -> Self::VerifierState;
 
     /// Query the oracle using the random oracle. Run the verifier code, and return verifier output that
     /// is valid if prover claim is true. Verifier will return an error if prover message is obviously false,

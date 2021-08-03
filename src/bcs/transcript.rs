@@ -2,7 +2,9 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 
-use crate::bcs::message::{MessageRecordingOracle, ProverMessagesInRound, VerifierMessage};
+use crate::bcs::message::{
+    MessageRecordingOracle, ProverMessagesInRound, ProverRoundMessageInfo, VerifierMessage,
+};
 use crate::bcs::prover::BCSProof;
 use crate::bcs::MTHashParameters;
 use crate::ldt_trait::LDT;
@@ -222,13 +224,14 @@ where
         &mut self,
         degree_bound: usize,
         poly: &DensePolynomial<F>,
+        ldt_params: &L::LDTParameters,
     ) -> Result<usize, Error> {
         // check degree bound
         if poly.degree() > degree_bound {
             panic!("polynomial degree is greater than degree bound!");
         }
         // evaluate the poly using ldt domain
-        let (enforced_bound, domain) = L::ldt_info(degree_bound);
+        let (enforced_bound, domain) = L::ldt_info(ldt_params, degree_bound);
         let evaluations = domain.evaluate(poly);
         self.send_oracle_evaluations_unchecked(evaluations, degree_bound)?;
         Ok(enforced_bound)
@@ -239,10 +242,11 @@ where
         &mut self,
         msg: impl IntoIterator<Item = F>,
         domain: Radix2CosetDomain<F>,
+        ldt_params: &L::LDTParameters,
         degree_bound: usize,
     ) -> Result<usize, Error> {
         // check domain validity
-        let (enforced_bound, suggested_domain) = L::ldt_info(degree_bound);
+        let (enforced_bound, suggested_domain) = L::ldt_info(ldt_params, degree_bound);
         if domain != suggested_domain {
             panic!("invalid domain")
         }
@@ -407,15 +411,16 @@ where
     P::InnerDigest: Absorb,
 {
     /// prover short messages at each round
+    prover_messages_info: Vec<ProverRoundMessageInfo>,
     prover_short_messages: Vec<&'a Vec<Vec<F>>>,
     prover_mt_roots: &'a [Option<P::InnerDigest>],
     sponge: &'a mut S,
     /// the next prover round message to absorb
-    current_prover_round: usize,
+    pub(crate) current_prover_round: usize,
 
-    reconstructed_verifer_messages: Vec<Vec<VerifierMessage<F>>>,
+    pub(crate) reconstructed_verifer_messages: Vec<Vec<VerifierMessage<F>>>,
     pending_verifier_messages: Vec<VerifierMessage<F>>,
-    bookkeeper: MessageBookkeeper,
+    pub(crate) bookkeeper: MessageBookkeeper,
 }
 
 impl<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
@@ -430,8 +435,14 @@ where
             .iter()
             .map(|msg| &msg.short_messages)
             .collect();
+        let prover_messages_info: Vec<_> = bcs_proof
+            .prover_messages
+            .iter()
+            .map(|msg| msg.get_info())
+            .collect();
         Self {
             prover_short_messages,
+            prover_messages_info,
             prover_mt_roots: &bcs_proof.prover_messages_mt_root,
             sponge,
             current_prover_round: 0,
@@ -448,8 +459,14 @@ where
             .iter()
             .map(|msg| &msg.short_messages)
             .collect();
+        let prover_messages_info = bcs_proof
+            .ldt_prover_messages
+            .iter()
+            .map(|msg| msg.get_info())
+            .collect();
         Self {
             prover_short_messages,
+            prover_messages_info,
             prover_mt_roots: &bcs_proof.ldt_prover_messages_mt_root,
             sponge,
             current_prover_round: 0,
@@ -461,9 +478,20 @@ where
 
     /// Receive prover's current round messages, which can possibly contain multiple oracles with same size.
     /// This function will absorb the merkle tree root and short messages (if any).
-    pub fn receive_prover_current_round(&mut self, ns: &NameSpace) {
+    /// # Panic
+    /// This function will panic is prover message structure contained in proof is not consistent with `expected_message_structure`.
+    pub fn receive_prover_current_round(
+        &mut self,
+        ns: &NameSpace,
+        expected_message_info: &ProverRoundMessageInfo,
+    ) {
         let index = self.current_prover_round;
         self.current_prover_round += 1;
+
+        assert_eq!(
+            expected_message_info, &self.prover_messages_info[index],
+            "prover message is not what verifier want at current round"
+        );
 
         // absorb merkle tree root, if any
         self.sponge.absorb(&self.prover_mt_roots[index]);

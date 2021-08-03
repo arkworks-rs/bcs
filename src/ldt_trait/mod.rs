@@ -1,5 +1,5 @@
-use crate::bcs::message::{MessageOracle, ProverMessagesInRound, VerifierMessage};
-use crate::bcs::transcript::Transcript;
+use crate::bcs::message::{MessageOracle, ProverMessagesInRound, SuccinctOracle, VerifierMessage};
+use crate::bcs::transcript::{SimulationTranscript, Transcript};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
@@ -16,7 +16,7 @@ pub trait LDT<F: PrimeField + Absorb> {
     /// Given the degree bound, return the enforced bound and poly domain used.
     /// # Panics
     /// `ldt_info` will panic if `degree_bound` is not supported by this LDT.
-    fn ldt_info(degree_bound: usize) -> (usize, Radix2CosetDomain<F>);
+    fn ldt_info(param: &Self::LDTParameters, degree_bound: usize) -> (usize, Radix2CosetDomain<F>);
 
     /// Given the list of codewords along with its degree bound, send LDT prover messages.
     ///
@@ -30,10 +30,12 @@ pub trait LDT<F: PrimeField + Absorb> {
     where
         MT::InnerDigest: Absorb;
 
-    // fn reconstruct_ldt_verifier_messages(
-    //     param: &Self::LDTParameters,
-    //
-    // ); // TODO: need simulation transcript
+    fn reconstruct_ldt_verifier_messages<MT: MTConfig, L: LDT<F>, S: CryptographicSponge>(
+        param: &Self::LDTParameters,
+        codewords_oracles: &[(usize, &SuccinctOracle<F>)], // FRI does not use codewords_oracles in commit phase though
+        transcript: &mut SimulationTranscript<MT, S, F>,
+    ) where
+        MT::InnerDigest: Absorb; // TODO: need simulation transcript
 
     /// Verify `codewords` is low-degree, given the succinct codewords oracle and proof.
     fn query_and_decide<S: CryptographicSponge, Oracle: MessageOracle<F>>(

@@ -13,9 +13,17 @@ pub trait IOPProver<F: PrimeField + Absorb> {
 
     /// Prover State. May contain witness.
     /// Prover state should be a superset of verifier state.
-    type ProverState: ?Sized;
+    type ProverState;
     /// Public input
     type PublicInput: ?Sized;
+    /// Private input
+    type PrivateInput: ?Sized;
+
+    /// Returns the initial state of the prover.
+    fn initial_state(
+        public_input: &Self::PublicInput,
+        private_input: &Self::PrivateInput,
+    ) -> Self::ProverState;
 
     /// TODO doc
     ///
@@ -25,7 +33,6 @@ pub trait IOPProver<F: PrimeField + Absorb> {
     fn prove<MT: MTConfig, S: CryptographicSponge>(
         namespace: &NameSpace,
         state: &mut Self::ProverState,
-        public_input: &Self::PublicInput,
         transcript: &mut Transcript<MT, S, F>,
         prover_parameter: &Self::ProverParameter,
     ) where

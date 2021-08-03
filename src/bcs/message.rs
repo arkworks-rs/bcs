@@ -31,6 +31,15 @@ pub struct ProverMessagesInRound<F: PrimeField, Oracle: MessageOracle<F>> {
     oracle_length: usize,
 }
 
+/// Contains structure and degree bound information about prover round messages, but does not contain real messages.
+#[derive(Eq, PartialEq, Debug)]
+pub struct ProverRoundMessageInfo {
+    pub reed_solomon_code_degrees: Vec<usize>,
+    pub num_message_oracles: usize,
+    pub num_short_messages: usize,
+    pub oracle_length: usize,
+}
+
 impl<F: PrimeField, Oracle: MessageOracle<F>> ProverMessagesInRound<F, Oracle> {
     pub fn empty() -> Self {
         ProverMessagesInRound {
@@ -42,6 +51,18 @@ impl<F: PrimeField, Oracle: MessageOracle<F>> ProverMessagesInRound<F, Oracle> {
     }
     pub fn oracle_length(&self) -> usize {
         self.oracle_length
+    }
+    pub fn get_info(&self) -> ProverRoundMessageInfo {
+        ProverRoundMessageInfo {
+            reed_solomon_code_degrees: self
+                .reed_solomon_codes
+                .iter()
+                .map(|(_, degree)| *degree)
+                .collect(),
+            num_message_oracles: self.message_oracles.len(),
+            num_short_messages: self.short_messages.len(),
+            oracle_length: self.oracle_length,
+        }
     }
 }
 
@@ -192,8 +213,8 @@ pub struct SuccinctOracle<F: PrimeField> {
     query_responses: BTreeMap<usize, F>,
 }
 
-impl<F: PrimeField> MessageOracle<F> for SuccinctOracle<F> {
-    fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error> {
+impl<F: PrimeField> SuccinctOracle<F> {
+    fn non_mut_query(&self, position: &[usize]) -> Result<Vec<F>, Error> {
         let mut result = Vec::with_capacity(position.len());
         for pos in position {
             match self.query_responses.get(pos) {
@@ -202,6 +223,18 @@ impl<F: PrimeField> MessageOracle<F> for SuccinctOracle<F> {
             }
         }
         Ok(result)
+    }
+}
+
+impl<F: PrimeField> MessageOracle<F> for SuccinctOracle<F> {
+    fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error> {
+        self.non_mut_query(position)
+    }
+}
+
+impl<F: PrimeField> MessageOracle<F> for &SuccinctOracle<F> {
+    fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error> {
+        self.non_mut_query(position)
     }
 }
 
