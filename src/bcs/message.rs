@@ -142,6 +142,18 @@ impl<F: PrimeField> ProverMessagesInRound<F, MessageRecordingOracle<F>> {
     }
 }
 
+impl<F: PrimeField> ProverMessagesInRound<F, SuccinctOracle<F>>{
+    /// Get a queryable prover messages.
+    pub fn get_dummy_mut(&self) -> ProverMessagesInRound<F, &SuccinctOracle<F>> {
+        ProverMessagesInRound{
+            oracle_length: self.oracle_length,
+            reed_solomon_codes: self.reed_solomon_codes.iter().map(|(a, b)|(a, *b)).collect(),
+            short_messages: self.short_messages.clone(),
+            message_oracles: self.message_oracles.iter().collect()
+        }
+    }
+}
+
 /// An Oracle of encoded message.
 /// BCS prover will use this oracle to store queries and answers.
 /// IOP Verifier will use this oracle to query prover message.
@@ -214,7 +226,11 @@ pub struct SuccinctOracle<F: PrimeField> {
 }
 
 impl<F: PrimeField> SuccinctOracle<F> {
-    fn non_mut_query(&self, position: &[usize]) -> Result<Vec<F>, Error> {
+    pub(crate) fn available_indices(&self) -> Vec<usize> {
+        self.query_responses.keys().map(|key|*key).collect()
+    }
+    
+    pub(crate) fn query_no_mut(&self, position: &[usize]) -> Result<Vec<F>, Error> {
         let mut result = Vec::with_capacity(position.len());
         for pos in position {
             match self.query_responses.get(pos) {
@@ -228,13 +244,13 @@ impl<F: PrimeField> SuccinctOracle<F> {
 
 impl<F: PrimeField> MessageOracle<F> for SuccinctOracle<F> {
     fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error> {
-        self.non_mut_query(position)
+        self.query_no_mut(position)
     }
 }
 
 impl<F: PrimeField> MessageOracle<F> for &SuccinctOracle<F> {
     fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error> {
-        self.non_mut_query(position)
+        self.query_no_mut(position)
     }
 }
 

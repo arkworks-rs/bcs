@@ -1,4 +1,4 @@
-use crate::bcs::message::{MessageOracle, ProverMessagesInRound, SuccinctOracle, VerifierMessage};
+use crate::bcs::message::{MessageOracle, ProverMessagesInRound, VerifierMessage};
 use crate::bcs::transcript::{SimulationTranscript, Transcript};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
@@ -30,9 +30,9 @@ pub trait LDT<F: PrimeField + Absorb> {
     where
         MT::InnerDigest: Absorb;
 
-    fn reconstruct_ldt_verifier_messages<MT: MTConfig, L: LDT<F>, S: CryptographicSponge>(
+    fn reconstruct_ldt_verifier_messages<MT: MTConfig, L: LDT<F>, S: CryptographicSponge, Oracle: MessageOracle<F>>(
         param: &Self::LDTParameters,
-        codewords_oracles: &[(usize, &SuccinctOracle<F>)], // FRI does not use codewords_oracles in commit phase though
+        codewords_oracles: &[(usize, &mut Oracle)], // FRI does not use codewords_oracles in commit phase though
         transcript: &mut SimulationTranscript<MT, S, F>,
     ) where
         MT::InnerDigest: Absorb; // TODO: need simulation transcript
@@ -41,7 +41,7 @@ pub trait LDT<F: PrimeField + Absorb> {
     fn query_and_decide<S: CryptographicSponge, Oracle: MessageOracle<F>>(
         param: &Self::LDTParameters,
         random_oracle: &mut S,
-        codewords_oracles: &[&mut Oracle],
+        codewords_oracles: &[(usize, &mut Oracle)],
         ldt_prover_message_oracles: &[&mut ProverMessagesInRound<F, Oracle>],
         ldt_verifier_messages: &[Vec<VerifierMessage<F>>],
     ) -> Result<(), Error>;

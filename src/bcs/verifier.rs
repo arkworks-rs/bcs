@@ -1,4 +1,3 @@
-use crate::bcs::message::MessageOracle;
 use crate::bcs::prover::BCSProof;
 use crate::bcs::transcript::{SimulationTranscript, ROOT_NAMESPACE};
 use crate::bcs::MTHashParameters;
@@ -9,7 +8,8 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
-use std::borrow::Borrow;
+use std::collections::BTreeMap;
+use std::iter::FromIterator;
 
 pub struct BCSVerifier<MT, F>
 where
@@ -40,6 +40,12 @@ where
         L: LDT<F>,
         S: CryptographicSponge,
     {
+        // construct queryable oracles
+        let mut prover_messages: Vec<_> = proof.prover_messages.iter()
+            .map(|msg|msg.get_dummy_mut()).collect();
+        let mut ldt_prover_messages: Vec<_> = proof.ldt_prover_messages.iter()
+            .map(|msg|msg.get_dummy_mut()).collect();
+
         // reconstruct verifier messages to restore verifier state
         let (verifier_messages, bookkeeper) = {
             let mut transcript = SimulationTranscript::new_main_transcript(proof, &mut sponge);
@@ -62,19 +68,20 @@ where
             )
         };
         // reconstruct LDT verifier messages to restore LDT verifier state
+
+        // the helper is to resolve some lifetime issue
+        let codeword_oracles_ref: Vec<_> = prover_messages
+            .iter_mut()
+            .map(|msg| {
+                msg.reed_solomon_codes.iter_mut().map(|(oracle,degree)|
+                    // those degree has been verified in `restore_state_from_commit_phase`
+                    (*degree, oracle))
+            })
+            .flatten()
+            .collect();
         let ldt_verifier_messages = {
-            let codeword_oracles_ref: Vec<_> = proof
-                .prover_messages
-                .iter()
-                .map(|msg| {
-                    msg.reed_solomon_codes.iter().map(|(oracle,degree)|
-                        // those degree has been verified in `restore_state_from_commit_phase`
-                        (*degree, oracle))
-                })
-                .flatten()
-                .collect();
-            let mut ldt_transcript = SimulationTranscript::new_ldt_transcript(proof, &mut sponge);
-            L::reconstruct_ldt_verifier_messages::<MT, L, S>(
+            let mut ldt_transcript = SimulationTranscript::new_ldt_transcript(&proof, &mut sponge);
+            L::reconstruct_ldt_verifier_messages::<MT, L, S, _>(
                 ldt_params,
                 &codeword_oracles_ref,
                 &mut ldt_transcript,
@@ -88,6 +95,65 @@ where
             debug_assert!(ldt_transcript.current_prover_round == proof.ldt_prover_messages.len());
             ldt_transcript.reconstructed_verifer_messages
         };
+
+        // verify LDT bound
+        {
+            let ldt_prover_messages_ref: Vec<_> = ldt_prover_messages.iter_mut().collect();
+            L::query_and_decide(
+                ldt_params,
+                &mut sponge,
+                &codeword_oracles_ref,
+                &ldt_prover_messages_ref,
+                &ldt_verifier_messages
+            )?; // will return error if verification failed
+        }
+
+        // verify the protocol
+        {
+            let prover_messages_ref: Vec<_> = prover_messages.iter_mut().collect();
+            V::query_and_decide(
+                &ROOT_NAMESPACE,
+                verifier_parameter,
+                &mut V::initial_state_for_query_and_decision_phase(public_input),
+                &mut sponge,
+                &prover_messages_ref,
+                &verifier_messages,
+                &bookkeeper
+            )?;
+        }
+
+        // Authentication path verification
+        for round_msg in proof.prover_messages.iter(){
+            // get available queries
+            let mut queries = Vec::new();
+            let mut queried_leaves = BTreeMap::default();
+            round_msg.reed_solomon_codes
+                .iter()
+                .map(|(oracle, _)|oracle)
+                .chain(round_msg.message_oracles.iter())
+                .for_each(|oracle|{
+                    let queries_current_oracle = oracle.available_indices();
+                    if queries.is_empty() {
+                        queries = queries_current_oracle;
+                        queried_leaves = BTreeMap::from_iter(queries_current_oracle.iter().map(|index|(*index, Vec::new())));
+                    }else{
+                        assert_eq!(queries, queries_current_oracle, "oracles in the same round have different query indices");
+                    }
+
+
+                    todo!()
+
+            });
+
+
+            let queried_leaves = Vec::with_capacity(queries.len());
+
+
+        }
+
+
+
+
 
         todo!()
     }

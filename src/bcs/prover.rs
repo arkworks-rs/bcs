@@ -123,7 +123,7 @@ where
             // get the mutable codeword oracle reference for LDT
             let low_degree_oracle_ref: Vec<_> = prover_message_oracles
                 .iter_mut()
-                .map(|msg| msg.reed_solomon_codes.iter_mut().map(|(oracle, _)| oracle))
+                .map(|msg| msg.reed_solomon_codes.iter_mut().map(|(oracle, degree)| (*degree, oracle)))
                 .flatten()
                 .collect();
 
@@ -186,6 +186,8 @@ where
             ldt_messages_mt_path: ldt_prover_message_paths,
         })
     }
+
+
 }
 
 fn generate_mt_paths<P: MTConfig>(
