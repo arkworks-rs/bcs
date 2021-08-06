@@ -10,6 +10,7 @@ use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
+use crate::bcs::message::MessageOracle;
 
 pub struct BCSVerifier<MT, F>
 where
@@ -139,7 +140,8 @@ where
                     }else{
                         assert_eq!(queries, queries_current_oracle, "oracles in the same round have different query indices");
                     }
-
+                    let queries_response_current_oracle = (&oracle).query(&queries).expect("");
+                    
 
                     todo!()
 

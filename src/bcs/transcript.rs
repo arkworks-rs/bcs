@@ -238,6 +238,7 @@ where
     }
 
     /// Send Reed-Solomon codes of a polynomial.
+    /// todo: remove LDT, and check domain afterwards
     pub fn send_oracle_evaluations<L: LDT<F>>(
         &mut self,
         msg: impl IntoIterator<Item = F>,

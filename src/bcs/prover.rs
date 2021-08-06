@@ -49,6 +49,8 @@ where
     MT::InnerDigest: Absorb,
 {
     /// Generate proof
+    /// todo: RS-IOP only, add another geenrate for solely pure IOP BCS
+    /// do it in future: derive verifier param from prover param
     pub fn generate<V, P, L, S>(
         sponge: S,
         public_input: &P::PublicInput,
@@ -89,7 +91,7 @@ where
                 .prover_message_oracles
                 .iter()
                 .map(|msg| {
-                    msg.reed_solomon_codes
+                    msg.reed_solomon_codes // todo: better name?
                         .iter()
                         .map(|(oracle, degree)| (*degree, oracle.leaves.as_slice()))
                 })
@@ -178,6 +180,7 @@ where
             .map(|x| x.as_ref().map(|tree| tree.root()))
             .collect();
         Ok(BCSProof {
+            // todo: maybe combine prover and ldt?
             prover_messages: succinct_prover_message_oracles,
             prover_messages_mt_root: prover_mt_root,
             prover_messages_mt_path: prover_message_paths,

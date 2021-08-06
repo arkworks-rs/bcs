@@ -69,8 +69,11 @@ impl<F: PrimeField, Oracle: MessageOracle<F>> ProverMessagesInRound<F, Oracle> {
 impl<F: PrimeField, Oracle: OracleWithCodewords<F>> ProverMessagesInRound<F, Oracle> {
     /// Generate a merkle tree of `Self`.
     pub fn generate_merkle_tree<P: MTConfig<Leaf = Vec<F>>>(
-        &self,
+        &self, // all RS-codes, all message oracles
         hash_params: &MTHashParameters<P>,
+        // todo (future): serialize by coset (stride) (element in same coset in same leaf): add addition
+        // stride 3: [0: {oracle_1[0], oracle_2[0], ...},3,6,...], [1,4,7], ....
+        // panic if stride is not divisible by oracle length
     ) -> Result<Option<MerkleTree<P>>, Error> {
         if !self.oracle_length().is_power_of_two() {
             panic!("oracle length need to be power of two")
@@ -178,7 +181,7 @@ pub trait OracleWithCodewords<F: PrimeField>: MessageOracle<F> {
 pub struct MessageRecordingOracle<F: PrimeField> {
     /// Prover message encoded to leaves.
     pub leaves: Vec<F>,
-    /// Contain all the recorded queries.
+    /// Contain all the recorded queries, in order.
     pub queries: BTreeSet<usize>,
 }
 
@@ -224,12 +227,20 @@ impl<F: PrimeField> OracleWithCodewords<F> for MessageRecordingOracle<F> {
 pub struct SuccinctOracle<F: PrimeField> {
     query_responses: BTreeMap<usize, F>,
 }
+// query: Uint32: variable (give each)
+// Vec<FieldVar> // store it query order by query number
 
 impl<F: PrimeField> SuccinctOracle<F> {
     pub(crate) fn available_indices(&self) -> Vec<usize> {
         self.query_responses.keys().map(|key|*key).collect()
     }
-    
+
+    // constraint (&self, num_response: usize) -> Vec<FieldVar>
+    // when generating responses, we store native verifier query position (not index of the entire oracle, but index of `query_responses`)
+    // as UInt32 in proof, and use this UInt32 to make RAM access on queries
+    // basically instead of store `query_responses`, we can store
+    // {query_orders: Vec<UInt32: index of `query_responses`>, query_responses: Vec<(UInt32: index of oracle, F)>}
+    // verifier check the correctness of query orders (using O(#number queries constraints))
     pub(crate) fn query_no_mut(&self, position: &[usize]) -> Result<Vec<F>, Error> {
         let mut result = Vec::with_capacity(position.len());
         for pos in position {

@@ -43,6 +43,6 @@ pub trait LDT<F: PrimeField + Absorb> {
         random_oracle: &mut S,
         codewords_oracles: &[(usize, &mut Oracle)],
         ldt_prover_message_oracles: &[&mut ProverMessagesInRound<F, Oracle>],
-        ldt_verifier_messages: &[Vec<VerifierMessage<F>>],
+        ldt_verifier_messages: &[Vec<VerifierMessage<F>>]
     ) -> Result<(), Error>;
 }
