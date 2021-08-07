@@ -8,7 +8,7 @@ pub mod prover;
 /// TODO: refactor me!
 pub mod transcript;
 /// TODO: refactor me!
-// pub mod verifier;
+pub mod verifier;
 
 /// Specify the merkle tree hash parameters used for this protocol.
 #[derive(Derivative)]

@@ -2,9 +2,7 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 
-use crate::bcs::message::{
-    RecordingRoundOracle, VerifierMessage,
-};
+use crate::bcs::message::{RecordingRoundOracle, VerifierMessage, ProverRoundMessageInfo, RoundOracle};
 use crate::bcs::MTHashParameters;
 use crate::Error;
 use ark_crypto_primitives::MerkleTree;
@@ -13,6 +11,7 @@ use ark_poly::univariate::DensePolynomial;
 use ark_poly::Polynomial;
 use ark_std::collections::BTreeMap;
 use ark_std::mem::take;
+use crate::bcs::prover::BCSProof;
 
 /// # Namespace
 /// The namespace is an Each protocol is a list of subprotocol_id that represents a path.
@@ -384,185 +383,195 @@ where
     }
 }
 
-// /// A wrapper for BCS proof, so that verifier can reconstruct verifier messages by simulating commit phase
-// /// easily.
-// pub struct SimulationTranscript<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
-// where
-//     P::InnerDigest: Absorb,
-// {
-//     /// prover short messages at each round
-//     prover_messages_info: Vec<ProverRoundMessageInfo>,
-//     prover_short_messages: Vec<&'a Vec<Vec<F>>>,
-//     prover_mt_roots: &'a [Option<P::InnerDigest>],
-//     sponge: &'a mut S,
-//     /// the next prover round message to absorb
-//     pub(crate) current_prover_round: usize,
-//
-//     pub(crate) reconstructed_verifer_messages: Vec<Vec<VerifierMessage<F>>>,
-//     pending_verifier_messages: Vec<VerifierMessage<F>>,
-//     pub(crate) bookkeeper: MessageBookkeeper,
-// }
-//
-// impl<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
-//     SimulationTranscript<'a, P, S, F>
-// where
-//     P::InnerDigest: Absorb,
-// {
-//     /// Returns a wrapper for BCS proof so that verifier can reconstruct verifier messages by simulating commit phase easily.
-//     pub(crate) fn new_main_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
-//         let prover_short_messages: Vec<_> = bcs_proof
-//             .prover_messages
-//             .iter()
-//             .map(|msg| &msg.short_messages)
-//             .collect();
-//         let prover_messages_info: Vec<_> = bcs_proof
-//             .prover_messages
-//             .iter()
-//             .map(|msg| msg.get_info())
-//             .collect();
-//         Self {
-//             prover_short_messages,
-//             prover_messages_info,
-//             prover_mt_roots: &bcs_proof.prover_messages_mt_root,
-//             sponge,
-//             current_prover_round: 0,
-//             bookkeeper: MessageBookkeeper::default(),
-//             reconstructed_verifer_messages: Vec::new(),
-//             pending_verifier_messages: Vec::new(),
-//         }
-//     }
-//
-//     /// Returns a wrapper for BCS proof so that LDT verifier can reconstruct verifier messages by simulating commit phase easily.
-//     pub(crate) fn new_ldt_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
-//         let prover_short_messages: Vec<_> = bcs_proof
-//             .ldt_prover_messages
-//             .iter()
-//             .map(|msg| &msg.short_messages)
-//             .collect();
-//         let prover_messages_info = bcs_proof
-//             .ldt_prover_messages
-//             .iter()
-//             .map(|msg| msg.get_info())
-//             .collect();
-//         Self {
-//             prover_short_messages,
-//             prover_messages_info,
-//             prover_mt_roots: &bcs_proof.ldt_prover_messages_mt_root,
-//             sponge,
-//             current_prover_round: 0,
-//             bookkeeper: MessageBookkeeper::default(),
-//             reconstructed_verifer_messages: Vec::new(),
-//             pending_verifier_messages: Vec::new(),
-//         }
-//     }
-//
-//     /// Receive prover's current round messages, which can possibly contain multiple oracles with same size.
-//     /// This function will absorb the merkle tree root and short messages (if any).
-//     /// # Panic
-//     /// This function will panic is prover message structure contained in proof is not consistent with `expected_message_structure`.
-//     pub fn receive_prover_current_round(
-//         &mut self,
-//         ns: &NameSpace,
-//         expected_message_info: &ProverRoundMessageInfo,
-//     ) {
-//         let index = self.current_prover_round;
-//         self.current_prover_round += 1;
-//
-//         assert_eq!(
-//             expected_message_info, &self.prover_messages_info[index],
-//             "prover message is not what verifier want at current round"
-//         );
-//
-//         // absorb merkle tree root, if any
-//         self.sponge.absorb(&self.prover_mt_roots[index]);
-//         // absorb short messages for this round, if any
-//         self.prover_short_messages[index]
-//             .iter()
-//             .for_each(|msg| self.sponge.absorb(msg));
-//         self.attach_latest_prover_round_to_namespace(ns);
-//     }
-//
-//     /// Submit all verifier messages in this round.
-//     pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace) {
-//         let pending_message = take(&mut self.pending_verifier_messages);
-//         self.reconstructed_verifer_messages.push(pending_message)
-//     }
-//
-//     /// Squeeze sampled verifier message as field elements. The squeezed elements is attached to
-//     /// pending messages, and need to be submitted through `submit_verifier_current_round`.
-//     /// Submitted messages will be stored in transcript and will be later
-//     /// given to verifier in query and decision phase.
-//     ///
-//     /// **Note**: Since we are not running the actual prover code, verifier message is not used
-//     /// `reconstructed_verifer_messages`, so this function returns nothing.
-//     pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) {
-//         let msg = self.sponge.squeeze_field_elements_with_sizes(field_size);
-//         self.pending_verifier_messages
-//             .push(VerifierMessage::FieldElements(msg));
-//     }
-//
-//     /// Squeeze sampled verifier message as bytes. The squeezed bytes is attached to
-//     /// pending messages, and need to be submitted through `submit_verifier_current_round`.
-//     /// Submitted messages will be stored in transcript and will be later
-//     /// given to verifier in query and decision phase.
-//     ///
-//     /// **Note**: Since we are not running the actual prover code, verifier message is not used
-//     /// `reconstructed_verifer_messages`, so this function returns nothing.
-//     pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) {
-//         let msg = self.sponge.squeeze_bytes(num_bytes);
-//         self.pending_verifier_messages
-//             .push(VerifierMessage::Bytes(msg));
-//     }
-//
-//     /// Squeeze sampled verifier message as bytes. The squeezed bytes is attached to
-//     /// pending messages, and need to be submitted through `submit_verifier_current_round`.
-//     /// Submitted messages will be stored in transcript and will be later
-//     /// given to verifier in query and decision phase.
-//     ///
-//     /// **Note**: Since we are not running the actual prover code, verifier message is not used
-//     /// `reconstructed_verifer_messages`, so this function returns nothing.
-//     pub fn squeeze_verifier_field_bits(&mut self, num_bits: usize) {
-//         let msg = self.sponge.squeeze_bits(num_bits);
-//         self.pending_verifier_messages
-//             .push(VerifierMessage::Bits(msg));
-//     }
-//
-//     /// Returns if there is a verifier message for the transcript.
-//     pub fn is_pending_message_available(&self) -> bool {
-//         !self.pending_verifier_messages.is_empty()
-//     }
-//
-//     fn attach_latest_prover_round_to_namespace(&mut self, namespace: &NameSpace) {
-//         // add verifier message index to namespace
-//         let index = self.current_prover_round - 1;
-//         self.bookkeeper
-//             .fetch_node_mut(namespace)
-//             .expect("namespace not found")
-//             .prover_message_locations
-//             .push(index);
-//     }
-//
-//     fn attach_latest_verifier_round_to_namespace(&mut self, namespace: &NameSpace) {
-//         // add verifier message index to namespace
-//         let index = self.reconstructed_verifer_messages.len() - 1;
-//         self.bookkeeper
-//             .fetch_node_mut(namespace)
-//             .expect("namespace not found")
-//             .verifier_message_locations
-//             .push(index);
-//     }
-//
-//     #[cfg(test)]
-//     /// test whether `reconstructed_verifer_messages` simulate the prover-verifier interaction in
-//     /// commit phase correctly.
-//     pub fn check_correctness(&self, prover_transcript: &Transcript<P, S, F>) {
-//         assert_eq!(prover_transcript.bookkeeper,
-//                    self.bookkeeper,
-//                    "your simulation code submits incorrect number of rounds, or call subprotocols in incorrect order.");
-//
-//         assert_eq!(prover_transcript.verifier_messages,
-//                    self.reconstructed_verifer_messages,
-//                    "reconstructed verifer messages is inconsistent with verifier messages sampled in prover code");
-//     }
-// }
+/// A wrapper for BCS proof, so that verifier can reconstruct verifier messages by simulating commit phase
+/// easily.
+pub struct SimulationTranscript<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
+    where
+        P::InnerDigest: Absorb,
+{
+    /// prover message info used to verify consistency
+    prover_messages_info: Vec<ProverRoundMessageInfo>,
+
+    /// For each round submit, absorb merkle tree root first
+    prover_mt_roots: &'a [Option<P::InnerDigest>],
+    /// After absorb merkle tree root for this round, absorb the short messages in entirety
+    prover_short_messages: Vec<&'a Vec<Vec<F>>>,
+
+    /// sponge is used to sample verifier message
+    sponge: &'a mut S,
+    /// the next prover round message to absorb
+    pub(crate) current_prover_round: usize,
+
+    /// Those reconstructed messages will be used in query and decision phase
+    pub(crate) reconstructed_verifer_messages: Vec<Vec<VerifierMessage<F>>>,
+
+    pending_verifier_messages: Vec<VerifierMessage<F>>,
+    pub(crate) bookkeeper: MessageBookkeeper,
+}
+
+impl<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
+    SimulationTranscript<'a, P, S, F>
+where
+    P::InnerDigest: Absorb,
+{
+    /// Returns a wrapper for BCS proof so that verifier can reconstruct verifier messages by simulating commit phase easily.
+    pub(crate) fn new_main_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
+        let prover_short_messages: Vec<_> = bcs_proof
+            .prover_messages
+            .iter()
+            .map(|msg| &msg.short_messages)
+            .collect();
+        let prover_messages_info: Vec<_> = bcs_proof
+            .prover_messages
+            .iter()
+            .map(|msg| msg.get_view().get_info())
+            .collect();
+        Self {
+            prover_short_messages,
+            prover_messages_info,
+            prover_mt_roots: &bcs_proof.prover_messages_mt_root,
+            sponge,
+            current_prover_round: 0,
+            bookkeeper: MessageBookkeeper::default(),
+            reconstructed_verifer_messages: Vec::new(),
+            pending_verifier_messages: Vec::new(),
+        }
+    }
+
+    /// Returns a wrapper for BCS proof so that LDT verifier can reconstruct verifier messages by simulating commit phase easily.
+    pub(crate) fn new_ldt_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
+        let prover_short_messages: Vec<_> = bcs_proof
+            .ldt_prover_messages
+            .iter()
+            .map(|msg| &msg.short_messages)
+            .collect();
+        let prover_messages_info = bcs_proof
+            .ldt_prover_messages
+            .iter()
+            .map(|msg| msg.get_view().get_info())
+            .collect();
+        Self {
+            prover_short_messages,
+            prover_messages_info,
+            prover_mt_roots: &bcs_proof.ldt_prover_messages_mt_root,
+            sponge,
+            current_prover_round: 0,
+            bookkeeper: MessageBookkeeper::default(),
+            reconstructed_verifer_messages: Vec::new(),
+            pending_verifier_messages: Vec::new(),
+        }
+    }
+
+    /// Receive prover's current round messages, which can possibly contain multiple oracles with same size.
+    /// This function will absorb the merkle tree root and short messages (if any).
+    /// # Panic
+    /// This function will panic is prover message structure contained in proof is not consistent with `expected_message_structure`.
+    pub fn receive_prover_current_round(
+        &mut self,
+        ns: &NameSpace,
+        expected_message_info: &ProverRoundMessageInfo,
+    ) {
+        let index = self.current_prover_round;
+        self.current_prover_round += 1;
+
+        assert_eq!(
+            expected_message_info, &self.prover_messages_info[index],
+            "prover message is not what verifier want at current round"
+        );
+
+        // absorb merkle tree root, if any
+        self.sponge.absorb(&self.prover_mt_roots[index]);
+        // absorb short messages for this round, if any
+        self.prover_short_messages[index]
+            .iter()
+            .for_each(|msg| self.sponge.absorb(msg));
+        self.attach_latest_prover_round_to_namespace(ns);
+    }
+
+    /// Submit all verifier messages in this round.
+    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace) {
+        let pending_message = take(&mut self.pending_verifier_messages);
+        self.reconstructed_verifer_messages.push(pending_message);
+        self.attach_latest_verifier_round_to_namespace(namespace);
+    }
+
+    /// Squeeze sampled verifier message as field elements. The squeezed elements is attached to
+    /// pending messages, and need to be submitted through `submit_verifier_current_round`.
+    /// Submitted messages will be stored in transcript and will be later
+    /// given to verifier in query and decision phase.
+    ///
+    /// **Note**: Since we are not running the actual prover code, verifier message is not used
+    /// `reconstructed_verifer_messages`, so this function returns nothing.
+    pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) {
+        let msg = self.sponge.squeeze_field_elements_with_sizes(field_size);
+        self.pending_verifier_messages
+            .push(VerifierMessage::FieldElements(msg));
+    }
+
+    /// Squeeze sampled verifier message as bytes. The squeezed bytes is attached to
+    /// pending messages, and need to be submitted through `submit_verifier_current_round`.
+    /// Submitted messages will be stored in transcript and will be later
+    /// given to verifier in query and decision phase.
+    ///
+    /// **Note**: Since we are not running the actual prover code, verifier message is not used
+    /// `reconstructed_verifer_messages`, so this function returns nothing.
+    pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) {
+        let msg = self.sponge.squeeze_bytes(num_bytes);
+        self.pending_verifier_messages
+            .push(VerifierMessage::Bytes(msg));
+    }
+
+    /// Squeeze sampled verifier message as bytes. The squeezed bytes is attached to
+    /// pending messages, and need to be submitted through `submit_verifier_current_round`.
+    /// Submitted messages will be stored in transcript and will be later
+    /// given to verifier in query and decision phase.
+    ///
+    /// **Note**: Since we are not running the actual prover code, verifier message is not used
+    /// `reconstructed_verifer_messages`, so this function returns nothing.
+    pub fn squeeze_verifier_field_bits(&mut self, num_bits: usize) {
+        let msg = self.sponge.squeeze_bits(num_bits);
+        self.pending_verifier_messages
+            .push(VerifierMessage::Bits(msg));
+    }
+
+    /// Returns if there is a verifier message for the transcript.
+    pub fn is_pending_message_available(&self) -> bool {
+        !self.pending_verifier_messages.is_empty()
+    }
+
+    fn attach_latest_prover_round_to_namespace(&mut self, namespace: &NameSpace) {
+        // add verifier message index to namespace
+        let index = self.current_prover_round - 1;
+        self.bookkeeper
+            .fetch_node_mut(namespace)
+            .expect("namespace not found")
+            .prover_message_locations
+            .push(index);
+    }
+
+    fn attach_latest_verifier_round_to_namespace(&mut self, namespace: &NameSpace) {
+        // add verifier message index to namespace
+        let index = self.reconstructed_verifer_messages.len() - 1;
+        self.bookkeeper
+            .fetch_node_mut(namespace)
+            .expect("namespace not found")
+            .verifier_message_locations
+            .push(index);
+    }
+
+    #[cfg(test)]
+    /// test whether `reconstructed_verifer_messages` simulate the prover-verifier interaction in
+    /// commit phase correctly.
+    pub fn check_correctness(&self, prover_transcript: &Transcript<P, S, F>) {
+        // TODO: give information about which namespace is incorrect
+        assert_eq!(prover_transcript.bookkeeper,
+                   self.bookkeeper,
+                   "your simulation code submits incorrect number of rounds, or call subprotocols in incorrect order.");
+
+        // TODO: give information about which message in which namespace is incorrect
+        assert_eq!(prover_transcript.verifier_messages,
+                   self.reconstructed_verifer_messages,
+                   "reconstructed verifer messages is inconsistent with verifier messages sampled in prover code");
+    }
+}
 

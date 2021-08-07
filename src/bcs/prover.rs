@@ -89,17 +89,16 @@ where
         let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params);
         {
             // TODO: verify the domain here
-            let codeword_oracles_ref: Vec<_> = transcript
+            let codeword_oracles_ref = transcript
                 .prover_message_oracles
                 .iter()
                 .map(|msg| {
                     &msg.reed_solomon_codes
-                })
-                .collect();
+                });
 
             // Given the entire codewords of all low-degree messages in the protocol,
             // run the ldt prover to generate LDT prover messages.
-            L::prove(ldt_params, &codeword_oracles_ref, &mut ldt_transcript)?;
+            L::prove(ldt_params, codeword_oracles_ref, &mut ldt_transcript)?;
         }
 
         debug_assert!(
@@ -121,31 +120,23 @@ where
 
         // run LDT verifier code to obtain all queries. We will use this query to generate succinct oracles from message recording oracle.
         {
-            // get the mutable codeword oracle reference for LDT
-            let low_degree_oracle_ref: Vec<_> = prover_message_oracles
-                .iter_mut()
-                .collect();
-
-            let ldt_prover_message_oracles_ref: Vec<_> =
-                ldt_prover_message_oracles.iter_mut().collect();
             L::query_and_decide(
                 ldt_params,
                 &mut sponge,
-                &low_degree_oracle_ref,
-                &ldt_prover_message_oracles_ref,
+                prover_message_oracles.iter_mut().collect(),
+                ldt_prover_message_oracles.iter_mut().collect(),
                 ldt_verifier_messages.as_slice(),
             )?;
         }
 
         // run main verifier code to obtain all queries
         {
-            let prover_message_oracles_ref: Vec<_> = prover_message_oracles.iter_mut().collect();
             V::query_and_decide(
                 &ROOT_NAMESPACE,
                 verifier_parameter,
                 &mut V::initial_state_for_query_and_decision_phase(public_input),
                 &mut sponge,
-                &prover_message_oracles_ref,
+                prover_message_oracles.iter_mut(),
                 &verifier_messages,
                 &bookkeeper,
             )?;

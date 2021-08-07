@@ -4,9 +4,8 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::MerkleTree;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
-/// A trait for oracle messages that contains all oracles in one round. Those oracles need to have
-/// same length. Prover can also send short IP messages in this round, and those short messages do
-/// not have length constraint.
+/// A trait for all oracle messages (including RS-code oracles, Non RS-code oracles, and IP short messages) sent in one round.
+/// Those oracles (except IP short messages) need to have same length.
 ///
 /// All oracle messages in the same prover round should will share one merkle tree. Each merkle tree leaf is
 /// a vector which each element correspond to the same location of different oracles. The response of each query
@@ -124,9 +123,9 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
         let queries = self.queries.clone();
         SuccinctRoundOracle{
             info,
-            leaves,
+            queried_leaves: leaves,
             queries,
-            current_pos: 0
+            short_messages: self.short_messages.clone()
         }
     }
 
@@ -182,32 +181,49 @@ pub struct SuccinctRoundOracle<F: PrimeField> {
     /// Oracle Info
     pub info: ProverRoundMessageInfo,
     /// Leaves at this queries.
-    pub leaves: Vec<Vec<F>>,
+    pub queried_leaves: Vec<Vec<F>>,
     /// Supposed queries of the verifier in order.
     pub queries: Vec<usize>,
-    current_pos: usize
+    /// Store the non-oracle IP messages in this round
+    pub short_messages: Vec<Vec<F>>
 }
 
-impl<F: PrimeField> RoundOracle<F> for SuccinctRoundOracle<F> {
+impl<F: PrimeField> SuccinctRoundOracle<F> {
+    pub fn get_view(&self) -> SuccinctRoundOracleView<F> {
+        SuccinctRoundOracleView{
+            oracle: &self,
+            current_query_pos: 0
+        }
+    }
+}
+
+/// A reference to the oracle plus a state recording current query position.
+#[derive(Clone)]
+pub struct SuccinctRoundOracleView<'a, F: PrimeField> {
+    oracle: &'a SuccinctRoundOracle<F>,
+    current_query_pos: usize
+}
+
+impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
     fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
         // verify consistency with next `position.len()` queries
-        let expected_position = &self.queries[self.current_pos..position.len()];
+        let expected_position = &self.oracle.queries[self.current_query_pos..self.current_query_pos + position.len()];
         assert_eq!(expected_position, position, "query order is inconsistent with expected");
-        let result = self.leaves[self.current_pos..position.len()].to_vec();
-        self.current_pos += position.len();
+        let result = self.oracle.queried_leaves[self.current_query_pos..self.current_query_pos + position.len()].to_vec();
+        self.current_query_pos += position.len();
         result
     }
 
     fn num_reed_solomon_codes_oracles(&self) -> usize {
-        self.info.reed_solomon_code_degree_bound.len()
+        self.oracle.info.reed_solomon_code_degree_bound.len()
     }
 
     fn oracle_length(&self) -> usize {
-        self.info.oracle_length
+        self.oracle.info.oracle_length
     }
 
     fn get_info(&self) -> ProverRoundMessageInfo {
-        self.info.clone()
+        self.oracle.info.clone()
     }
 }
 
