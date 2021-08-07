@@ -3,11 +3,12 @@ use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOne
 /// Defines a prover message oracle.
 pub mod message;
 
+/// TODO: refactor me!
 pub mod prover;
-/// TODO doc
+/// TODO: refactor me!
 pub mod transcript;
-/// TODO doc
-pub mod verifier;
+/// TODO: refactor me!
+// pub mod verifier;
 
 /// Specify the merkle tree hash parameters used for this protocol.
 #[derive(Derivative)]

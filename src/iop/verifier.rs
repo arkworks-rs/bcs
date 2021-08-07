@@ -1,11 +1,10 @@
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
 
-use crate::bcs::message::{MessageOracle, ProverMessagesInRound, VerifierMessage};
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript};
-use crate::ldt_trait::LDT;
+use crate::bcs::message::{VerifierMessage, RoundOracle};
+use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 use crate::Error;
-use ark_crypto_primitives::merkle_tree::Config as MTConfig;
+// use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 
 /// The verifier for public coin IOP has two phases.
 /// * **Commit Phase**: Verifier send message that is uniformly sampled from a random oracle. Verifier
@@ -24,18 +23,18 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// Public input
     type PublicInput: ?Sized;
 
-    /// Simulate interaction with prover in commit phase, reconstruct verifier messages and verifier state
-    /// using the sponge provided in the simulation transcript. Returns the verifier state for query and decision phase.
-    ///
-    /// When writing test, use `transcript.check_correctness` after calling this method to verify the correctness
-    /// of this method.
-    fn restore_state_from_commit_phase<MT: MTConfig, L: LDT<F>>(
-        namespace: &NameSpace,
-        public_input: &Self::PublicInput,
-        transcript: &mut SimulationTranscript<MT, S, F>,
-        verifier_parameter: &Self::VerifierParameter,
-    ) where
-        MT::InnerDigest: Absorb;
+    // /// Simulate interaction with prover in commit phase, reconstruct verifier messages and verifier state
+    // /// using the sponge provided in the simulation transcript. Returns the verifier state for query and decision phase.
+    // ///
+    // /// When writing test, use `transcript.check_correctness` after calling this method to verify the correctness
+    // /// of this method.
+    // fn restore_state_from_commit_phase<MT: MTConfig, L: LDT<F>>(
+    //     namespace: &NameSpace,
+    //     public_input: &Self::PublicInput,
+    //     transcript: &mut SimulationTranscript<MT, S, F>,
+    //     verifier_parameter: &Self::VerifierParameter,
+    // ) where
+    //     MT::InnerDigest: Absorb;
 
     /// Returns the initial state for query and decision phase.
     fn initial_state_for_query_and_decision_phase(
@@ -47,12 +46,12 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// or oracle cannot answer the query.
     ///
     /// To access prover message oracle and previous verifier messages of current namespace, use bookkeeper.
-    fn query_and_decide<Oracle: MessageOracle<F>>(
+    fn query_and_decide<O: RoundOracle<F>>(
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         verifier_state: &mut Self::VerifierState,
         random_oracle: &mut S,
-        prover_message_oracle: &[&mut ProverMessagesInRound<F, Oracle>],
+        prover_message_oracle: &[&mut O],
         verifier_messages: &[Vec<VerifierMessage<F>>],
         bookkeeper: &MessageBookkeeper,
     ) -> Result<Self::VerifierOutput, Error>;

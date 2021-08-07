@@ -4,69 +4,94 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::MerkleTree;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
-use ark_std::collections::BTreeMap;
-use ark_std::collections::BTreeSet;
-use ark_std::iter::FromIterator;
-
-/// A generalized RS-IOP message.
-#[derive(Clone)]
-/// `ProverMessagesInRound` contains all oracles sent in this round. Those oracles need to have
+/// A trait for oracle messages that contains all oracles in one round. Those oracles need to have
 /// same length. Prover can also send short IP messages in this round, and those short messages do
 /// not have length constraint.
 ///
 /// All oracle messages in the same prover round should will share one merkle tree. Each merkle tree leaf is
-/// a vector which each element correspond to the same location of different oracles.
-///
+/// a vector which each element correspond to the same location of different oracles. The response of each query
+/// is itself a vector where `result[i]` is oracle `i`'s leaf on this query position. All `reed_solomon_codes` oracle
+/// will come first, and then message oracles.
+pub trait RoundOracle<F: PrimeField>{
+    /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
+    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>>;
+
+    /// Return the leaves of at `position` of reed_solomon code oracle. `result[i][j]` is leaf `i` at oracle `j`.
+    /// This method is convenient for LDT.
+    /// Query position should be a coset, that has a starting index and stride.
+    fn query_rs_code(&mut self, starting_index: usize, stride: usize) -> Vec<Vec<F>> {
+        // This is naive implementation, where we use `self.query`.
+        // TODO: use another merkle tree to store each coset together.
+        let oracle_length = self.oracle_length();
+        debug_assert!(oracle_length % stride == 0, "stride should be dividing oracle length!");
+        debug_assert!(starting_index < stride, "starting index should be less than stride!");
+        let position: Vec<_> = (starting_index..oracle_length).step_by(stride).collect();
+        let num_rs_codes = self.num_reed_solomon_codes_oracles();
+        let query_responses = self.query(&position);
+        query_responses.into_iter().map(|mut resp|{
+            resp.truncate(num_rs_codes);
+            resp
+        }).collect()
+    }
+
+    /// Number of reed_solomon_codes oracles in this round.
+    fn num_reed_solomon_codes_oracles(&self) -> usize;
+
+    /// length of each oracle
+    fn oracle_length(&self) -> usize;
+
+    /// Get oracle info, including number of oracles for each type and degree bound of each RS code oracle.
+    fn get_info(&self) -> ProverRoundMessageInfo;
+
+    /// Get degree bound of all reed-solomon codes in this round.
+    fn get_degree_bound(&self) -> Vec<usize> {
+        self.get_info().reed_solomon_code_degree_bound
+    }
+}
+
+#[derive(Clone)]
+/// Contains all oracle messages in this round, and is storing queries, in order.
 /// **Sponge absorb order**: Sponge will first absorb all merkle tree roots for `reed_solomon_codes`, then all merkle tree
 /// roots for `message_oracles`, then all entire messages for `short_messages`.
-pub struct ProverMessagesInRound<F: PrimeField, Oracle: MessageOracle<F>> {
+pub struct RecordingRoundOracle<F: PrimeField> {
     /// Oracle evaluations with a degree bound.
-    pub reed_solomon_codes: Vec<(Oracle, usize)>,
+    pub reed_solomon_codes: Vec<(Vec<F>, usize)>,
     /// Message oracles without a degree bound
-    pub message_oracles: Vec<Oracle>,
+    pub message_oracles: Vec<Vec<F>>,
     /// Messages without oracle sent in current round
     pub short_messages: Vec<Vec<F>>,
     /// length of each oracle message. `oracle_length` is 0 if in this round, prover sends only
     /// short messages.
     oracle_length: usize,
+    /// Store the query position, in order
+    pub queries: Vec<usize>
 }
 
+
+
 /// Contains structure and degree bound information about prover round messages, but does not contain real messages.
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct ProverRoundMessageInfo {
-    pub reed_solomon_code_degrees: Vec<usize>,
+    pub reed_solomon_code_degree_bound: Vec<usize>,
     pub num_message_oracles: usize,
     pub num_short_messages: usize,
     pub oracle_length: usize,
 }
 
-impl<F: PrimeField, Oracle: MessageOracle<F>> ProverMessagesInRound<F, Oracle> {
-    pub fn empty() -> Self {
-        ProverMessagesInRound {
+impl<F: PrimeField> Default for RecordingRoundOracle<F> {
+    fn default() -> Self {
+        RecordingRoundOracle {
             reed_solomon_codes: Vec::new(),
             message_oracles: Vec::new(),
             short_messages: Vec::new(),
             oracle_length: 0,
-        }
-    }
-    pub fn oracle_length(&self) -> usize {
-        self.oracle_length
-    }
-    pub fn get_info(&self) -> ProverRoundMessageInfo {
-        ProverRoundMessageInfo {
-            reed_solomon_code_degrees: self
-                .reed_solomon_codes
-                .iter()
-                .map(|(_, degree)| *degree)
-                .collect(),
-            num_message_oracles: self.message_oracles.len(),
-            num_short_messages: self.short_messages.len(),
-            oracle_length: self.oracle_length,
+            queries: Vec::new()
         }
     }
 }
 
-impl<F: PrimeField, Oracle: OracleWithCodewords<F>> ProverMessagesInRound<F, Oracle> {
+impl<F: PrimeField> RecordingRoundOracle<F> {
+
     /// Generate a merkle tree of `Self`.
     pub fn generate_merkle_tree<P: MTConfig<Leaf = Vec<F>>>(
         &self, // all RS-codes, all message oracles
@@ -83,23 +108,8 @@ impl<F: PrimeField, Oracle: OracleWithCodewords<F>> ProverMessagesInRound<F, Ora
             debug_assert!(self.reed_solomon_codes.is_empty() && self.message_oracles.is_empty());
             return Ok(None);
         }
-        let mut mt_leaves: Vec<_> = (0..self.oracle_length()).map(|_| Vec::new()).collect();
-        let messages = self
-            .reed_solomon_codes
-            .iter()
-            .map(|(oracle, _)| oracle)
-            .chain(self.message_oracles.iter());
-        for oracle in messages {
-            if oracle.get_message().len() != self.oracle_length() {
-                panic!("invalid oracle leaves");
-            }
-            mt_leaves
-                .iter_mut()
-                .zip(oracle.get_message().iter())
-                .for_each(|(leaf, new)| {
-                    leaf.push(*new);
-                })
-        }
+        let all_positions: Vec<_> = (0..self.oracle_length).collect();
+        let mt_leaves: Vec<_> = self.query_without_recording(&all_positions);
 
         Ok(Some(MerkleTree::<P>::new(
             &hash_params.leaf_hash_param,
@@ -107,161 +117,97 @@ impl<F: PrimeField, Oracle: OracleWithCodewords<F>> ProverMessagesInRound<F, Ora
             mt_leaves,
         )?))
     }
-}
 
-impl<F: PrimeField> ProverMessagesInRound<F, MessageRecordingOracle<F>> {
-    /// If `self` contains an oracle, remove all entries not queried to make. Return the union of query indices of
-    /// all oracles, and the queried indices.
-    pub fn into_succinct(self) -> (ProverMessagesInRound<F, SuccinctOracle<F>>, BTreeSet<usize>) {
-        let mut query_indices = BTreeSet::new();
-        for (oracle, _) in &self.reed_solomon_codes {
-            query_indices = BTreeSet::from_iter(query_indices.union(&oracle.queries).map(|&x| x));
+    pub fn get_succinct_oracle(&self) -> SuccinctRoundOracle<F> {
+        let info = self.get_info();
+        let leaves = self.query_without_recording(&self.queries);
+        let queries = self.queries.clone();
+        SuccinctRoundOracle{
+            info,
+            leaves,
+            queries,
+            current_pos: 0
         }
-        for oracle in &self.message_oracles {
-            query_indices = BTreeSet::from_iter(query_indices.union(&oracle.queries).map(|&x| x));
-        }
-
-        let reed_solomon_codes = self
-            .reed_solomon_codes
-            .into_iter()
-            .map(|(oracle, degree)| (oracle.get_succinct_oracle(&query_indices), degree))
-            .collect();
-        let message_oracles = self
-            .message_oracles
-            .into_iter()
-            .map(|oracle| oracle.get_succinct_oracle(&query_indices))
-            .collect();
-        let short_messages = self.short_messages;
-        let oracle_length = self.oracle_length;
-        (
-            ProverMessagesInRound {
-                reed_solomon_codes,
-                message_oracles,
-                short_messages,
-                oracle_length,
-            },
-            query_indices,
-        )
     }
+
+    fn query_without_recording(&self, position: &[usize]) -> Vec<Vec<F>> {
+        let mut leaves: Vec<_> = (0..position.len()).map(|_|Vec::new()).collect();
+        self.reed_solomon_codes.iter().map(|msg|&msg.0)
+            .chain(&self.message_oracles) // the oracles
+            .for_each(|oracle|{
+                if oracle.len() != self.oracle_length{
+                    panic!("invalid oracle leaves");
+                }
+
+                for (i, pos) in position.into_iter().enumerate(){
+                    leaves[i].push(oracle[*pos]);
+                }
+            });
+        leaves
+    }
+
 }
 
-impl<F: PrimeField> ProverMessagesInRound<F, SuccinctOracle<F>>{
-    /// Get a queryable prover messages.
-    pub fn get_dummy_mut(&self) -> ProverMessagesInRound<F, &SuccinctOracle<F>> {
-        ProverMessagesInRound{
+impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
+    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
+        self.queries.extend_from_slice(position);
+        self.query_without_recording(position)
+    }
+
+    fn num_reed_solomon_codes_oracles(&self) -> usize {
+        self.reed_solomon_codes.len()
+    }
+
+    fn oracle_length(&self) -> usize {
+        self.oracle_length
+    }
+
+    fn get_info(&self) -> ProverRoundMessageInfo {
+        ProverRoundMessageInfo {
+            reed_solomon_code_degree_bound: self
+                .reed_solomon_codes
+                .iter()
+                .map(|(_, degree)| *degree)
+                .collect(),
+            num_message_oracles: self.message_oracles.len(),
+            num_short_messages: self.short_messages.len(),
             oracle_length: self.oracle_length,
-            reed_solomon_codes: self.reed_solomon_codes.iter().map(|(a, b)|(a, *b)).collect(),
-            short_messages: self.short_messages.clone(),
-            message_oracles: self.message_oracles.iter().collect()
         }
     }
 }
 
-/// An Oracle of encoded message.
-/// BCS prover will use this oracle to store queries and answers.
-/// IOP Verifier will use this oracle to query prover message.
-pub trait MessageOracle<F: PrimeField>: Clone {
-    /// Query prover message at `position`. Returns answer and proof.
-    ///
-    /// `query` return error if oracle cannot fetch value at that position.
-    ///
-    /// Note that `query` does not do any merkle tree verification. Instead, in BCS verifier, merkle
-    /// tree path check will be done separately.
-    fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error>;
-}
-
-/// A message oracle, but with codewords that can be accessed by prover.
-pub trait OracleWithCodewords<F: PrimeField>: MessageOracle<F> {
-    /// Access the entire message without querying.
-    fn get_message(&self) -> &[F];
-}
-
-/// An oracle used when generating BCS proof. This oracle contains the entire codeword.
-#[derive(Clone)]
-pub struct MessageRecordingOracle<F: PrimeField> {
-    /// Prover message encoded to leaves.
-    pub leaves: Vec<F>,
-    /// Contain all the recorded queries, in order.
-    pub queries: BTreeSet<usize>,
-}
-
-impl<F: PrimeField> MessageRecordingOracle<F> {
-    /// Convert `Self` to succinct oracle, which will then be included in BCS Proof.
-    pub fn get_succinct_oracle(&self, queries: &BTreeSet<usize>) -> SuccinctOracle<F> {
-        let query_responses_iter = queries
-            .into_iter()
-            .map(|query| (*query, *(self.leaves.get(*query).expect("invalid query"))));
-        let query_responses = BTreeMap::from_iter(query_responses_iter);
-        SuccinctOracle { query_responses }
-    }
-}
-
-impl<F: PrimeField> MessageOracle<F> for MessageRecordingOracle<F> {
-    fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error> {
-        position
-            .iter()
-            .map(|&pos| {
-                assert!(
-                    pos < self.leaves.len(),
-                    "requested position {} out of range",
-                    pos
-                );
-                // record position
-                let leaf = &self.leaves[pos];
-                self.queries.insert(pos);
-                Ok(*leaf)
-            })
-            .collect()
-    }
-}
-
-impl<F: PrimeField> OracleWithCodewords<F> for MessageRecordingOracle<F> {
-    fn get_message(&self) -> &[F] {
-        &self.leaves
-    }
-}
-
-/// An oracle that can be included in oracle proof.
-/// This oracle only contains answers to queried bits.
+/// A round oracle that contains only leaves of queries.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
-pub struct SuccinctOracle<F: PrimeField> {
-    query_responses: BTreeMap<usize, F>,
-}
-// query: Uint32: variable (give each)
-// Vec<FieldVar> // store it query order by query number
-
-impl<F: PrimeField> SuccinctOracle<F> {
-    pub(crate) fn available_indices(&self) -> Vec<usize> {
-        self.query_responses.keys().map(|key|*key).collect()
-    }
-
-    // constraint (&self, num_response: usize) -> Vec<FieldVar>
-    // when generating responses, we store native verifier query position (not index of the entire oracle, but index of `query_responses`)
-    // as UInt32 in proof, and use this UInt32 to make RAM access on queries
-    // basically instead of store `query_responses`, we can store
-    // {query_orders: Vec<UInt32: index of `query_responses`>, query_responses: Vec<(UInt32: index of oracle, F)>}
-    // verifier check the correctness of query orders (using O(#number queries constraints))
-    pub(crate) fn query_no_mut(&self, position: &[usize]) -> Result<Vec<F>, Error> {
-        let mut result = Vec::with_capacity(position.len());
-        for pos in position {
-            match self.query_responses.get(pos) {
-                Some(leaf) => result.push(*leaf),
-                None => panic!("oracle does not contain answer to this query"),
-            }
-        }
-        Ok(result)
-    }
+pub struct SuccinctRoundOracle<F: PrimeField> {
+    /// Oracle Info
+    pub info: ProverRoundMessageInfo,
+    /// Leaves at this queries.
+    pub leaves: Vec<Vec<F>>,
+    /// Supposed queries of the verifier in order.
+    pub queries: Vec<usize>,
+    current_pos: usize
 }
 
-impl<F: PrimeField> MessageOracle<F> for SuccinctOracle<F> {
-    fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error> {
-        self.query_no_mut(position)
+impl<F: PrimeField> RoundOracle<F> for SuccinctRoundOracle<F> {
+    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
+        // verify consistency with next `position.len()` queries
+        let expected_position = &self.queries[self.current_pos..position.len()];
+        assert_eq!(expected_position, position, "query order is inconsistent with expected");
+        let result = self.leaves[self.current_pos..position.len()].to_vec();
+        self.current_pos += position.len();
+        result
     }
-}
 
-impl<F: PrimeField> MessageOracle<F> for &SuccinctOracle<F> {
-    fn query(&mut self, position: &[usize]) -> Result<Vec<F>, Error> {
-        self.query_no_mut(position)
+    fn num_reed_solomon_codes_oracles(&self) -> usize {
+        self.info.reed_solomon_code_degree_bound.len()
+    }
+
+    fn oracle_length(&self) -> usize {
+        self.info.oracle_length
+    }
+
+    fn get_info(&self) -> ProverRoundMessageInfo {
+        self.info.clone()
     }
 }
 

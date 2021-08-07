@@ -1,4 +1,4 @@
-use crate::bcs::message::{ProverMessagesInRound, SuccinctOracle};
+use crate::bcs::message::SuccinctRoundOracle;
 use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
 use crate::bcs::MTHashParameters;
 use crate::iop::prover::IOPProver;
@@ -9,7 +9,6 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::{MerkleTree, Path};
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
-use std::collections::{BTreeMap, BTreeSet};
 
 /// BCSProof contains all prover messages that use succinct oracle, and thus is itself succinct.
 #[derive(Derivative)]
@@ -27,9 +26,9 @@ where
     ///
     /// Prover succinct oracle message. If the user uses RSIOP, the oracles in last `n` rounds will be used for LDT with
     /// `n` queries.
-    pub prover_messages: Vec<ProverMessagesInRound<F, SuccinctOracle<F>>>,
+    pub prover_messages: Vec<SuccinctRoundOracle<F>>,
     /// Extra Prover messages used for LDT. If the prover is not RS-IOP, this vector should be empty.
-    pub ldt_prover_messages: Vec<ProverMessagesInRound<F, SuccinctOracle<F>>>,
+    pub ldt_prover_messages: Vec<SuccinctRoundOracle<F>>,
 
     /// Merkle tree root for prover messages in main protocol.
     pub prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
@@ -37,9 +36,11 @@ where
     pub ldt_prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
 
     /// Merkle tree paths for queried prover messages in main protocol.
-    pub prover_messages_mt_path: Vec<BTreeMap<usize, Path<MT>>>,
+    /// `prover_messages_mt_path[i][j]` is the path for jth query at ith round of prover message.
+    pub prover_messages_mt_path: Vec<Vec<Path<MT>>>,
     /// Merkle tree paths for queried LDT prover messages in main protocol.
-    pub ldt_messages_mt_path: Vec<BTreeMap<usize, Path<MT>>>,
+    /// `ldt_messages_mt_path[i][j]` is the path for jth query at ith round of ldt prover message.
+    pub ldt_messages_mt_path: Vec<Vec<Path<MT>>>,
 }
 
 impl<MT, F> BCSProof<MT, F>
@@ -87,15 +88,13 @@ where
         // perform LDT to enforce degree bound on low-degree oracles
         let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params);
         {
+            // TODO: verify the domain here
             let codeword_oracles_ref: Vec<_> = transcript
                 .prover_message_oracles
                 .iter()
                 .map(|msg| {
-                    msg.reed_solomon_codes // todo: better name?
-                        .iter()
-                        .map(|(oracle, degree)| (*degree, oracle.leaves.as_slice()))
+                    &msg.reed_solomon_codes
                 })
-                .flatten()
                 .collect();
 
             // Given the entire codewords of all low-degree messages in the protocol,
@@ -125,8 +124,6 @@ where
             // get the mutable codeword oracle reference for LDT
             let low_degree_oracle_ref: Vec<_> = prover_message_oracles
                 .iter_mut()
-                .map(|msg| msg.reed_solomon_codes.iter_mut().map(|(oracle, degree)| (*degree, oracle)))
-                .flatten()
                 .collect();
 
             let ldt_prover_message_oracles_ref: Vec<_> =
@@ -155,20 +152,19 @@ where
         }
 
         // convert oracles to succinct oracle
-        let (succinct_prover_message_oracles, queried_indices): (Vec<_>, Vec<_>) =
+        let succinct_prover_message_oracles: Vec<_> =
             prover_message_oracles
                 .into_iter()
-                .map(|x| x.into_succinct())
-                .unzip();
-        let (succinct_ldt_prover_message_oracles, ldt_query_indices): (Vec<_>, Vec<_>) =
+                .map(|x| x.get_succinct_oracle())
+                .collect();
+        let succinct_ldt_prover_message_oracles: Vec<_> =
             ldt_prover_message_oracles
                 .into_iter()
-                .map(|x| x.into_succinct())
-                .unzip();
+                .map(|x| x.get_succinct_oracle()).collect();
 
         // compute all authentication paths
-        let prover_message_paths = generate_mt_paths(queried_indices, &merkle_trees);
-        let ldt_prover_message_paths = generate_mt_paths(ldt_query_indices, &ldt_merkle_trees);
+        let prover_message_paths = Self::generate_all_paths(&succinct_prover_message_oracles, merkle_trees.as_slice());
+        let ldt_prover_message_paths = Self::generate_all_paths(&succinct_ldt_prover_message_oracles, &ldt_merkle_trees);
 
         // compute all merkle tree roots
         let prover_mt_root: Vec<_> = merkle_trees
@@ -190,30 +186,19 @@ where
         })
     }
 
+    fn generate_all_paths(oracles: &[SuccinctRoundOracle<F>], mt: &[Option<MerkleTree<MT>>]) -> Vec<Vec<Path<MT>>> {
+        debug_assert_eq!(mt.len(), oracles.len());
+        oracles.iter()
+            .zip(mt.iter())
+            .map(|(oracle, mt)|
+                oracle.queries.iter()
+                    .map(|query|
+                        mt.as_ref().expect("this oracle contains query but has no merkle tree").generate_proof(*query)
+                            .expect("fail to generate mt path"))
+                    .collect())
+            .collect()
+    }
+
 
 }
 
-fn generate_mt_paths<P: MTConfig>(
-    queried_indices: Vec<BTreeSet<usize>>,
-    merkle_trees: &[Option<MerkleTree<P>>],
-) -> Vec<BTreeMap<usize, Path<P>>> {
-    queried_indices
-        .into_iter()
-        .map(|query| {
-            let paths_curr_round: BTreeMap<_, _> = query
-                .into_iter()
-                .map(|index| {
-                    (
-                        index,
-                        merkle_trees[index]
-                            .as_ref()
-                            .expect("merkle tree for this round should not be empty")
-                            .generate_proof(index)
-                            .expect("unable to generate merkle tree proof"),
-                    )
-                })
-                .collect();
-            paths_curr_round
-        })
-        .collect()
-}
