@@ -23,5 +23,8 @@ pub mod bcs;
 /// TODO: move this to `ark-ldt`
 pub mod ldt_trait;
 
+#[cfg(test)]
+pub(crate) mod test_utils;
+
 /// Universal Error Type
 pub type Error = Box<dyn ark_std::error::Error>;

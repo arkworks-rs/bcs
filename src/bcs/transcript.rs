@@ -129,7 +129,7 @@ impl<F: PrimeField + Absorb> Default for PendingMessage<F> {
 
 /// A communication protocol for IOP prover.
 #[derive(Clone)]
-pub struct Transcript<P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
+pub struct Transcript<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
 where
     P::InnerDigest: Absorb,
 {
@@ -154,7 +154,7 @@ where
 
 impl<P, S, F> Transcript<P, S, F>
 where
-    P: MTConfig<Leaf = Vec<F>>,
+    P: MTConfig<Leaf = [F]>,
     S: CryptographicSponge,
     F: PrimeField + Absorb,
     P::InnerDigest: Absorb,
@@ -264,7 +264,8 @@ where
     /// Returns the index of message.
     pub fn send_message_oracle(&mut self, msg: impl IntoIterator<Item = F>) -> Result<(), Error> {
         // encode the message
-        let oracle = msg.into_iter().collect();
+        let oracle : Vec<_>= msg.into_iter().collect();
+        debug_assert!(oracle.len().is_power_of_two());
         // store the encoded prover message for generating proof
         self.current_prover_pending_message()
             .message_oracles
@@ -385,7 +386,7 @@ where
 
 /// A wrapper for BCS proof, so that verifier can reconstruct verifier messages by simulating commit phase
 /// easily.
-pub struct SimulationTranscript<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
+pub struct SimulationTranscript<'a, P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeField + Absorb>
     where
         P::InnerDigest: Absorb,
 {
@@ -409,7 +410,7 @@ pub struct SimulationTranscript<'a, P: MTConfig, S: CryptographicSponge, F: Prim
     pub(crate) bookkeeper: MessageBookkeeper,
 }
 
-impl<'a, P: MTConfig, S: CryptographicSponge, F: PrimeField + Absorb>
+impl<'a, P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeField + Absorb>
     SimulationTranscript<'a, P, S, F>
 where
     P::InnerDigest: Absorb,

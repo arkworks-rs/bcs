@@ -12,7 +12,7 @@ use ark_std::marker::PhantomData;
 
 pub struct BCSVerifier<MT, F>
 where
-    MT: MTConfig<Leaf = Vec<F>>,
+    MT: MTConfig<Leaf = [F]>,
     F: PrimeField + Absorb,
     MT::InnerDigest: Absorb,
 {
@@ -22,7 +22,7 @@ where
 
 impl<MT, F> BCSVerifier<MT, F>
 where
-    MT: MTConfig<Leaf = Vec<F>>,
+    MT: MTConfig<Leaf = [F]>,
     F: PrimeField + Absorb,
     MT::InnerDigest: Absorb,
 {
@@ -141,7 +141,7 @@ where
                     assert!(path.verify(&hash_params.leaf_hash_param,
                     &hash_params.inner_hash_param,
                         &mt_root,
-                       leaf
+                       leaf.as_slice()
                     ).expect("cannot verify"), "merkle tree verification failed")
                 })
             });

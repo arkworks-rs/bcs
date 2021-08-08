@@ -9,6 +9,8 @@ pub mod verifier;
 
 #[cfg(feature = "r1cs")]
 pub mod constraints;
+#[cfg(test)]
+mod tests;
 
 /// Specify the merkle tree hash parameters used for this protocol.
 #[derive(Derivative)]

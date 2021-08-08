@@ -92,7 +92,7 @@ impl<F: PrimeField> Default for RecordingRoundOracle<F> {
 impl<F: PrimeField> RecordingRoundOracle<F> {
 
     /// Generate a merkle tree of `Self`.
-    pub fn generate_merkle_tree<P: MTConfig<Leaf = Vec<F>>>(
+    pub fn generate_merkle_tree<P: MTConfig<Leaf = [F]>>(
         &self, // all RS-codes, all message oracles
         hash_params: &MTHashParameters<P>,
         // todo (future): serialize by coset (stride) (element in same coset in same leaf): add addition

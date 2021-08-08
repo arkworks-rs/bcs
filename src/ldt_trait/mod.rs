@@ -23,7 +23,7 @@ pub trait LDT<F: PrimeField + Absorb> {
     ///
     /// **important**: when simulating verifier in LDT, make sure verifier can only access prover message
     /// though `oracle.query`.  
-    fn prove<'a, MT: MTConfig, S: CryptographicSponge>(
+    fn prove<'a, MT: MTConfig<Leaf=[F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
         codewords: impl IntoIterator<Item=&'a Vec<(Vec<F>, usize)>>,
         ldt_transcript: &mut Transcript<MT, S, F>,
@@ -31,7 +31,7 @@ pub trait LDT<F: PrimeField + Absorb> {
     where
         MT::InnerDigest: Absorb;
 
-    fn reconstruct_ldt_verifier_messages<MT: MTConfig, S: CryptographicSponge>(
+    fn reconstruct_ldt_verifier_messages<MT: MTConfig<Leaf=[F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>, // FRI only gets degree bound information from this phase
         transcript: &mut SimulationTranscript<MT, S, F>,

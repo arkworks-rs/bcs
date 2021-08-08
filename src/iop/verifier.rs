@@ -28,7 +28,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     ///
     /// When writing test, use `transcript.check_correctness` after calling this method to verify the correctness
     /// of this method.
-    fn restore_state_from_commit_phase<MT: MTConfig>(
+    fn restore_state_from_commit_phase<MT: MTConfig<Leaf=[F]>>(
         namespace: &NameSpace,
         public_input: &Self::PublicInput,
         transcript: &mut SimulationTranscript<MT, S, F>,
