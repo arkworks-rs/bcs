@@ -11,7 +11,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, Serializatio
 /// a vector which each element correspond to the same location of different oracles. The response of each query
 /// is itself a vector where `result[i]` is oracle `i`'s leaf on this query position. All `reed_solomon_codes` oracle
 /// will come first, and then message oracles.
-pub trait RoundOracle<F: PrimeField>{
+pub trait RoundOracle<F: PrimeField>: Sized{
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
     fn query(&mut self, position: &[usize]) -> Vec<Vec<F>>;
 
