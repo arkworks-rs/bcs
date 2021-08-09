@@ -187,7 +187,6 @@ where
     {
         // create a BCS transcript
         let mut transcript = Transcript::new(sponge, hash_params.clone());
-
         // run prover code, using transcript to sample verifier message
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(

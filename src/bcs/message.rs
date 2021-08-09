@@ -61,7 +61,7 @@ pub struct RecordingRoundOracle<F: PrimeField> {
     pub short_messages: Vec<Vec<F>>,
     /// length of each oracle message. `oracle_length` is 0 if in this round, prover sends only
     /// short messages.
-    oracle_length: usize,
+    pub(crate) oracle_length: usize,
     /// Store the query position, in order
     pub queries: Vec<usize>
 }
@@ -99,13 +99,13 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
         // stride 3: [0: {oracle_1[0], oracle_2[0], ...},3,6,...], [1,4,7], ....
         // panic if stride is not divisible by oracle length
     ) -> Result<Option<MerkleTree<P>>, Error> {
-        if !self.oracle_length().is_power_of_two() {
-            panic!("oracle length need to be power of two")
-        }
         if self.oracle_length() == 0 {
             // oracle does not contain any message oracle
             debug_assert!(self.reed_solomon_codes.is_empty() && self.message_oracles.is_empty());
             return Ok(None);
+        }
+        if !self.oracle_length().is_power_of_two() {
+            panic!("oracle length need to be power of two")
         }
         let all_positions: Vec<_> = (0..self.oracle_length).collect();
         let mt_leaves: Vec<_> = self.query_without_recording(&all_positions);

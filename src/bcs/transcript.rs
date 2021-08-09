@@ -32,11 +32,19 @@ pub fn create_subprotocol_namespace(
     result
 }
 
-#[derive(Clone, Default, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 /// Stores the ownership relation of each message to its protocol.
 pub struct MessageBookkeeper {
     /// TODO doc
     pub map: BTreeMap<NameSpace, MessageIndices>,
+}
+
+impl Default for MessageBookkeeper{
+    fn default() -> Self {
+        let mut result = Self{map: BTreeMap::default()};
+        result.new_namespace(ROOT_NAMESPACE);
+        result
+    }
 }
 
 /// Namespace `/`
@@ -165,9 +173,7 @@ where
             prover_message_oracles: Vec::new(),
             merkle_tree_for_each_round: Vec::new(),
             verifier_messages: Vec::new(),
-            bookkeeper: MessageBookkeeper {
-                map: BTreeMap::new(),
-            },
+            bookkeeper: MessageBookkeeper::default(),
             sponge,
             hash_params,
             pending_message_for_current_round: PendingMessage::default(),
@@ -266,6 +272,14 @@ where
         // encode the message
         let oracle : Vec<_>= msg.into_iter().collect();
         debug_assert!(oracle.len().is_power_of_two());
+        let current_prover_pending_message = self.current_prover_pending_message();
+        if current_prover_pending_message.oracle_length != 0 {
+            if oracle.len() != current_prover_pending_message.oracle_length {
+                panic!("Oracles have different length in one round!");
+            }
+        }else{
+                current_prover_pending_message.oracle_length = oracle.len()
+        }
         // store the encoded prover message for generating proof
         self.current_prover_pending_message()
             .message_oracles
