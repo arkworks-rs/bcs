@@ -194,7 +194,7 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
 pub struct SuccinctRoundOracle<F: PrimeField> {
     /// Oracle Info
     pub info: ProverRoundMessageInfo,
-    /// Leaves at this queries.
+    /// Leaves at query indices.
     pub queried_leaves: Vec<Vec<F>>,
     /// Supposed queries of the verifier in order.
     pub queries: Vec<usize>,
