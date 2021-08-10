@@ -30,7 +30,7 @@ pub trait IOPProver<F: PrimeField + Absorb> {
     /// If the prover involves a subprotocol, consider create a separate namespace for them,
     /// using `create_subprotocol_namespace(namespace)`. Doing so, subprotocol messages will not
     /// pollute the current namespace.
-    fn prove<MT: MTConfig<Leaf=[F]>, S: CryptographicSponge>(
+    fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         namespace: &NameSpace,
         state: &mut Self::ProverState,
         transcript: &mut Transcript<MT, S, F>,

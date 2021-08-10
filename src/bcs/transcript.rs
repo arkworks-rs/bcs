@@ -2,7 +2,10 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 
-use crate::bcs::message::{RecordingRoundOracle, VerifierMessage, ProverRoundMessageInfo, RoundOracle};
+use crate::bcs::message::{
+    ProverRoundMessageInfo, RecordingRoundOracle, RoundOracle, VerifierMessage,
+};
+use crate::bcs::prover::BCSProof;
 use crate::bcs::MTHashParameters;
 use crate::Error;
 use ark_crypto_primitives::MerkleTree;
@@ -11,7 +14,6 @@ use ark_poly::univariate::DensePolynomial;
 use ark_poly::Polynomial;
 use ark_std::collections::BTreeMap;
 use ark_std::mem::take;
-use crate::bcs::prover::BCSProof;
 
 /// # Namespace
 /// The namespace is an Each protocol is a list of subprotocol_id that represents a path.
@@ -39,9 +41,11 @@ pub struct MessageBookkeeper {
     pub map: BTreeMap<NameSpace, MessageIndices>,
 }
 
-impl Default for MessageBookkeeper{
+impl Default for MessageBookkeeper {
     fn default() -> Self {
-        let mut result = Self{map: BTreeMap::default()};
+        let mut result = Self {
+            map: BTreeMap::default(),
+        };
         result.new_namespace(ROOT_NAMESPACE);
         result
     }
@@ -270,15 +274,15 @@ where
     /// Returns the index of message.
     pub fn send_message_oracle(&mut self, msg: impl IntoIterator<Item = F>) -> Result<(), Error> {
         // encode the message
-        let oracle : Vec<_>= msg.into_iter().collect();
+        let oracle: Vec<_> = msg.into_iter().collect();
         debug_assert!(oracle.len().is_power_of_two());
         let current_prover_pending_message = self.current_prover_pending_message();
         if current_prover_pending_message.oracle_length != 0 {
             if oracle.len() != current_prover_pending_message.oracle_length {
                 panic!("Oracles have different length in one round!");
             }
-        }else{
-                current_prover_pending_message.oracle_length = oracle.len()
+        } else {
+            current_prover_pending_message.oracle_length = oracle.len()
         }
         // store the encoded prover message for generating proof
         self.current_prover_pending_message()
@@ -349,9 +353,7 @@ where
     /// Get reference to current prover pending message.
     /// If current round pending message to `None`, current round message will become prover message type.
     /// Panic if current pending message is not prover message.
-    fn current_prover_pending_message(
-        &mut self,
-    ) -> &mut RecordingRoundOracle<F> {
+    fn current_prover_pending_message(&mut self) -> &mut RecordingRoundOracle<F> {
         if let PendingMessage::None = &self.pending_message_for_current_round {
             self.pending_message_for_current_round =
                 PendingMessage::ProverMessage(RecordingRoundOracle::default());
@@ -400,9 +402,13 @@ where
 
 /// A wrapper for BCS proof, so that verifier can reconstruct verifier messages by simulating commit phase
 /// easily.
-pub struct SimulationTranscript<'a, P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeField + Absorb>
-    where
-        P::InnerDigest: Absorb,
+pub struct SimulationTranscript<
+    'a,
+    P: MTConfig<Leaf = [F]>,
+    S: CryptographicSponge,
+    F: PrimeField + Absorb,
+> where
+    P::InnerDigest: Absorb,
 {
     /// prover message info used to verify consistency
     prover_messages_info: Vec<ProverRoundMessageInfo>,
@@ -424,7 +430,7 @@ pub struct SimulationTranscript<'a, P: MTConfig<Leaf=[F]>, S: CryptographicSpong
     pub(crate) bookkeeper: MessageBookkeeper,
 }
 
-impl<'a, P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeField + Absorb>
+impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
     SimulationTranscript<'a, P, S, F>
 where
     P::InnerDigest: Absorb,
@@ -589,4 +595,3 @@ where
                    "reconstructed verifer messages is inconsistent with verifier messages sampled in prover code");
     }
 }
-

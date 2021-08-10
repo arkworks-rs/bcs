@@ -11,7 +11,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, Serializatio
 /// a vector which each element correspond to the same location of different oracles. The response of each query
 /// is itself a vector where `result[i]` is oracle `i`'s leaf on this query position. All `reed_solomon_codes` oracle
 /// will come first, and then message oracles.
-pub trait RoundOracle<F: PrimeField>: Sized{
+pub trait RoundOracle<F: PrimeField>: Sized {
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
     fn query(&mut self, position: &[usize]) -> Vec<Vec<F>>;
 
@@ -22,15 +22,24 @@ pub trait RoundOracle<F: PrimeField>: Sized{
         // This is naive implementation, where we use `self.query`.
         // TODO: use another merkle tree to store each coset together.
         let oracle_length = self.oracle_length();
-        debug_assert!(oracle_length % stride == 0, "stride should be dividing oracle length!");
-        debug_assert!(starting_index < stride, "starting index should be less than stride!");
+        debug_assert!(
+            oracle_length % stride == 0,
+            "stride should be dividing oracle length!"
+        );
+        debug_assert!(
+            starting_index < stride,
+            "starting index should be less than stride!"
+        );
         let position: Vec<_> = (starting_index..oracle_length).step_by(stride).collect();
         let num_rs_codes = self.num_reed_solomon_codes_oracles();
         let query_responses = self.query(&position);
-        query_responses.into_iter().map(|mut resp|{
-            resp.truncate(num_rs_codes);
-            resp
-        }).collect()
+        query_responses
+            .into_iter()
+            .map(|mut resp| {
+                resp.truncate(num_rs_codes);
+                resp
+            })
+            .collect()
     }
 
     /// Number of reed_solomon_codes oracles in this round.
@@ -63,10 +72,8 @@ pub struct RecordingRoundOracle<F: PrimeField> {
     /// short messages.
     pub(crate) oracle_length: usize,
     /// Store the query position, in order
-    pub queries: Vec<usize>
+    pub queries: Vec<usize>,
 }
-
-
 
 /// Contains structure and degree bound information about prover round messages, but does not contain real messages.
 #[derive(Eq, PartialEq, Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
@@ -84,13 +91,12 @@ impl<F: PrimeField> Default for RecordingRoundOracle<F> {
             message_oracles: Vec::new(),
             short_messages: Vec::new(),
             oracle_length: 0,
-            queries: Vec::new()
+            queries: Vec::new(),
         }
     }
 }
 
 impl<F: PrimeField> RecordingRoundOracle<F> {
-
     /// Generate a merkle tree of `Self`.
     pub fn generate_merkle_tree<P: MTConfig<Leaf = [F]>>(
         &self, // all RS-codes, all message oracles
@@ -121,30 +127,31 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
         let info = self.get_info();
         let leaves = self.query_without_recording(&self.queries);
         let queries = self.queries.clone();
-        SuccinctRoundOracle{
+        SuccinctRoundOracle {
             info,
             queried_leaves: leaves,
             queries,
-            short_messages: self.short_messages.clone()
+            short_messages: self.short_messages.clone(),
         }
     }
 
     fn query_without_recording(&self, position: &[usize]) -> Vec<Vec<F>> {
-        let mut leaves: Vec<_> = (0..position.len()).map(|_|Vec::new()).collect();
-        self.reed_solomon_codes.iter().map(|msg|&msg.0)
+        let mut leaves: Vec<_> = (0..position.len()).map(|_| Vec::new()).collect();
+        self.reed_solomon_codes
+            .iter()
+            .map(|msg| &msg.0)
             .chain(&self.message_oracles) // the oracles
-            .for_each(|oracle|{
-                if oracle.len() != self.oracle_length{
+            .for_each(|oracle| {
+                if oracle.len() != self.oracle_length {
                     panic!("invalid oracle leaves");
                 }
 
-                for (i, pos) in position.into_iter().enumerate(){
+                for (i, pos) in position.into_iter().enumerate() {
                     leaves[i].push(oracle[*pos]);
                 }
             });
         leaves
     }
-
 }
 
 impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
@@ -185,14 +192,14 @@ pub struct SuccinctRoundOracle<F: PrimeField> {
     /// Supposed queries of the verifier in order.
     pub queries: Vec<usize>,
     /// Store the non-oracle IP messages in this round
-    pub short_messages: Vec<Vec<F>>
+    pub short_messages: Vec<Vec<F>>,
 }
 
 impl<F: PrimeField> SuccinctRoundOracle<F> {
     pub fn get_view(&self) -> SuccinctRoundOracleView<F> {
-        SuccinctRoundOracleView{
+        SuccinctRoundOracleView {
             oracle: &self,
-            current_query_pos: 0
+            current_query_pos: 0,
         }
     }
 }
@@ -201,15 +208,21 @@ impl<F: PrimeField> SuccinctRoundOracle<F> {
 #[derive(Clone)]
 pub struct SuccinctRoundOracleView<'a, F: PrimeField> {
     oracle: &'a SuccinctRoundOracle<F>,
-    current_query_pos: usize
+    current_query_pos: usize,
 }
 
 impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
     fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
         // verify consistency with next `position.len()` queries
-        let expected_position = &self.oracle.queries[self.current_query_pos..self.current_query_pos + position.len()];
-        assert_eq!(expected_position, position, "query order is inconsistent with expected");
-        let result = self.oracle.queried_leaves[self.current_query_pos..self.current_query_pos + position.len()].to_vec();
+        let expected_position =
+            &self.oracle.queries[self.current_query_pos..self.current_query_pos + position.len()];
+        assert_eq!(
+            expected_position, position,
+            "query order is inconsistent with expected"
+        );
+        let result = self.oracle.queried_leaves
+            [self.current_query_pos..self.current_query_pos + position.len()]
+            .to_vec();
         self.current_query_pos += position.len();
         result
     }

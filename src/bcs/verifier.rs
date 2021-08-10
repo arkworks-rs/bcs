@@ -2,13 +2,12 @@ use crate::bcs::prover::BCSProof;
 use crate::bcs::transcript::{SimulationTranscript, ROOT_NAMESPACE};
 use crate::bcs::MTHashParameters;
 use crate::iop::verifier::IOPVerifier;
-use crate::ldt_trait::LDT;
+use crate::ldt_trait::{NoLDT, LDT};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
-
 
 pub struct BCSVerifier<MT, F>
 where
@@ -62,13 +61,19 @@ where
         };
 
         // construct view of oracle
-        let mut prover_messages_view: Vec<_> = proof.prover_messages.iter()
-            .map(|msg|msg.get_view()).collect();
-        let mut ldt_prover_messages_view: Vec<_> = proof.ldt_prover_messages.iter()
-            .map(|msg|msg.get_view()).collect();
+        let mut prover_messages_view: Vec<_> = proof
+            .prover_messages
+            .iter()
+            .map(|msg| msg.get_view())
+            .collect();
+        let mut ldt_prover_messages_view: Vec<_> = proof
+            .ldt_prover_messages
+            .iter()
+            .map(|msg| msg.get_view())
+            .collect();
 
         // simulate LDT prove: reconstruct LDT verifier messages to restore LDT verifier state
-       let ldt_verifier_messages = {
+        let ldt_verifier_messages = {
             let mut ldt_transcript = SimulationTranscript::new_ldt_transcript(&proof, &mut sponge);
             L::reconstruct_ldt_verifier_messages(
                 ldt_params,
@@ -93,59 +98,113 @@ where
                 &mut sponge,
                 prover_messages_view.iter_mut().collect(),
                 ldt_prover_messages_view.iter_mut().collect(),
-                &ldt_verifier_messages
+                &ldt_verifier_messages,
             )?; // will return error if verification failed
         }
 
         // verify the protocol (we can use a new view)
         let verifier_result = V::query_and_decide(
-                &ROOT_NAMESPACE,
-                verifier_parameter,
-                &mut V::initial_state_for_query_and_decision_phase(public_input),
-                &mut sponge,
-                prover_messages_view.iter_mut(),
-                &verifier_messages,
-                &bookkeeper
-            )?;
+            &ROOT_NAMESPACE,
+            verifier_parameter,
+            &mut V::initial_state_for_query_and_decision_phase(public_input),
+            &mut sponge,
+            prover_messages_view.iter_mut(),
+            &verifier_messages,
+            &bookkeeper,
+        )?;
 
         // verify all authentication paths Authentication path verification
-        assert_eq!(proof.prover_messages.len(), proof.prover_messages_mt_root.len());
-        assert_eq!(proof.prover_messages.len(), proof.prover_messages_mt_path.len());
-        assert_eq!(proof.ldt_prover_messages.len(), proof.ldt_prover_messages_mt_root.len());
-        assert_eq!(proof.ldt_prover_messages.len(), proof.prover_messages_mt_path.len());
+        assert_eq!(
+            proof.prover_messages.len(),
+            proof.prover_messages_mt_root.len()
+        );
+        assert_eq!(
+            proof.prover_messages.len(),
+            proof.prover_messages_mt_path.len()
+        );
+        assert_eq!(
+            proof.ldt_prover_messages.len(),
+            proof.ldt_prover_messages_mt_root.len()
+        );
+        assert_eq!(
+            proof.ldt_prover_messages.len(),
+            proof.ldt_prover_messages_mt_path.len()
+        );
 
         // each item is a round containing multiple oracles
-        let all_prover_oracles = proof.prover_messages.iter().chain(proof.ldt_prover_messages.iter());
-        let all_paths = proof.prover_messages_mt_path.iter().chain(proof.ldt_messages_mt_path.iter());
-        let all_mt_roots = proof.prover_messages_mt_root.iter().chain(proof.ldt_prover_messages_mt_root.iter());
+        let all_prover_oracles = proof
+            .prover_messages
+            .iter()
+            .chain(proof.ldt_prover_messages.iter());
+        let all_paths = proof
+            .prover_messages_mt_path
+            .iter()
+            .chain(proof.ldt_prover_messages_mt_path.iter());
+        let all_mt_roots = proof
+            .prover_messages_mt_root
+            .iter()
+            .chain(proof.ldt_prover_messages_mt_root.iter());
 
         all_prover_oracles
             .zip(all_paths)
             .zip(all_mt_roots)
             // iterate over all oracles and in this round
-            .for_each(|((round_oracle, paths), mt_root)|{
+            .for_each(|((round_oracle, paths), mt_root)| {
                 assert_eq!(round_oracle.queries.len(), paths.len());
-                assert_eq!(round_oracle.queries.len(), round_oracle.queried_leaves.len());
+                assert_eq!(
+                    round_oracle.queries.len(),
+                    round_oracle.queried_leaves.len()
+                );
                 let mt_root = {
                     if round_oracle.queries.len() > 0 {
-                        mt_root.as_ref().expect("round oracle has query but has no mt_root")
-                    }else{
+                        mt_root
+                            .as_ref()
+                            .expect("round oracle has query but has no mt_root")
+                    } else {
                         return;
                     }
                 };
-                round_oracle.queries.iter()
+                round_oracle
+                    .queries
+                    .iter()
                     .zip(round_oracle.queried_leaves.iter())
                     .zip(paths.iter())
-                    .for_each(|((index, leaf), path)|{
+                    .for_each(|((index, leaf), path)| {
                         assert_eq!(*index, path.leaf_index);
-                    assert!(path.verify(&hash_params.leaf_hash_param,
-                    &hash_params.inner_hash_param,
-                        &mt_root,
-                       leaf.as_slice()
-                    ).expect("cannot verify"), "merkle tree verification failed")
-                })
+                        assert!(
+                            path.verify(
+                                &hash_params.leaf_hash_param,
+                                &hash_params.inner_hash_param,
+                                &mt_root,
+                                leaf.as_slice()
+                            )
+                            .expect("cannot verify"),
+                            "merkle tree verification failed"
+                        )
+                    })
             });
 
         Ok(verifier_result)
+    }
+
+    pub fn verify_without_ldt<V, S>(
+        sponge: S,
+        proof: &BCSProof<MT, F>,
+        public_input: &V::PublicInput,
+        verifier_parameter: &V::VerifierParameter,
+        hash_params: MTHashParameters<MT>,
+    ) -> Result<V::VerifierOutput, Error>
+    where
+        V: IOPVerifier<S, F>,
+        S: CryptographicSponge,
+    {
+        Self::verify::<V, NoLDT<_>, S>(
+            sponge,
+            proof,
+            public_input,
+            verifier_parameter,
+            &(),
+            hash_params,
+        )
     }
 }

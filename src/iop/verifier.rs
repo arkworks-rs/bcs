@@ -1,7 +1,7 @@
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
 
-use crate::bcs::message::{VerifierMessage, RoundOracle};
+use crate::bcs::message::{RoundOracle, VerifierMessage};
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
@@ -28,7 +28,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     ///
     /// When writing test, use `transcript.check_correctness` after calling this method to verify the correctness
     /// of this method.
-    fn restore_state_from_commit_phase<MT: MTConfig<Leaf=[F]>>(
+    fn restore_state_from_commit_phase<MT: MTConfig<Leaf = [F]>>(
         namespace: &NameSpace,
         public_input: &Self::PublicInput,
         transcript: &mut SimulationTranscript<MT, S, F>,
@@ -46,12 +46,12 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// or oracle cannot answer the query.
     ///
     /// To access prover message oracle and previous verifier messages of current namespace, use bookkeeper.
-    fn query_and_decide<'a, O:'a + RoundOracle<F>>(
+    fn query_and_decide<'a, O: 'a + RoundOracle<F>>(
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         verifier_state: &mut Self::VerifierState,
         random_oracle: &mut S,
-        prover_message_oracle: impl IntoIterator<Item=&'a mut O>,
+        prover_message_oracle: impl IntoIterator<Item = &'a mut O>,
         verifier_messages: &[Vec<VerifierMessage<F>>],
         bookkeeper: &MessageBookkeeper,
     ) -> Result<Self::VerifierOutput, Error>;
