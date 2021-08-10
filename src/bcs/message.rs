@@ -12,6 +12,9 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, Serializatio
 /// is itself a vector where `result[i]` is oracle `i`'s leaf on this query position. All `reed_solomon_codes` oracle
 /// will come first, and then message oracles.
 pub trait RoundOracle<F: PrimeField>: Sized {
+    /// Get short message in the oracle by index.
+    fn get_short_message(&self, index: usize) -> &Vec<F>;
+
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
     fn query(&mut self, position: &[usize]) -> Vec<Vec<F>>;
 
@@ -155,6 +158,10 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
 }
 
 impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
+    fn get_short_message(&self, index: usize) -> &Vec<F> {
+        &self.short_messages[index]
+    }
+
     fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
         self.queries.extend_from_slice(position);
         self.query_without_recording(position)
@@ -212,6 +219,10 @@ pub struct SuccinctRoundOracleView<'a, F: PrimeField> {
 }
 
 impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
+    fn get_short_message(&self, index: usize) -> &Vec<F> {
+        &self.oracle.short_messages[index]
+    }
+
     fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
         // verify consistency with next `position.len()` queries
         let expected_position =

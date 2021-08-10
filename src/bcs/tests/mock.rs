@@ -60,15 +60,15 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
         transcript.submit_verifier_current_round(namespace);
 
         // prover send
-        let msg3 = vm1.into_iter().map(|x| x.square());
-        transcript.send_message(msg3);
-        let msg4 = (0..256u128).map(|x| F::from(x) + F::from_le_bytes_mod_order(&vm2));
-        transcript.send_message_oracle(msg4).unwrap();
+        let msg1 = vm1.into_iter().map(|x| x.square());
+        transcript.send_message(msg1);
+        let msg2 = (0..256u128).map(|x| F::from(x) + F::from_le_bytes_mod_order(&vm2));
+        transcript.send_message_oracle(msg2).unwrap();
         transcript.submit_prover_current_round(namespace).unwrap();
 
         // prover send 2
-        let msg5 = (0..6).map(|_| F::rand(&mut rng));
-        transcript.send_message(msg5);
+        let msg1 = (0..6).map(|_| F::rand(&mut rng));
+        transcript.send_message(msg1);
         transcript.submit_prover_current_round(namespace).unwrap();
     }
 }
@@ -133,21 +133,68 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
     }
 
     fn initial_state_for_query_and_decision_phase(
-        public_input: &Self::PublicInput,
+        _public_input: &Self::PublicInput,
     ) -> Self::VerifierState {
         /*none*/
     }
 
-    fn query_and_decide<'a, O: 'a + RoundOracle<F>>(
-        namespace: &NameSpace,
-        verifier_parameter: &Self::VerifierParameter,
-        verifier_state: &mut Self::VerifierState,
-        random_oracle: &mut S,
-        prover_message_oracle: impl IntoIterator<Item = &'a mut O>,
+    fn query_and_decide<O: RoundOracle<F>>(
+        _namespace: &NameSpace,
+        _verifier_parameter: &Self::VerifierParameter,
+        _verifier_state: &mut Self::VerifierState,
+        _random_oracle: &mut S,
+        mut prover_message_oracle: Vec<&mut O>,
         verifier_messages: &[Vec<VerifierMessage<F>>],
-        bookkeeper: &MessageBookkeeper,
+        _bookkeeper: &MessageBookkeeper,
     ) -> Result<Self::VerifierOutput, Error> {
-        // TODO: add some verification on prover answer
+        // verify if message is indeed correct
+        let mut rng = test_rng();
+        let pm1_1: Vec<_> = (0..4).map(|_| F::rand(&mut rng)).collect();
+        let pm1_2: Vec<_> = (0..256).map(|_| F::rand(&mut rng)).collect();
+        let pm1_3: Vec<_> = (0..256).map(|_| F::rand(&mut rng)).collect();
+
+        assert_eq!(prover_message_oracle[0].get_short_message(0), &pm1_1);
+        assert_eq!(
+            prover_message_oracle[0].query(&[123, 223]),
+            vec![vec![pm1_2[123], pm1_3[123]], vec![pm1_2[223], pm1_3[223]]]
+        );
+
+        let vm1_1 = if let VerifierMessage::FieldElements(fe) = verifier_messages[0][0].clone() {
+            assert_eq!(fe.len(), 3);
+            fe
+        } else {
+            panic!("invalid vm message type")
+        };
+        let vm1_2 = if let VerifierMessage::Bytes(bytes) = verifier_messages[0][1].clone() {
+            assert_eq!(bytes.len(), 16);
+            bytes
+        } else {
+            panic!("invalid vm message type");
+        };
+
+        if let VerifierMessage::Bits(bits) = &verifier_messages[1][0] {
+            assert_eq!(bits.len(), 19);
+        } else {
+            panic!("invalid vm message type");
+        }
+
+        let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square()).collect();
+
+        assert_eq!(prover_message_oracle[1].get_short_message(0), &pm2_1);
+
+        let pm2_2: Vec<_> = (0..256u128)
+            .map(|x| F::from(x) + F::from_le_bytes_mod_order(&vm1_2))
+            .collect();
+
+        assert_eq!(
+            prover_message_oracle[1].query(&[19, 29, 39]),
+            vec![vec![pm2_2[19]], vec![pm2_2[29]], vec![pm2_2[39]]]
+        );
+
+        let pm3_1: Vec<_> = (0..6).map(|_| F::rand(&mut rng)).collect();
+
+        assert_eq!(prover_message_oracle[2].get_short_message(0), &pm3_1);
+
         Ok(true)
     }
 }

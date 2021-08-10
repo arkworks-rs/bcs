@@ -46,12 +46,12 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// or oracle cannot answer the query.
     ///
     /// To access prover message oracle and previous verifier messages of current namespace, use bookkeeper.
-    fn query_and_decide<'a, O: 'a + RoundOracle<F>>(
+    fn query_and_decide<O: RoundOracle<F>>(
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         verifier_state: &mut Self::VerifierState,
         random_oracle: &mut S,
-        prover_message_oracle: impl IntoIterator<Item = &'a mut O>,
+        prover_message_oracle: Vec<&mut O>,
         verifier_messages: &[Vec<VerifierMessage<F>>],
         bookkeeper: &MessageBookkeeper,
     ) -> Result<Self::VerifierOutput, Error>;

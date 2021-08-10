@@ -108,7 +108,7 @@ where
             verifier_parameter,
             &mut V::initial_state_for_query_and_decision_phase(public_input),
             &mut sponge,
-            prover_messages_view.iter_mut(),
+            prover_messages_view.iter_mut().collect(),
             &verifier_messages,
             &bookkeeper,
         )?;
