@@ -1,4 +1,7 @@
-use crate::bcs::message::{ProverRoundMessageInfo, RoundOracle, SuccinctRoundOracle};
+use crate::bcs::message::{
+    ProverRoundMessageInfo, SuccinctRoundOracle,
+    VerifierMessage,
+};
 use crate::Error;
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
@@ -6,14 +9,8 @@ use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use std::borrow::Borrow;
 
-/// Enables simple access to the "gadget" version `RoundOracle`, which includes all oracle messages
-/// (RS-code oracles, Non RS-code oracles, and IP short messages) sent in one round.
-pub trait RoundOracleWithGadget<F: PrimeField>: RoundOracle<F> {
-    type Var: RoundOracleVar<F, Self>;
-}
-
 /// Constraint Gadget for `RoundOracleVar`
-pub trait RoundOracleVar<F: PrimeField, Oracle: RoundOracle<F>> {
+pub trait RoundOracleVar<F: PrimeField> {
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
     fn query(&mut self, position: &[Vec<Boolean<F>>]) -> Result<Vec<Vec<FpVar<F>>>, Error>;
 
@@ -58,10 +55,14 @@ pub trait RoundOracleVar<F: PrimeField, Oracle: RoundOracle<F>> {
     }
 
     /// Number of reed_solomon_codes oracles in this round.
-    fn num_reed_solomon_codes_oracles(&self) -> usize;
+    fn num_reed_solomon_codes_oracles(&self) -> usize {
+        self.get_info().reed_solomon_code_degree_bound.len()
+    }
 
     /// length of each oracle
-    fn oracle_length(&self) -> usize;
+    fn oracle_length(&self) -> usize {
+        self.get_info().oracle_length
+    }
 
     /// Get oracle info, including number of oracles for each type and degree bound of each RS code oracle.
     fn get_info(&self) -> ProverRoundMessageInfo;
@@ -132,5 +133,79 @@ impl<F: PrimeField> AllocVar<SuccinctRoundOracle<F>, F> for SuccinctRoundOracleV
             queries,
             short_messages,
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct SuccinctRoundOracleVarView<'a, F: PrimeField> {
+    oracle: &'a SuccinctRoundOracleVar<F>,
+    current_query_pos: usize,
+}
+
+impl<'a, F: PrimeField> RoundOracleVar<F> for SuccinctRoundOracleVarView<'a, F> {
+    fn query(&mut self, position: &[Vec<Boolean<F>>]) -> Result<Vec<Vec<FpVar<F>>>, Error> {
+        // verify consistency with next `position.len()` queries
+        let expected_position =
+            &self.oracle.queries[self.current_query_pos..self.current_query_pos + position.len()];
+        assert_eq!(expected_position.len(), position.len());
+        // enforce that query stored in proof is consistent with `position`
+        expected_position
+            .iter()
+            .zip(position.iter())
+            .try_for_each(|(expected, actual)| expected.enforce_equal(actual.as_slice()))?;
+
+        let result = self.oracle.queried_leaves
+            [self.current_query_pos..self.current_query_pos + position.len()]
+            .to_vec();
+        Ok(result)
+    }
+
+    fn get_info(&self) -> ProverRoundMessageInfo {
+        self.oracle.info.clone()
+    }
+}
+
+#[derive(Clone)]
+pub enum VerifierMessageVar<F: PrimeField> {
+    /// Field elements
+    FieldElements(Vec<FpVar<F>>),
+    /// bits
+    Bits(Vec<Boolean<F>>),
+    /// bytes
+    Bytes(Vec<UInt8<F>>),
+}
+
+impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {
+    fn new_variable<T: Borrow<VerifierMessage<F>>>(
+        cs: impl Into<Namespace<F>>,
+        f: impl FnOnce() -> Result<T, SynthesisError>,
+        mode: AllocationMode,
+    ) -> Result<Self, SynthesisError> {
+        let cs = cs.into();
+        let msg = f()?;
+        let msg = msg.borrow();
+        match msg {
+            VerifierMessage::FieldElements(elements) => {
+                let var: Result<Vec<_>, _> = elements
+                    .iter()
+                    .map(|x| FpVar::new_variable(cs.clone(), || Ok(*x), mode))
+                    .collect();
+                Ok(VerifierMessageVar::FieldElements(var?))
+            }
+            VerifierMessage::Bits(bits) => {
+                let var: Result<Vec<_>, _> = bits
+                    .iter()
+                    .map(|x| Boolean::new_variable(cs.clone(), || Ok(*x), mode))
+                    .collect();
+                Ok(VerifierMessageVar::Bits(var?))
+            }
+            VerifierMessage::Bytes(bytes) => {
+                let var: Result<Vec<_>, _> = bytes
+                    .iter()
+                    .map(|x| UInt8::new_variable(cs.clone(), || Ok(*x), mode))
+                    .collect();
+                Ok(VerifierMessageVar::Bytes(var?))
+            }
+        }
     }
 }
