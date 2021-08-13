@@ -26,21 +26,23 @@ where
     ///
     /// Prover succinct oracle message. If the user uses RSIOP, the oracles in last `n` rounds will be used for LDT with
     /// `n` queries.
-    pub prover_messages: Vec<SuccinctRoundOracle<F>>,
+    pub prover_iop_messages_by_round: Vec<SuccinctRoundOracle<F>>,
     /// Extra Prover messages used for LDT. If the prover is not RS-IOP, this vector should be empty.
-    pub ldt_prover_messages: Vec<SuccinctRoundOracle<F>>,
+    pub ldt_prover_iop_messages_by_round: Vec<SuccinctRoundOracle<F>>,
+
+    // BCS data below: maybe combine
 
     /// Merkle tree root for prover messages in main protocol.
     pub prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
     /// Merkle tree root for extra prover messages used for LDT. If the prover is not RS-IOP, this vector should be empty.
-    pub ldt_prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
+    pub ldt_prover_messages_mt_root: Vec<Option<MT::InnerDigest>>, // TODO: making this combined
 
     /// Merkle tree paths for queried prover messages in main protocol.
     /// `prover_messages_mt_path[i][j]` is the path for jth query at ith round of prover message.
-    pub prover_messages_mt_path: Vec<Vec<Path<MT>>>,
+    pub prover_oracles_mt_path: Vec<Vec<Path<MT>>>,
     /// Merkle tree paths for queried LDT prover messages in main protocol.
     /// `ldt_messages_mt_path[i][j]` is the path for jth query at ith round of ldt prover message.
-    pub ldt_prover_messages_mt_path: Vec<Vec<Path<MT>>>,
+    pub ldt_prover_oracles_mt_path: Vec<Vec<Path<MT>>>,
 }
 
 impl<MT, F> BCSProof<MT, F>
@@ -50,8 +52,6 @@ where
     MT::InnerDigest: Absorb,
 {
     /// Generate proof
-    /// todo: RS-IOP only, add another geenrate for solely pure IOP BCS
-    /// do it in future: derive verifier param from prover param
     pub fn generate<V, P, L, S>(
         sponge: S,
         public_input: &P::PublicInput,
@@ -146,11 +146,14 @@ where
         let succinct_ldt_prover_message_oracles =
             Self::batch_to_succinct(&ldt_prover_message_oracles, false);
 
+        let main_queries: Vec<_> = prover_message_oracles.into_iter().map(|msg|msg.queries).collect();
+        let ldt_queries: Vec<_> = ldt_prover_message_oracles.into_iter().map(|msg|msg.queries).collect();
+
         // compute all authentication paths
         let prover_message_paths =
-            Self::generate_all_paths(&succinct_prover_message_oracles, merkle_trees.as_slice());
+            Self::generate_all_paths(&main_queries, merkle_trees.as_slice());
         let ldt_prover_message_paths =
-            Self::generate_all_paths(&succinct_ldt_prover_message_oracles, &ldt_merkle_trees);
+            Self::generate_all_paths(&ldt_queries, &ldt_merkle_trees);
 
         // compute all merkle tree roots
         let prover_mt_root: Vec<_> = merkle_trees
@@ -163,12 +166,12 @@ where
             .collect();
         Ok(BCSProof {
             // todo: maybe combine prover and ldt?
-            prover_messages: succinct_prover_message_oracles,
+            prover_iop_messages_by_round: succinct_prover_message_oracles,
             prover_messages_mt_root: prover_mt_root,
-            prover_messages_mt_path: prover_message_paths,
-            ldt_prover_messages: succinct_ldt_prover_message_oracles,
+            prover_oracles_mt_path: prover_message_paths,
+            ldt_prover_iop_messages_by_round: succinct_ldt_prover_message_oracles,
             ldt_prover_messages_mt_root: ldt_prover_mt_root,
-            ldt_prover_messages_mt_path: ldt_prover_message_paths,
+            ldt_prover_oracles_mt_path: ldt_prover_message_paths,
         })
     }
 
@@ -214,16 +217,14 @@ where
     }
 
     fn generate_all_paths(
-        oracles: &[SuccinctRoundOracle<F>],
+        queries: &[Vec<usize>],
         mt: &[Option<MerkleTree<MT>>],
     ) -> Vec<Vec<Path<MT>>> {
-        debug_assert_eq!(mt.len(), oracles.len());
-        oracles
-            .iter()
+        debug_assert_eq!(mt.len(), queries.len());
+        queries.iter()
             .zip(mt.iter())
-            .map(|(oracle, mt)| {
-                oracle
-                    .queries
+            .map(|(queries, mt)| {
+                    queries
                     .iter()
                     .map(|query| {
                         mt.as_ref()

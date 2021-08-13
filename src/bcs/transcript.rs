@@ -438,12 +438,12 @@ where
     /// Returns a wrapper for BCS proof so that verifier can reconstruct verifier messages by simulating commit phase easily.
     pub(crate) fn new_main_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
         let prover_short_messages: Vec<_> = bcs_proof
-            .prover_messages
+            .prover_iop_messages_by_round
             .iter()
             .map(|msg| &msg.short_messages)
             .collect();
         let prover_messages_info: Vec<_> = bcs_proof
-            .prover_messages
+            .prover_iop_messages_by_round
             .iter()
             .map(|msg| msg.get_view().get_info())
             .collect();
@@ -462,12 +462,12 @@ where
     /// Returns a wrapper for BCS proof so that LDT verifier can reconstruct verifier messages by simulating commit phase easily.
     pub(crate) fn new_ldt_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
         let prover_short_messages: Vec<_> = bcs_proof
-            .ldt_prover_messages
+            .ldt_prover_iop_messages_by_round
             .iter()
             .map(|msg| &msg.short_messages)
             .collect();
         let prover_messages_info = bcs_proof
-            .ldt_prover_messages
+            .ldt_prover_iop_messages_by_round
             .iter()
             .map(|msg| msg.get_view().get_info())
             .collect();

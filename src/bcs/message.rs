@@ -21,28 +21,9 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     /// Return the leaves of at `position` of reed_solomon code oracle. `result[i][j]` is leaf `i` at oracle `j`.
     /// This method is convenient for LDT.
     /// Query position should be a coset, that has a starting index and stride.
-    fn query_rs_code(&mut self, starting_index: usize, stride: usize) -> Vec<Vec<F>> {
-        // This is naive implementation, where we use `self.query`.
-        // TODO: use another merkle tree to store each coset together.
-        let oracle_length = self.oracle_length();
-        debug_assert!(
-            oracle_length % stride == 0,
-            "stride should be dividing oracle length!"
-        );
-        debug_assert!(
-            starting_index < stride,
-            "starting index should be less than stride!"
-        );
-        let position: Vec<_> = (starting_index..oracle_length).step_by(stride).collect();
-        let num_rs_codes = self.num_reed_solomon_codes_oracles();
-        let query_responses = self.query(&position);
-        query_responses
-            .into_iter()
-            .map(|mut resp| {
-                resp.truncate(num_rs_codes);
-                resp
-            })
-            .collect()
+    ///
+    fn query_rs_code(&mut self, _starting_index: usize, _stride: usize) -> Vec<Vec<F>> {
+        todo!("implement this once LDT is implemented")
     }
 
     /// Number of reed_solomon_codes oracles in this round.
@@ -129,11 +110,9 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
     pub fn get_succinct_oracle(&self) -> SuccinctRoundOracle<F> {
         let info = self.get_info();
         let leaves = self.query_without_recording(&self.queries);
-        let queries = self.queries.clone();
         SuccinctRoundOracle {
             info,
             queried_leaves: leaves,
-            queries,
             short_messages: self.short_messages.clone(),
         }
     }
@@ -196,8 +175,7 @@ pub struct SuccinctRoundOracle<F: PrimeField> {
     pub info: ProverRoundMessageInfo,
     /// Leaves at query indices.
     pub queried_leaves: Vec<Vec<F>>,
-    /// Supposed queries of the verifier in order.
-    pub queries: Vec<usize>,
+    // note that we do not store query position here, as they will be calculated in verifier
     /// Store the non-oracle IP messages in this round
     pub short_messages: Vec<Vec<F>>,
 }
@@ -206,6 +184,7 @@ impl<F: PrimeField> SuccinctRoundOracle<F> {
     pub fn get_view(&self) -> SuccinctRoundOracleView<F> {
         SuccinctRoundOracleView {
             oracle: &self,
+            queries: Vec::new(),
             current_query_pos: 0,
         }
     }
@@ -214,7 +193,9 @@ impl<F: PrimeField> SuccinctRoundOracle<F> {
 /// A reference to the oracle plus a state recording current query position.
 #[derive(Clone)]
 pub struct SuccinctRoundOracleView<'a, F: PrimeField> {
-    oracle: &'a SuccinctRoundOracle<F>,
+    pub(crate) oracle: &'a SuccinctRoundOracle<F>,
+    /// Supposed queries of the verifier in order.
+    pub queries: Vec<usize>,
     current_query_pos: usize,
 }
 
@@ -223,14 +204,9 @@ impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
         &self.oracle.short_messages[index]
     }
 
-    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
-        // verify consistency with next `position.len()` queries
-        let expected_position =
-            &self.oracle.queries[self.current_query_pos..self.current_query_pos + position.len()];
-        assert_eq!(
-            expected_position, position,
-            "query order is inconsistent with expected"
-        );
+    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> { // maybe: type QueryEvaluations<F> = Vec<F>
+        self.queries.extend_from_slice(position);
+        assert!(self.current_query_pos + position.len() <= self.oracle.queried_leaves.len(), "too many queries");
         let result = self.oracle.queried_leaves
             [self.current_query_pos..self.current_query_pos + position.len()]
             .to_vec();

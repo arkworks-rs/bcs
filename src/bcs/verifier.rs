@@ -53,7 +53,7 @@ where
                 "Sanity check failed, pending verifier message not submitted"
             );
             // sanity check: transcript's all prover messages are absorbed
-            debug_assert!(transcript.current_prover_round == proof.prover_messages.len());
+            debug_assert!(transcript.current_prover_round == proof.prover_iop_messages_by_round.len());
             (
                 transcript.reconstructed_verifer_messages,
                 transcript.bookkeeper,
@@ -62,12 +62,12 @@ where
 
         // construct view of oracle
         let mut prover_messages_view: Vec<_> = proof
-            .prover_messages
+            .prover_iop_messages_by_round
             .iter()
             .map(|msg| msg.get_view())
             .collect();
         let mut ldt_prover_messages_view: Vec<_> = proof
-            .ldt_prover_messages
+            .ldt_prover_iop_messages_by_round
             .iter()
             .map(|msg| msg.get_view())
             .collect();
@@ -87,7 +87,7 @@ where
                 "Sanity check failed, pending verifier message not submitted"
             );
             // sanity check: transcript's all prover messages are absorbed
-            debug_assert!(ldt_transcript.current_prover_round == proof.ldt_prover_messages.len());
+            debug_assert!(ldt_transcript.current_prover_round == proof.ldt_prover_iop_messages_by_round.len());
             ldt_transcript.reconstructed_verifer_messages
         };
 
@@ -115,62 +115,50 @@ where
 
         // verify all authentication paths Authentication path verification
         assert_eq!(
-            proof.prover_messages.len(),
+            prover_messages_view.len(),
             proof.prover_messages_mt_root.len()
         );
         assert_eq!(
-            proof.prover_messages.len(),
-            proof.prover_messages_mt_path.len()
+            prover_messages_view.len(),
+            proof.prover_oracles_mt_path.len()
         );
         assert_eq!(
-            proof.ldt_prover_messages.len(),
+            ldt_prover_messages_view.len(),
             proof.ldt_prover_messages_mt_root.len()
         );
         assert_eq!(
-            proof.ldt_prover_messages.len(),
-            proof.ldt_prover_messages_mt_path.len()
+            ldt_prover_messages_view.len(),
+            proof.ldt_prover_oracles_mt_path.len()
         );
 
-        // each item is a round containing multiple oracles
-        let all_prover_oracles = proof
-            .prover_messages
-            .iter()
-            .chain(proof.ldt_prover_messages.iter());
-        let all_paths = proof
-            .prover_messages_mt_path
-            .iter()
-            .chain(proof.ldt_prover_messages_mt_path.iter());
-        let all_mt_roots = proof
-            .prover_messages_mt_root
-            .iter()
-            .chain(proof.ldt_prover_messages_mt_root.iter());
+        let all_prover_oracles = prover_messages_view.iter()
+            .chain(ldt_prover_messages_view.iter());
+        let all_paths = proof.prover_oracles_mt_path.clone().into_iter().chain(
+            proof.ldt_prover_oracles_mt_path.clone().into_iter());
+        let all_mt_roots = proof.prover_messages_mt_root.iter().chain(
+            proof.ldt_prover_messages_mt_root.iter());
 
-        all_prover_oracles
-            .zip(all_paths)
-            .zip(all_mt_roots)
-            // iterate over all oracles and in this round
+        all_prover_oracles.zip(all_paths).zip(all_mt_roots)
             .for_each(|((round_oracle, paths), mt_root)| {
-                assert_eq!(round_oracle.queries.len(), paths.len());
+               assert_eq!(round_oracle.queries.len(), paths.len());
                 assert_eq!(
                     round_oracle.queries.len(),
-                    round_oracle.queried_leaves.len()
+                    round_oracle.oracle.queried_leaves.len(),
+                    "insufficient queries in verifier code"
                 );
                 let mt_root = {
                     if round_oracle.queries.len() > 0 {
-                        mt_root
-                            .as_ref()
-                            .expect("round oracle has query but has no mt_root")
-                    } else {
+                        mt_root.as_ref().expect("round oracle has query but has no mt_root")
+                    }else{
                         return;
                     }
                 };
-                round_oracle
-                    .queries
-                    .iter()
-                    .zip(round_oracle.queried_leaves.iter())
-                    .zip(paths.iter())
-                    .for_each(|((index, leaf), path)| {
-                        assert_eq!(*index, path.leaf_index);
+                round_oracle.queries.iter()
+                    .zip(round_oracle.oracle.queried_leaves.iter())
+                    .zip(paths.into_iter())
+                    .for_each(|((index, leaf),mut path)| {
+                        debug_assert_eq!(path.leaf_index, *index);
+                        path.leaf_index = *index;
                         assert!(
                             path.verify(
                                 &hash_params.leaf_hash_param,
@@ -178,11 +166,13 @@ where
                                 &mt_root,
                                 leaf.as_slice()
                             )
-                            .expect("cannot verify"),
+                                .expect("cannot verify"),
                             "merkle tree verification failed"
                         )
                     })
-            });
+                }
+            );
+
 
         Ok(verifier_result)
     }
