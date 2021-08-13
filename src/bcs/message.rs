@@ -204,9 +204,13 @@ impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
         &self.oracle.short_messages[index]
     }
 
-    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> { // maybe: type QueryEvaluations<F> = Vec<F>
+    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
+        // maybe: type QueryEvaluations<F> = Vec<F>
         self.queries.extend_from_slice(position);
-        assert!(self.current_query_pos + position.len() <= self.oracle.queried_leaves.len(), "too many queries");
+        assert!(
+            self.current_query_pos + position.len() <= self.oracle.queried_leaves.len(),
+            "too many queries"
+        );
         let result = self.oracle.queried_leaves
             [self.current_query_pos..self.current_query_pos + position.len()]
             .to_vec();

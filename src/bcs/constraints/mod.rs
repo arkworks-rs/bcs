@@ -1,9 +1,6 @@
 mod message;
 
-use crate::bcs::message::{
-    ProverRoundMessageInfo, SuccinctRoundOracle,
-    VerifierMessage,
-};
+use crate::bcs::message::{ProverRoundMessageInfo, SuccinctRoundOracle, VerifierMessage};
 use crate::Error;
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
@@ -100,7 +97,10 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
     pub fn query(&mut self, position: &[Vec<Boolean<F>>]) -> Result<Vec<Vec<FpVar<F>>>, Error> {
         // TODO: record the position somewhere (instead of enforcing equality)
         self.queries.extend_from_slice(position);
-        assert!(self.current_query_pos + position.len() <= self.oracle.queried_leaves.len(), "too many queries");
+        assert!(
+            self.current_query_pos + position.len() <= self.oracle.queried_leaves.len(),
+            "too many queries"
+        );
         let result = self.oracle.queried_leaves
             [self.current_query_pos..self.current_query_pos + position.len()]
             .to_vec();

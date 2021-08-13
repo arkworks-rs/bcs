@@ -39,7 +39,7 @@ where
         S: CryptographicSponge,
     {
         // simulate main prove: reconstruct verifier messages to restore verifier state
-        let (verifier_messages, bookkeeper) = {
+        let (verifier_messages, bookkeeper, num_rounds_submitted) = {
             let mut transcript = SimulationTranscript::new_main_transcript(proof, &mut sponge);
             V::restore_state_from_commit_phase::<MT>(
                 &ROOT_NAMESPACE,
@@ -53,28 +53,35 @@ where
                 "Sanity check failed, pending verifier message not submitted"
             );
             // sanity check: transcript's all prover messages are absorbed
-            debug_assert!(transcript.current_prover_round == proof.prover_iop_messages_by_round.len());
+            debug_assert!(
+                transcript.current_prover_round == proof.prover_iop_messages_by_round.len()
+            );
+            // let num_prover_messages = transcript.
+            // TODO: get number of prover round oracles in main prover, so that we can get
+            let num_rounds_submitted = transcript.num_prover_rounds_submitted();
             (
                 transcript.reconstructed_verifer_messages,
                 transcript.bookkeeper,
+                num_rounds_submitted,
             )
         };
 
         // construct view of oracle
-        let mut prover_messages_view: Vec<_> = proof
-            .prover_iop_messages_by_round
+        let mut prover_messages_view: Vec<_> = proof.prover_iop_messages_by_round
+            [..num_rounds_submitted]
             .iter()
             .map(|msg| msg.get_view())
             .collect();
-        let mut ldt_prover_messages_view: Vec<_> = proof
-            .ldt_prover_iop_messages_by_round
+        let mut ldt_prover_messages_view: Vec<_> = proof.prover_iop_messages_by_round
+            [num_rounds_submitted..]
             .iter()
             .map(|msg| msg.get_view())
             .collect();
 
         // simulate LDT prove: reconstruct LDT verifier messages to restore LDT verifier state
         let ldt_verifier_messages = {
-            let mut ldt_transcript = SimulationTranscript::new_ldt_transcript(&proof, &mut sponge);
+            let mut ldt_transcript =
+                SimulationTranscript::new_ldt_transcript(&proof, num_rounds_submitted, &mut sponge);
             L::reconstruct_ldt_verifier_messages(
                 ldt_params,
                 prover_messages_view.iter_mut().collect(),
@@ -87,7 +94,9 @@ where
                 "Sanity check failed, pending verifier message not submitted"
             );
             // sanity check: transcript's all prover messages are absorbed
-            debug_assert!(ldt_transcript.current_prover_round == proof.ldt_prover_iop_messages_by_round.len());
+            let expected_num_ldt_rounds =
+                proof.prover_iop_messages_by_round.len() - num_rounds_submitted;
+            debug_assert_eq!(ldt_transcript.current_prover_round, expected_num_ldt_rounds);
             ldt_transcript.reconstructed_verifer_messages
         };
 
@@ -114,33 +123,28 @@ where
         )?;
 
         // verify all authentication paths Authentication path verification
-        assert_eq!(
-            prover_messages_view.len(),
-            proof.prover_messages_mt_root.len()
-        );
-        assert_eq!(
-            prover_messages_view.len(),
-            proof.prover_oracles_mt_path.len()
-        );
-        assert_eq!(
-            ldt_prover_messages_view.len(),
-            proof.ldt_prover_messages_mt_root.len()
-        );
-        assert_eq!(
-            ldt_prover_messages_view.len(),
-            proof.ldt_prover_oracles_mt_path.len()
-        );
 
-        let all_prover_oracles = prover_messages_view.iter()
+        let all_prover_oracles = prover_messages_view
+            .iter()
             .chain(ldt_prover_messages_view.iter());
-        let all_paths = proof.prover_oracles_mt_path.clone().into_iter().chain(
-            proof.ldt_prover_oracles_mt_path.clone().into_iter());
-        let all_mt_roots = proof.prover_messages_mt_root.iter().chain(
-            proof.ldt_prover_messages_mt_root.iter());
+        // we clone all the paths because we need to replace its leaf position with verifier calculated one
+        let all_paths = proof.prover_oracles_mt_path.clone();
+        let all_mt_roots = &proof.prover_messages_mt_root;
 
-        all_prover_oracles.zip(all_paths).zip(all_mt_roots)
+        assert_eq!(
+            prover_messages_view.len() + ldt_prover_messages_view.len(),
+            all_paths.len()
+        );
+        assert_eq!(
+            prover_messages_view.len() + ldt_prover_messages_view.len(),
+            all_mt_roots.len()
+        );
+
+        all_prover_oracles
+            .zip(all_paths)
+            .zip(all_mt_roots)
             .for_each(|((round_oracle, paths), mt_root)| {
-               assert_eq!(round_oracle.queries.len(), paths.len());
+                assert_eq!(round_oracle.queries.len(), paths.len());
                 assert_eq!(
                     round_oracle.queries.len(),
                     round_oracle.oracle.queried_leaves.len(),
@@ -148,15 +152,19 @@ where
                 );
                 let mt_root = {
                     if round_oracle.queries.len() > 0 {
-                        mt_root.as_ref().expect("round oracle has query but has no mt_root")
-                    }else{
+                        mt_root
+                            .as_ref()
+                            .expect("round oracle has query but has no mt_root")
+                    } else {
                         return;
                     }
                 };
-                round_oracle.queries.iter()
+                round_oracle
+                    .queries
+                    .iter()
                     .zip(round_oracle.oracle.queried_leaves.iter())
                     .zip(paths.into_iter())
-                    .for_each(|((index, leaf),mut path)| {
+                    .for_each(|((index, leaf), mut path)| {
                         debug_assert_eq!(path.leaf_index, *index);
                         path.leaf_index = *index;
                         assert!(
@@ -166,13 +174,11 @@ where
                                 &mt_root,
                                 leaf.as_slice()
                             )
-                                .expect("cannot verify"),
+                            .expect("cannot verify"),
                             "merkle tree verification failed"
                         )
                     })
-                }
-            );
-
+            });
 
         Ok(verifier_result)
     }

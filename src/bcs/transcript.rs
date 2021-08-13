@@ -460,27 +460,34 @@ where
     }
 
     /// Returns a wrapper for BCS proof so that LDT verifier can reconstruct verifier messages by simulating commit phase easily.
-    pub(crate) fn new_ldt_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
-        let prover_short_messages: Vec<_> = bcs_proof
-            .ldt_prover_iop_messages_by_round
+    pub(crate) fn new_ldt_transcript(
+        bcs_proof: &'a BCSProof<P, F>,
+        round_offset: usize,
+        sponge: &'a mut S,
+    ) -> Self {
+        let prover_short_messages: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
             .iter()
             .map(|msg| &msg.short_messages)
             .collect();
-        let prover_messages_info = bcs_proof
-            .ldt_prover_iop_messages_by_round
+        let prover_messages_info = bcs_proof.prover_iop_messages_by_round[round_offset..]
             .iter()
             .map(|msg| msg.get_view().get_info())
             .collect();
         Self {
             prover_short_messages,
             prover_messages_info,
-            prover_mt_roots: &bcs_proof.ldt_prover_messages_mt_root,
+            prover_mt_roots: &bcs_proof.prover_messages_mt_root[round_offset..],
             sponge,
             current_prover_round: 0,
             bookkeeper: MessageBookkeeper::default(),
             reconstructed_verifer_messages: Vec::new(),
             pending_verifier_messages: Vec::new(),
         }
+    }
+
+    /// Returns the number of prover rounds that prover have submitted. Useful for
+    pub(crate) fn num_prover_rounds_submitted(&self) -> usize {
+        self.current_prover_round
     }
 
     /// Receive prover's current round messages, which can possibly contain multiple oracles with same size.
