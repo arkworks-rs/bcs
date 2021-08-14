@@ -9,21 +9,22 @@ use ark_relations::r1cs::SynthesisError;
 use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
 use ark_sponge::Absorb;
 use ark_std::mem::take;
+use crate::bcs::constraints::proof::BCSProofVar;
 
-pub struct SimulationTranscriptVar<'a, F, P, PG, S>
+pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
 where
     F: PrimeField + Absorb,
-    P: Config,
-    PG: ConfigGadget<P, F, Leaf = [FpVar<F>]>,
+    MT: Config,
+    MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
     S: SpongeWithGadget<F>,
-    P::InnerDigest: Absorb,
+    MT::InnerDigest: Absorb,
     F: Absorb,
-    PG::InnerDigest: AbsorbGadget<F>,
+    MTG::InnerDigest: AbsorbGadget<F>,
 {
     prover_messages_info: Vec<ProverRoundMessageInfo>,
-    prover_mt_roots: &'a [Option<PG::InnerDigest>],
+    prover_mt_roots: &'a [Option<MTG::InnerDigest>],
     prover_short_messages: Vec<&'a Vec<Vec<FpVar<F>>>>,
-    sponge_var: &'a mut S::Var,
+    sponge: &'a mut S::Var,
     pub(crate) current_prover_round: usize,
     pub(crate) reconstructed_verifer_messages: Vec<Vec<VerifierMessageVar<F>>>,
 
@@ -31,16 +32,41 @@ where
     pub(crate) bookkeeper: MessageBookkeeper,
 }
 
-impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
+impl<'a, F, MT, MTG, S> SimulationTranscriptVar<'a, F, MT, MTG, S>
 where
     F: PrimeField + Absorb,
-    P: Config,
-    PG: ConfigGadget<P, F, Leaf = [FpVar<F>]>,
+    MT: Config,
+    MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
     S: SpongeWithGadget<F>,
-    P::InnerDigest: Absorb,
+    MT::InnerDigest: Absorb,
     F: Absorb,
-    PG::InnerDigest: AbsorbGadget<F>,
+    MTG::InnerDigest: AbsorbGadget<F>,
 {
+
+    pub(crate) fn new_transcript(bcs_proof: &'a BCSProofVar<MT, MTG, F>, sponge: &'a mut S::Var) -> Self{
+        Self::new_transcript_with_offset(bcs_proof, 0, sponge)
+    }
+
+    pub(crate) fn new_transcript_with_offset(bcs_proof: &'a BCSProofVar<MT, MTG, F>, round_offset: usize, sponge: &'a mut S::Var) -> Self{
+        let prover_short_messages: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..].iter()
+            .map(|msg|&msg.short_messages)
+            .collect();
+        let prover_messages_info: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
+            .iter().map(|msg|msg.info.clone())
+            .collect();
+        Self{
+            prover_short_messages,
+            prover_messages_info,
+            prover_mt_roots: &bcs_proof.prover_messages_mt_root[round_offset..],
+            sponge,
+            current_prover_round: 0,
+            bookkeeper: MessageBookkeeper::default(),
+            reconstructed_verifer_messages: Vec::new(),
+            pending_verifier_messages: Vec::new()
+        }
+    }
+
+
     pub(crate) fn num_prover_rounds_submitted(&self) -> usize {
         self.current_prover_round
     }
@@ -59,12 +85,12 @@ where
         );
 
         // absorb merkle tree root, if any
-        self.sponge_var.absorb(&self.prover_mt_roots[index])?;
+        self.sponge.absorb(&self.prover_mt_roots[index])?;
 
         // absorb short messages for this round, if any
         self.prover_short_messages[index]
             .iter()
-            .try_for_each(|msg| self.sponge_var.absorb(msg))?;
+            .try_for_each(|msg| self.sponge.absorb(msg))?;
         self.attach_latest_prover_round_to_namespace(ns);
 
         Ok(())
@@ -89,7 +115,7 @@ where
         &mut self,
         num_elements: usize,
     ) -> Result<(), SynthesisError> {
-        let msg = self.sponge_var.squeeze_field_elements(num_elements)?;
+        let msg = self.sponge.squeeze_field_elements(num_elements)?;
         self.pending_verifier_messages
             .push(VerifierMessageVar::FieldElements(msg));
         Ok(())
@@ -103,7 +129,7 @@ where
     /// **Note**: Since we are not running the actual prover code, verifier message is not used
     /// `reconstructed_verifer_messages`, so this function returns nothing.
     pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) -> Result<(), SynthesisError> {
-        let msg = self.sponge_var.squeeze_bytes(num_bytes)?;
+        let msg = self.sponge.squeeze_bytes(num_bytes)?;
         self.pending_verifier_messages
             .push(VerifierMessageVar::Bytes(msg));
         Ok(())
@@ -117,7 +143,7 @@ where
     /// **Note**: Since we are not running the actual prover code, verifier message is not used
     /// `reconstructed_verifer_messages`, so this function returns nothing.
     pub fn squeeze_verifier_field_bits(&mut self, num_bits: usize) -> Result<(), SynthesisError> {
-        let msg = self.sponge_var.squeeze_bits(num_bits)?;
+        let msg = self.sponge.squeeze_bits(num_bits)?;
         self.pending_verifier_messages
             .push(VerifierMessageVar::Bits(msg));
         Ok(())

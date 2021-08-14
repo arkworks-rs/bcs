@@ -1,3 +1,4 @@
+#[cfg(feature="r1cs")]
 pub mod constraints;
 
 use crate::bcs::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};

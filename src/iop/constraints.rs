@@ -23,7 +23,7 @@ where
         public_input: &Self::PublicInputVar,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
-    ) where
+    ) -> Result<(), crate::Error> where
         MT::InnerDigest: Absorb,
         MTG::InnerDigest: AbsorbGadget<CF>;
 

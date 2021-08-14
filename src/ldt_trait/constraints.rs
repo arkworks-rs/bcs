@@ -33,9 +33,9 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
 
 impl<CF: PrimeField + Absorb> LDTWithGadget<CF> for NoLDT<CF> {
     fn restore_from_commit_phase_var<MT, MTG, S>(
-        param: &Self::LDTParameters,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
+        _param: &Self::LDTParameters,
+        _codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
+        _transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
     ) -> Result<(), Error>
     where
         MT: Config,
@@ -49,11 +49,11 @@ impl<CF: PrimeField + Absorb> LDTWithGadget<CF> for NoLDT<CF> {
     }
 
     fn query_and_decide_var<S: SpongeWithGadget<CF>>(
-        param: &Self::LDTParameters,
-        random_oracle: &mut S,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        ldt_prover_message_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        ldt_verifier_messages: &[Vec<VerifierMessageVar<CF>>],
+        _param: &Self::LDTParameters,
+        _random_oracle: &mut S,
+        _codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
+        _ldt_prover_message_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
+        _ldt_verifier_messages: &[Vec<VerifierMessageVar<CF>>],
     ) -> Result<(), Error> {
         // do nothing
         Ok(())

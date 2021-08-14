@@ -41,6 +41,18 @@ pub struct SuccinctRoundOracleVar<F: PrimeField> {
     pub short_messages: Vec<Vec<FpVar<F>>>,
 }
 
+impl<F: PrimeField> SuccinctRoundOracleVar<F> {
+    /// Return a view of succinct round oracle var. View contains a reference to the oracle, 
+    /// as well as recorded queries and position pointer. 
+    pub fn get_view(&self) -> SuccinctRoundOracleVarView<F>{
+        SuccinctRoundOracleVarView{
+            oracle: &self,
+            queries: Vec::new(),
+            current_query_pos: 0
+        }
+    }
+}
+
 impl<F: PrimeField> AllocVar<SuccinctRoundOracle<F>, F> for SuccinctRoundOracleVar<F> {
     fn new_variable<T: Borrow<SuccinctRoundOracle<F>>>(
         cs: impl Into<Namespace<F>>,
@@ -110,8 +122,8 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
     /// Query position should be a coset, that has a starting index and stride.
     pub fn query_rs_code(
         &mut self,
-        starting_index: Vec<Boolean<F>>,
-        stride: u32,
+        _starting_index: Vec<Boolean<F>>,
+        _stride: u32,
     ) -> Result<Vec<Vec<FpVar<F>>>, Error> {
         todo!("implement this once LDT implementation is done.")
     }

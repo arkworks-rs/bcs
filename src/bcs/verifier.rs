@@ -40,7 +40,7 @@ where
     {
         // simulate main prove: reconstruct verifier messages to restore verifier state
         let (verifier_messages, bookkeeper, num_rounds_submitted) = {
-            let mut transcript = SimulationTranscript::new_main_transcript(proof, &mut sponge);
+            let mut transcript = SimulationTranscript::new_transcript(proof, &mut sponge);
             V::restore_from_commit_phase::<MT>(
                 &ROOT_NAMESPACE,
                 public_input,
@@ -48,16 +48,13 @@ where
                 verifier_parameter,
             );
             // sanity check: transcript has not pending message
-            debug_assert!(
+            assert!(
                 !transcript.is_pending_message_available(),
-                "Sanity check failed, pending verifier message not submitted"
+                "Sanity check failed: pending verifier message not submitted"
             );
             // sanity check: transcript's all prover messages are absorbed
-            debug_assert!(
-                transcript.current_prover_round == proof.prover_iop_messages_by_round.len()
-            );
-            // let num_prover_messages = transcript.
-            // TODO: get number of prover round oracles in main prover, so that we can get
+            assert_eq!(transcript.current_prover_round, proof.prover_iop_messages_by_round.len(),
+                       "Sanity check failed: transcript's all prover messages are not absorbed");
             let num_rounds_submitted = transcript.num_prover_rounds_submitted();
             (
                 transcript.reconstructed_verifer_messages,
@@ -81,7 +78,7 @@ where
         // simulate LDT prove: reconstruct LDT verifier messages to restore LDT verifier state
         let ldt_verifier_messages = {
             let mut ldt_transcript =
-                SimulationTranscript::new_ldt_transcript(&proof, num_rounds_submitted, &mut sponge);
+                SimulationTranscript::new_transcript_with_offset(&proof, num_rounds_submitted, &mut sponge);
             L::restore_from_commit_phase(
                 ldt_params,
                 prover_messages_view.iter_mut().collect(),

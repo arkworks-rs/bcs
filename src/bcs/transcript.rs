@@ -436,31 +436,16 @@ where
     P::InnerDigest: Absorb,
 {
     /// Returns a wrapper for BCS proof so that verifier can reconstruct verifier messages by simulating commit phase easily.
-    pub(crate) fn new_main_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
-        let prover_short_messages: Vec<_> = bcs_proof
-            .prover_iop_messages_by_round
-            .iter()
-            .map(|msg| &msg.short_messages)
-            .collect();
-        let prover_messages_info: Vec<_> = bcs_proof
-            .prover_iop_messages_by_round
-            .iter()
-            .map(|msg| msg.get_view().get_info())
-            .collect();
-        Self {
-            prover_short_messages,
-            prover_messages_info,
-            prover_mt_roots: &bcs_proof.prover_messages_mt_root,
-            sponge,
-            current_prover_round: 0,
-            bookkeeper: MessageBookkeeper::default(),
-            reconstructed_verifer_messages: Vec::new(),
-            pending_verifier_messages: Vec::new(),
-        }
+    pub(crate) fn new_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
+        Self::new_transcript_with_offset(
+            bcs_proof,
+            0,
+            sponge
+        )
     }
 
-    /// Returns a wrapper for BCS proof so that LDT verifier can reconstruct verifier messages by simulating commit phase easily.
-    pub(crate) fn new_ldt_transcript(
+    /// Returns a wrapper for BCS proof and first `round_offset` messages are ignored.
+    pub(crate) fn new_transcript_with_offset(
         bcs_proof: &'a BCSProof<P, F>,
         round_offset: usize,
         sponge: &'a mut S,
