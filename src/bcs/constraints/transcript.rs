@@ -1,24 +1,25 @@
+use crate::bcs::constraints::message::VerifierMessageVar;
+use crate::bcs::message::ProverRoundMessageInfo;
+use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
+use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-use ark_sponge::constraints::{SpongeWithGadget, AbsorbGadget, CryptographicSpongeVar};
-use crate::bcs::message::{ProverRoundMessageInfo, VerifierMessage};
 use ark_r1cs_std::fields::fp::FpVar;
-use crate::bcs::constraints::message::VerifierMessageVar;
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace, Transcript};
 use ark_relations::r1cs::SynthesisError;
-use ark_std::mem::take;
+use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
 use ark_sponge::Absorb;
-use ark_r1cs_std::R1CSVar;
+use ark_std::mem::take;
 
 pub struct SimulationTranscriptVar<'a, F, P, PG, S>
-where F: PrimeField + AbsorbGadget<F>,
-      P: Config<Leaf=[F]>,
-      PG: ConfigGadget<P, F>,
-      S: SpongeWithGadget<F>,
-      P::InnerDigest: Absorb,
-      F: Absorb,
-      PG::InnerDigest : AbsorbGadget<F>{
+where
+    F: PrimeField + Absorb,
+    P: Config,
+    PG: ConfigGadget<P, F, Leaf = [FpVar<F>]>,
+    S: SpongeWithGadget<F>,
+    P::InnerDigest: Absorb,
+    F: Absorb,
+    PG::InnerDigest: AbsorbGadget<F>,
+{
     prover_messages_info: Vec<ProverRoundMessageInfo>,
     prover_mt_roots: &'a [Option<PG::InnerDigest>],
     prover_short_messages: Vec<&'a Vec<Vec<FpVar<F>>>>,
@@ -27,18 +28,19 @@ where F: PrimeField + AbsorbGadget<F>,
     pub(crate) reconstructed_verifer_messages: Vec<Vec<VerifierMessageVar<F>>>,
 
     pending_verifier_messages: Vec<VerifierMessageVar<F>>,
-    pub(crate) bookkeeper: MessageBookkeeper
+    pub(crate) bookkeeper: MessageBookkeeper,
 }
 
 impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
-    where F: PrimeField + AbsorbGadget<F>,
-          P: Config<Leaf=[F]>,
-          PG: ConfigGadget<P, F>,
-          S: SpongeWithGadget<F>,
-          P::InnerDigest: Absorb,
-          F: Absorb,
-          PG::InnerDigest: AbsorbGadget<F> {
-
+where
+    F: PrimeField + Absorb,
+    P: Config,
+    PG: ConfigGadget<P, F, Leaf = [FpVar<F>]>,
+    S: SpongeWithGadget<F>,
+    P::InnerDigest: Absorb,
+    F: Absorb,
+    PG::InnerDigest: AbsorbGadget<F>,
+{
     pub(crate) fn num_prover_rounds_submitted(&self) -> usize {
         self.current_prover_round
     }
@@ -46,7 +48,7 @@ impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
     pub fn receive_prover_current_round(
         &mut self,
         ns: &NameSpace,
-        expected_message_info: &ProverRoundMessageInfo
+        expected_message_info: &ProverRoundMessageInfo,
     ) -> Result<(), SynthesisError> {
         let index = self.current_prover_round;
         self.current_prover_round += 1;
@@ -62,7 +64,7 @@ impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
         // absorb short messages for this round, if any
         self.prover_short_messages[index]
             .iter()
-            .try_for_each(|msg|self.sponge_var.absorb(msg))?;
+            .try_for_each(|msg| self.sponge_var.absorb(msg))?;
         self.attach_latest_prover_round_to_namespace(ns);
 
         Ok(())
@@ -83,7 +85,10 @@ impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
     /// **Note**: Since we are not running the actual prover code, verifier message is not used
     /// `reconstructed_verifer_messages`, so this function returns nothing.
     /// TODO: current limitation: sponge constraints does not support squeeze native elements with size
-    pub fn squeeze_verifier_field_elements(&mut self, num_elements: usize) -> Result<(), SynthesisError> {
+    pub fn squeeze_verifier_field_elements(
+        &mut self,
+        num_elements: usize,
+    ) -> Result<(), SynthesisError> {
         let msg = self.sponge_var.squeeze_field_elements(num_elements)?;
         self.pending_verifier_messages
             .push(VerifierMessageVar::FieldElements(msg));
@@ -97,7 +102,7 @@ impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
     ///
     /// **Note**: Since we are not running the actual prover code, verifier message is not used
     /// `reconstructed_verifer_messages`, so this function returns nothing.
-    pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) -> Result<(), SynthesisError>{
+    pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) -> Result<(), SynthesisError> {
         let msg = self.sponge_var.squeeze_bytes(num_bytes)?;
         self.pending_verifier_messages
             .push(VerifierMessageVar::Bytes(msg));
@@ -142,35 +147,82 @@ impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
             .verifier_message_locations
             .push(index);
     }
-
-    /// test whether `reconstructed_verifer_messages` simulate the prover-verifier interaction in
-    /// commit phase correctly.
-    pub fn check_correctness(&self, prover_transcript: &Transcript<P, S, F>) {
-        // TODO: give information about which namespace is incorrect
-        assert_eq!(prover_transcript.bookkeeper,
-                   self.bookkeeper,
-                   "your simulation code submits incorrect number of rounds, or call subprotocols in incorrect order.");
-
-        // TODO: give information about which message in which namespace is incorrect
-        prover_transcript.verifier_messages.iter().zip(self.reconstructed_verifer_messages.iter())
-            .for_each(|(expected, actual)|{
-                expected.iter().zip(actual.iter()).for_each(|(expected, actual)|{
-                    match (expected, actual){
-                        (VerifierMessage::FieldElements(expected), VerifierMessageVar::FieldElements(actual)) => {
-                            expected.iter().zip(actual.iter()).for_each(|(expected, actual)|{
-                                assert_eq!(expected, &actual.value().expect("value not assigned!"))
-                            })
-                        },
-                        (VerifierMessage::Bytes(expected), VerifierMessageVar::Bytes(actual)) => {
-                            assert_eq!(expected.as_slice(), actual.value().expect("value not assigned").as_slice())
-                        },
-                        (VerifierMessage::Bits(expected), VerifierMessageVar::Bits(actual)) => {
-                            assert_eq!(expected.as_slice(), actual.value().expect("value not assigned").as_slice())
-                        },
-                        _ => panic!("verification message type mismatch!"),
-                    }
-                })
-            })
-    }
 }
 
+#[cfg(test)]
+pub(crate) mod sanity_check {
+    use crate::bcs::constraints::message::VerifierMessageVar;
+    use crate::bcs::constraints::transcript::SimulationTranscriptVar;
+    use crate::bcs::message::VerifierMessage;
+    use crate::bcs::transcript::Transcript;
+    use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
+    use ark_crypto_primitives::merkle_tree::Config;
+    use ark_ff::PrimeField;
+    use ark_r1cs_std::fields::fp::FpVar;
+    use ark_r1cs_std::R1CSVar;
+    use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
+    use ark_sponge::Absorb;
+
+    impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
+    where
+        F: PrimeField + Absorb,
+        P: Config<Leaf = [F]>,
+        PG: ConfigGadget<P, F, Leaf = [FpVar<F>]>,
+        S: SpongeWithGadget<F>,
+        P::InnerDigest: Absorb,
+        F: Absorb,
+        PG::InnerDigest: AbsorbGadget<F>,
+    {
+        /// test whether `reconstructed_verifer_messages` simulate the prover-verifier interaction in
+        /// commit phase correctly.
+        pub fn check_correctness(&self, prover_transcript: &Transcript<P, S, F>) {
+            // TODO: give information about which namespace is incorrect
+            assert_eq!(prover_transcript.bookkeeper,
+                       self.bookkeeper,
+                       "your simulation code submits incorrect number of rounds, or call subprotocols in incorrect order.");
+
+            // TODO: give information about which message in which namespace is incorrect
+            prover_transcript
+                .verifier_messages
+                .iter()
+                .zip(self.reconstructed_verifer_messages.iter())
+                .for_each(|(expected, actual)| {
+                    expected
+                        .iter()
+                        .zip(actual.iter())
+                        .for_each(|(expected, actual)| match (expected, actual) {
+                            (
+                                VerifierMessage::FieldElements(expected),
+                                VerifierMessageVar::FieldElements(actual),
+                            ) => {
+                                expected
+                                    .iter()
+                                    .zip(actual.iter())
+                                    .for_each(|(expected, actual)| {
+                                        assert_eq!(
+                                            expected,
+                                            &actual.value().expect("value not assigned!")
+                                        )
+                                    })
+                            }
+                            (
+                                VerifierMessage::Bytes(expected),
+                                VerifierMessageVar::Bytes(actual),
+                            ) => {
+                                assert_eq!(
+                                    expected.as_slice(),
+                                    actual.value().expect("value not assigned").as_slice()
+                                )
+                            }
+                            (VerifierMessage::Bits(expected), VerifierMessageVar::Bits(actual)) => {
+                                assert_eq!(
+                                    expected.as_slice(),
+                                    actual.value().expect("value not assigned").as_slice()
+                                )
+                            }
+                            _ => panic!("verification message type mismatch!"),
+                        })
+                })
+        }
+    }
+}

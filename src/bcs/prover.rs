@@ -34,19 +34,9 @@ where
     // BCS data below: maybe combine
     /// Merkle tree roots for all prover messages (including main prover and ldt prover).
     pub prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
-    // /// Merkle tree root for prover messages in main protocol.
-    // pub prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
-    // /// Merkle tree root for extra prover messages used for LDT. If the prover is not RS-IOP, this vector should be empty.
-    // pub ldt_prover_messages_mt_root: Vec<Option<MT::InnerDigest>>, // TODO: making this combined
     /// Merkle tree paths for queried prover messages in main protocol.
     /// `prover_messages_mt_path[i][j]` is the path for jth query at ith round of prover message.
     pub prover_oracles_mt_path: Vec<Vec<Path<MT>>>,
-    // /// Merkle tree paths for queried prover messages in main protocol.
-    // /// `prover_messages_mt_path[i][j]` is the path for jth query at ith round of prover message.
-    // pub prover_oracles_mt_path: Vec<Vec<Path<MT>>>,
-    // /// Merkle tree paths for queried LDT prover messages in main protocol.
-    // /// `ldt_messages_mt_path[i][j]` is the path for jth query at ith round of ldt prover message.
-    // pub ldt_prover_oracles_mt_path: Vec<Vec<Path<MT>>>,
 }
 
 impl<MT, F> BCSProof<MT, F>

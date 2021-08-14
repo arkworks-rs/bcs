@@ -1,3 +1,5 @@
+pub mod constraints;
+
 use crate::bcs::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};
 use crate::bcs::transcript::{SimulationTranscript, Transcript};
 use crate::Error;
@@ -32,7 +34,7 @@ pub trait LDT<F: PrimeField + Absorb> {
     where
         MT::InnerDigest: Absorb;
 
-    fn reconstruct_ldt_verifier_messages<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+    fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>, // FRI only gets degree bound information from this phase
         transcript: &mut SimulationTranscript<MT, S, F>,
@@ -77,7 +79,7 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
         Ok(())
     }
 
-    fn reconstruct_ldt_verifier_messages<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+    fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         _param: &Self::LDTParameters,
         _codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>,
         _transcript: &mut SimulationTranscript<MT, S, F>,

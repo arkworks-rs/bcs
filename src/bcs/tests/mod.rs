@@ -65,7 +65,7 @@ fn test_reconstruct_no_ldt() {
     let mut sponge = PoseidonSponge::new(&poseidon_parameters());
     let mut simulation_transcript =
         SimulationTranscript::new_main_transcript(&bcs_proof, &mut sponge);
-    MockTest1Verifier::restore_state_from_commit_phase(
+    MockTest1Verifier::restore_from_commit_phase(
         &ROOT_NAMESPACE,
         &(),
         &mut simulation_transcript,

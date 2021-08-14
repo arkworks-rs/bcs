@@ -1,4 +1,8 @@
 /// Public Coin IOP Prover
 pub mod prover;
-// TODO: refactor me!
+/// Public coin IOP verifier
 pub mod verifier;
+
+/// Constraints for Public Coin IOP Verifier
+#[cfg(feature = "r1cs")]
+pub mod constraints;

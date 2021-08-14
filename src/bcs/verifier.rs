@@ -41,7 +41,7 @@ where
         // simulate main prove: reconstruct verifier messages to restore verifier state
         let (verifier_messages, bookkeeper, num_rounds_submitted) = {
             let mut transcript = SimulationTranscript::new_main_transcript(proof, &mut sponge);
-            V::restore_state_from_commit_phase::<MT>(
+            V::restore_from_commit_phase::<MT>(
                 &ROOT_NAMESPACE,
                 public_input,
                 &mut transcript,
@@ -82,7 +82,7 @@ where
         let ldt_verifier_messages = {
             let mut ldt_transcript =
                 SimulationTranscript::new_ldt_transcript(&proof, num_rounds_submitted, &mut sponge);
-            L::reconstruct_ldt_verifier_messages(
+            L::restore_from_commit_phase(
                 ldt_params,
                 prover_messages_view.iter_mut().collect(),
                 &mut ldt_transcript,

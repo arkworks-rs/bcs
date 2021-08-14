@@ -83,7 +83,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
     type VerifierState = ();
     type PublicInput = ();
 
-    fn restore_state_from_commit_phase<MT: MTConfig<Leaf = [F]>>(
+    fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>>(
         namespace: &NameSpace,
         _public_input: &Self::PublicInput,
         transcript: &mut SimulationTranscript<MT, S, F>,
