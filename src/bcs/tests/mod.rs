@@ -63,8 +63,7 @@ fn test_reconstruct_no_ldt() {
 
     // verify if simulation transcript reconstructs correctly
     let mut sponge = PoseidonSponge::new(&poseidon_parameters());
-    let mut simulation_transcript =
-        SimulationTranscript::new_transcript(&bcs_proof, &mut sponge);
+    let mut simulation_transcript = SimulationTranscript::new_transcript(&bcs_proof, &mut sponge);
     MockTest1Verifier::restore_from_commit_phase(
         &ROOT_NAMESPACE,
         &(),

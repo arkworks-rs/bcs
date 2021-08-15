@@ -1,4 +1,5 @@
 use crate::bcs::constraints::message::VerifierMessageVar;
+use crate::bcs::constraints::proof::BCSProofVar;
 use crate::bcs::message::ProverRoundMessageInfo;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
@@ -9,7 +10,6 @@ use ark_relations::r1cs::SynthesisError;
 use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
 use ark_sponge::Absorb;
 use ark_std::mem::take;
-use crate::bcs::constraints::proof::BCSProofVar;
 
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
 where
@@ -42,19 +42,27 @@ where
     F: Absorb,
     MTG::InnerDigest: AbsorbGadget<F>,
 {
-
-    pub(crate) fn new_transcript(bcs_proof: &'a BCSProofVar<MT, MTG, F>, sponge: &'a mut S::Var) -> Self{
+    pub(crate) fn new_transcript(
+        bcs_proof: &'a BCSProofVar<MT, MTG, F>,
+        sponge: &'a mut S::Var,
+    ) -> Self {
         Self::new_transcript_with_offset(bcs_proof, 0, sponge)
     }
 
-    pub(crate) fn new_transcript_with_offset(bcs_proof: &'a BCSProofVar<MT, MTG, F>, round_offset: usize, sponge: &'a mut S::Var) -> Self{
-        let prover_short_messages: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..].iter()
-            .map(|msg|&msg.short_messages)
+    pub(crate) fn new_transcript_with_offset(
+        bcs_proof: &'a BCSProofVar<MT, MTG, F>,
+        round_offset: usize,
+        sponge: &'a mut S::Var,
+    ) -> Self {
+        let prover_short_messages: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
+            .iter()
+            .map(|msg| &msg.short_messages)
             .collect();
         let prover_messages_info: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
-            .iter().map(|msg|msg.info.clone())
+            .iter()
+            .map(|msg| msg.info.clone())
             .collect();
-        Self{
+        Self {
             prover_short_messages,
             prover_messages_info,
             prover_mt_roots: &bcs_proof.prover_messages_mt_root[round_offset..],
@@ -62,10 +70,9 @@ where
             current_prover_round: 0,
             bookkeeper: MessageBookkeeper::default(),
             reconstructed_verifer_messages: Vec::new(),
-            pending_verifier_messages: Vec::new()
+            pending_verifier_messages: Vec::new(),
         }
     }
-
 
     pub(crate) fn num_prover_rounds_submitted(&self) -> usize {
         self.current_prover_round

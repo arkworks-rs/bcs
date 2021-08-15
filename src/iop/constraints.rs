@@ -6,13 +6,14 @@ use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
+use ark_relations::r1cs::SynthesisError;
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 
-pub trait IOPVerifierWithGadget<CF, S>: IOPVerifier<S, CF>
+pub trait IOPVerifierWithGadget<S, CF>: IOPVerifier<S, CF>
 where
-    CF: PrimeField + Absorb,
     S: SpongeWithGadget<CF>,
+    CF: PrimeField + Absorb,
 {
     type VerifierOutputVar;
     type VerifierStateVar;
@@ -23,17 +24,23 @@ where
         public_input: &Self::PublicInputVar,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
-    ) -> Result<(), crate::Error> where
+    ) -> Result<(), SynthesisError>
+    where
         MT::InnerDigest: Absorb,
         MTG::InnerDigest: AbsorbGadget<CF>;
+
+    /// Returns the initial state for query and decision phase.
+    fn initial_state_for_query_and_decision_phase_var(
+        public_input: &Self::PublicInputVar,
+    ) -> Result<Self::VerifierStateVar, SynthesisError>;
 
     fn query_and_decide_var(
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
-        verifier_state: &mut Self::VerifierState,
-        random_oracle: &mut S,
+        verifier_state: &mut Self::VerifierStateVar,
+        random_oracle: &mut S::Var,
         prover_message_oracle: Vec<&mut SuccinctRoundOracleVarView<CF>>,
         verifier_messages: &[Vec<VerifierMessageVar<CF>>],
         bookkeeper: &MessageBookkeeper,
-    ) -> Result<Self::VerifierOutputVar, crate::Error>;
+    ) -> Result<Self::VerifierOutputVar, SynthesisError>;
 }

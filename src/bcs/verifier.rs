@@ -53,8 +53,11 @@ where
                 "Sanity check failed: pending verifier message not submitted"
             );
             // sanity check: transcript's all prover messages are absorbed
-            assert_eq!(transcript.current_prover_round, proof.prover_iop_messages_by_round.len(),
-                       "Sanity check failed: transcript's all prover messages are not absorbed");
+            assert_eq!(
+                transcript.current_prover_round,
+                proof.prover_iop_messages_by_round.len(),
+                "Sanity check failed: transcript's all prover messages are not absorbed"
+            );
             let num_rounds_submitted = transcript.num_prover_rounds_submitted();
             (
                 transcript.reconstructed_verifer_messages,
@@ -77,8 +80,11 @@ where
 
         // simulate LDT prove: reconstruct LDT verifier messages to restore LDT verifier state
         let ldt_verifier_messages = {
-            let mut ldt_transcript =
-                SimulationTranscript::new_transcript_with_offset(&proof, num_rounds_submitted, &mut sponge);
+            let mut ldt_transcript = SimulationTranscript::new_transcript_with_offset(
+                &proof,
+                num_rounds_submitted,
+                &mut sponge,
+            );
             L::restore_from_commit_phase(
                 ldt_params,
                 prover_messages_view.iter_mut().collect(),
@@ -119,7 +125,7 @@ where
             &bookkeeper,
         )?;
 
-        // verify all authentication paths Authentication path verification
+        // verify all authentication paths
 
         let all_prover_oracles = prover_messages_view
             .iter()
@@ -147,14 +153,12 @@ where
                     round_oracle.oracle.queried_leaves.len(),
                     "insufficient queries in verifier code"
                 );
-                let mt_root = {
-                    if round_oracle.queries.len() > 0 {
-                        mt_root
-                            .as_ref()
-                            .expect("round oracle has query but has no mt_root")
-                    } else {
-                        return;
-                    }
+                let mt_root = if round_oracle.queries.len() > 0 {
+                    mt_root
+                        .as_ref()
+                        .expect("round oracle has query but has no mt_root")
+                } else {
+                    return;
                 };
                 round_oracle
                     .queries

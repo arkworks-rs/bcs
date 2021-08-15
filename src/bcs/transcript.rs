@@ -437,11 +437,7 @@ where
 {
     /// Returns a wrapper for BCS proof so that verifier can reconstruct verifier messages by simulating commit phase easily.
     pub(crate) fn new_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
-        Self::new_transcript_with_offset(
-            bcs_proof,
-            0,
-            sponge
-        )
+        Self::new_transcript_with_offset(bcs_proof, 0, sponge)
     }
 
     /// Returns a wrapper for BCS proof and first `round_offset` messages are ignored.

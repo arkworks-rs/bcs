@@ -42,13 +42,13 @@ pub struct SuccinctRoundOracleVar<F: PrimeField> {
 }
 
 impl<F: PrimeField> SuccinctRoundOracleVar<F> {
-    /// Return a view of succinct round oracle var. View contains a reference to the oracle, 
-    /// as well as recorded queries and position pointer. 
-    pub fn get_view(&self) -> SuccinctRoundOracleVarView<F>{
-        SuccinctRoundOracleVarView{
+    /// Return a view of succinct round oracle var. View contains a reference to the oracle,
+    /// as well as recorded queries and position pointer.
+    pub fn get_view(&self) -> SuccinctRoundOracleVarView<F> {
+        SuccinctRoundOracleVarView {
             oracle: &self,
             queries: Vec::new(),
-            current_query_pos: 0
+            current_query_pos: 0,
         }
     }
 }
@@ -97,7 +97,7 @@ impl<F: PrimeField> AllocVar<SuccinctRoundOracle<F>, F> for SuccinctRoundOracleV
 
 #[derive(Clone)]
 pub struct SuccinctRoundOracleVarView<'a, F: PrimeField> {
-    oracle: &'a SuccinctRoundOracleVar<F>,
+    pub(crate) oracle: &'a SuccinctRoundOracleVar<F>,
     /// queries calculated by the verifier
     pub queries: Vec<Vec<Boolean<F>>>,
     current_query_pos: usize,
@@ -126,10 +126,6 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
         _stride: u32,
     ) -> Result<Vec<Vec<FpVar<F>>>, Error> {
         todo!("implement this once LDT implementation is done.")
-    }
-
-    fn get_info(&self) -> ProverRoundMessageInfo {
-        self.oracle.info.clone()
     }
 }
 
