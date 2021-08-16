@@ -1,5 +1,7 @@
 /// Contains the mock IOP prover and verifier to solely test correctness of transcript.
 pub(crate) mod mock;
+#[cfg(feature = "r1cs")]
+mod constraints;
 
 use crate::bcs::prover::BCSProof;
 use crate::bcs::tests::mock::{MockTest1Prover, MockTest1Verifier};

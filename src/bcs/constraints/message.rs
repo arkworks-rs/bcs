@@ -104,7 +104,7 @@ pub struct SuccinctRoundOracleVarView<'a, F: PrimeField> {
 }
 
 impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
-    pub fn query(&mut self, position: &[Vec<Boolean<F>>]) -> Result<Vec<Vec<FpVar<F>>>, Error> {
+    pub fn query(&mut self, position: &[Vec<Boolean<F>>]) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
         // TODO: record the position somewhere (instead of enforcing equality)
         self.queries.extend_from_slice(position);
         assert!(
@@ -127,6 +127,13 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
     ) -> Result<Vec<Vec<FpVar<F>>>, Error> {
         todo!("implement this once LDT implementation is done.")
     }
+    
+    pub fn get_short_message(
+        &self,
+        index: usize
+    ) -> Vec<FpVar<F>> {
+        self.oracle.short_messages[index].clone()
+    }
 }
 
 #[derive(Clone)]
@@ -137,6 +144,34 @@ pub enum VerifierMessageVar<F: PrimeField> {
     Bits(Vec<Boolean<F>>),
     /// bytes
     Bytes(Vec<UInt8<F>>),
+}
+
+impl<F: PrimeField> VerifierMessageVar<F> {
+    pub fn try_into_field_elements(self) -> Option<Vec<FpVar<F>>> {
+        if let VerifierMessageVar::FieldElements(fe) = self {
+            Some(fe)
+        }else{
+            None
+        }
+    }
+
+    pub fn try_into_bits(self) -> Option<Vec<Boolean<F>>> {
+        if let VerifierMessageVar::Bits(bits) = self {
+            Some(bits)
+        }else{
+            None
+        }
+    }
+    
+    pub fn try_into_bytes(self) -> Option<Vec<UInt8<F>>> {
+        if let VerifierMessageVar::Bytes(bytes) = self {
+            Some(bytes)
+        }else{
+            None
+        }
+    }
+    
+    
 }
 
 impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {

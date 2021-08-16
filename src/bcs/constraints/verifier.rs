@@ -10,7 +10,7 @@ use ark_ff::PrimeField;
 use ark_r1cs_std::boolean::Boolean;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::fields::fp::FpVar;
-use ark_relations::r1cs::SynthesisError;
+use ark_relations::r1cs::{SynthesisError, ConstraintSystemRef};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use std::marker::PhantomData;
@@ -34,6 +34,7 @@ where
     MTG::InnerDigest: AbsorbGadget<CF>,
 {
     pub fn verify<V, L, S>(
+        cs: ConstraintSystemRef<CF>,
         mut sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
         public_input: &V::PublicInputVar,
@@ -118,6 +119,7 @@ where
 
         // verify the protocol
         let verifier_result_var = V::query_and_decide_var(
+            cs.clone(),
             &ROOT_NAMESPACE,
             verifier_parameter,
             &mut V::initial_state_for_query_and_decision_phase_var(public_input)?,

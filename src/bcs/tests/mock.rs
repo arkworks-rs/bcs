@@ -4,7 +4,7 @@ use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, ToConstraintField};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 use ark_std::test_rng;
@@ -62,7 +62,10 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
         // prover send
         let msg1 = vm1.into_iter().map(|x| x.square());
         transcript.send_message(msg1);
-        let msg2 = (0..256u128).map(|x| F::from(x) + F::from_le_bytes_mod_order(&vm2));
+        let msg2 = (0..256u128).map(|x| {
+            let rhs: F = vm2.to_field_elements().unwrap()[0];
+            F::from(x) + rhs
+        });
         transcript.send_message_oracle(msg2).unwrap();
         transcript.submit_prover_current_round(namespace).unwrap();
 
@@ -183,7 +186,10 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         assert_eq!(prover_message_oracle[1].get_short_message(0), &pm2_1);
 
         let pm2_2: Vec<_> = (0..256u128)
-            .map(|x| F::from(x) + F::from_le_bytes_mod_order(&vm1_2))
+            .map(|x| {
+                let rhs: F = vm1_2.to_field_elements().unwrap()[0];
+                F::from(x) + rhs
+            })
             .collect();
 
         assert_eq!(
