@@ -16,7 +16,7 @@ use ark_std::test_rng;
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::bits::uint8::UInt8;
-use ark_r1cs_std::ToBitsGadget;
+use ark_r1cs_std::{ToBitsGadget, ToConstraintFieldGadget};
 use ark_r1cs_std::fields::FieldVar;
 
 impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, CF> for MockTest1Verifier<CF> {
@@ -109,12 +109,20 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x|x.square().unwrap()).collect();
         pm2_1.enforce_equal(prover_message_oracle[1].get_short_message(0).as_slice())?;
 
-        // TODO wait for this
-        // let pm2_2: Vec<_> = (0..256u128)
-        //     .map(|x|FpVar::new_witness(cs.cs(), ||Ok(CF::from(x) + vm1_2.to_constraint_field().unwrap()[0].clone())).unwrap()).collect();
-        // ;
+        let pm2_2: Vec<_> = (0..256u128)
+            .map(|x|FpVar::new_witness(cs.cs(), ||Ok(CF::from(x) + vm1_2.to_constraint_field().unwrap()[0].clone())).unwrap()).collect();
 
-        Ok(Boolean::TRUE)
+        prover_message_oracle[1].query(
+            &[
+                UInt8::constant(19).to_bits_le()?, UInt8::constant(29).to_bits_le()?, UInt8::constant(39).to_bits_le()?
+            ]
+        ).unwrap().into_iter().zip(
+            vec![vec![pm2_2[19].clone()], vec![pm2_2[29].clone()], vec![pm2_2[39].clone()]].into_iter()
+        ).for_each(|(left, right)|left.enforce_equal(&right).unwrap());
+
+        // TODO: add more tests
+
+        ;Ok(Boolean::TRUE)
 
     }
 }
