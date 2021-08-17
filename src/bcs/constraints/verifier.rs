@@ -4,13 +4,14 @@ use crate::bcs::constraints::MTHashParametersVar;
 use crate::bcs::transcript::ROOT_NAMESPACE;
 use crate::iop::constraints::IOPVerifierWithGadget;
 use crate::ldt_trait::constraints::LDTWithGadget;
+use crate::ldt_trait::NoLDT;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
 use ark_r1cs_std::boolean::Boolean;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::fields::fp::FpVar;
-use ark_relations::r1cs::{SynthesisError, ConstraintSystemRef};
+use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use std::marker::PhantomData;
@@ -177,5 +178,28 @@ where
             })?;
 
         Ok(verifier_result_var)
+    }
+
+    pub fn verify_without_ldt<V, S>(
+        cs: ConstraintSystemRef<CF>,
+        sponge: S::Var,
+        proof: &BCSProofVar<MT, MTG, CF>,
+        public_input: &V::PublicInputVar,
+        verifier_parameter: &V::VerifierParameter,
+        hash_params: &MTHashParametersVar<CF, MT, MTG>,
+    ) -> Result<V::VerifierOutputVar, SynthesisError>
+    where
+        V: IOPVerifierWithGadget<S, CF>,
+        S: SpongeWithGadget<CF>,
+    {
+        Self::verify::<V, NoLDT<CF>, S>(
+            cs,
+            sponge,
+            proof,
+            public_input,
+            verifier_parameter,
+            &(),
+            hash_params,
+        )
     }
 }

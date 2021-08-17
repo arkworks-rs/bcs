@@ -1,7 +1,7 @@
-/// Contains the mock IOP prover and verifier to solely test correctness of transcript.
-pub(crate) mod mock;
 #[cfg(feature = "r1cs")]
 mod constraints;
+/// Contains the mock IOP prover and verifier to solely test correctness of transcript.
+pub(crate) mod mock;
 
 use crate::bcs::prover::BCSProof;
 use crate::bcs::tests::mock::{MockTest1Prover, MockTest1Verifier};
@@ -16,11 +16,11 @@ use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};
 use ark_sponge::poseidon::PoseidonSponge;
 use ark_sponge::CryptographicSponge;
 
-type Fr = ark_ed_on_bls12_381::Fr;
-type H = poseidon::CRH<Fr>;
-type TwoToOneH = poseidon::TwoToOneCRH<Fr>;
+pub(crate) type Fr = ark_ed_on_bls12_381::Fr;
+pub(crate) type H = poseidon::CRH<Fr>;
+pub(crate) type TwoToOneH = poseidon::TwoToOneCRH<Fr>;
 
-struct FieldMTConfig;
+pub(crate) struct FieldMTConfig;
 impl Config for FieldMTConfig {
     type Leaf = [Fr];
     type LeafDigest = Fr;
@@ -30,9 +30,10 @@ impl Config for FieldMTConfig {
     type TwoToOneHash = TwoToOneH;
 }
 
-#[test]
-/// Test if restore_state_from_commit_phase message works
-fn test_reconstruct_no_ldt() {
+pub(crate) fn mock_test1_prove_with_transcript() -> (
+    BCSProof<FieldMTConfig, Fr>,
+    Transcript<FieldMTConfig, PoseidonSponge<Fr>, Fr>,
+) {
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     let mt_hash_param = MTHashParameters::<FieldMTConfig> {
         leaf_hash_param: poseidon_parameters(),
@@ -62,6 +63,19 @@ fn test_reconstruct_no_ldt() {
             mt_hash_param.clone(),
         )
         .expect("fail to prove");
+
+    (bcs_proof, expected_prove_transcript)
+}
+
+#[test]
+/// Test if restore_state_from_commit_phase message works
+fn test_bcs_no_ldt() {
+    let (bcs_proof, expected_prove_transcript) = mock_test1_prove_with_transcript();
+
+    let mt_hash_param = MTHashParameters::<FieldMTConfig> {
+        leaf_hash_param: poseidon_parameters(),
+        inner_hash_param: poseidon_parameters(),
+    };
 
     // verify if simulation transcript reconstructs correctly
     let mut sponge = PoseidonSponge::new(&poseidon_parameters());

@@ -10,11 +10,11 @@ pub mod transcript;
 pub mod verifier;
 
 pub struct MTHashParametersVar<CF: PrimeField, MT: Config, MTG: ConfigGadget<MT, CF>> {
-    leaf_params: <<MTG as ConfigGadget<MT, CF>>::LeafHash as CRHSchemeGadget<
+    pub leaf_params: <<MTG as ConfigGadget<MT, CF>>::LeafHash as CRHSchemeGadget<
         <MT as Config>::LeafHash,
         CF,
     >>::ParametersVar,
-    inner_params: <<MTG as ConfigGadget<MT, CF>>::TwoToOneHash as TwoToOneCRHSchemeGadget<
+    pub inner_params: <<MTG as ConfigGadget<MT, CF>>::TwoToOneHash as TwoToOneCRHSchemeGadget<
         <MT as Config>::TwoToOneHash,
         CF,
     >>::ParametersVar,

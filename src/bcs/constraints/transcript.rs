@@ -214,47 +214,63 @@ pub(crate) mod sanity_check {
                        self.bookkeeper,
                        "your simulation code submits incorrect number of rounds, or call subprotocols in incorrect order.");
 
-            // TODO: give information about which message in which namespace is incorrect
+            // TODO: give information about in which namespace is incorrect
             prover_transcript
                 .verifier_messages
                 .iter()
                 .zip(self.reconstructed_verifer_messages.iter())
-                .for_each(|(expected, actual)| {
-                    expected
-                        .iter()
-                        .zip(actual.iter())
-                        .for_each(|(expected, actual)| match (expected, actual) {
-                            (
-                                VerifierMessage::FieldElements(expected),
-                                VerifierMessageVar::FieldElements(actual),
-                            ) => {
-                                expected
-                                    .iter()
-                                    .zip(actual.iter())
-                                    .for_each(|(expected, actual)| {
+                .enumerate()
+                .for_each(|(round_num, (expected, actual))| {
+                    expected.iter().zip(actual.iter()).enumerate().for_each(
+                        |(message_num, (expected, actual))| {
+                            let message_info = || {
+                                format!(
+                                    "Inconsistency found at round {}, verifier message {}",
+                                    round_num, message_num
+                                )
+                            };
+                            match (expected, actual) {
+                                (
+                                    VerifierMessage::FieldElements(expected),
+                                    VerifierMessageVar::FieldElements(actual),
+                                ) => expected.iter().zip(actual.iter()).for_each(
+                                    |(expected, actual)| {
                                         assert_eq!(
                                             expected,
-                                            &actual.value().expect("value not assigned!")
+                                            &actual.value().expect("value not assigned!"),
+                                            "{}",
+                                            message_info()
                                         )
-                                    })
+                                    },
+                                ),
+                                (
+                                    VerifierMessage::Bytes(expected),
+                                    VerifierMessageVar::Bytes(actual),
+                                ) => {
+                                    assert_eq!(
+                                        expected.as_slice(),
+                                        actual.value().expect("value not assigned").as_slice(),
+                                        "{}",
+                                        message_info()
+                                    )
+                                }
+                                (
+                                    VerifierMessage::Bits(expected),
+                                    VerifierMessageVar::Bits(actual),
+                                ) => {
+                                    assert_eq!(
+                                        expected.as_slice(),
+                                        actual.value().expect("value not assigned").as_slice(),
+                                        "{}",
+                                        message_info()
+                                    )
+                                }
+                                _ => {
+                                    panic!("verification message type mismatch: {}", message_info())
+                                }
                             }
-                            (
-                                VerifierMessage::Bytes(expected),
-                                VerifierMessageVar::Bytes(actual),
-                            ) => {
-                                assert_eq!(
-                                    expected.as_slice(),
-                                    actual.value().expect("value not assigned").as_slice()
-                                )
-                            }
-                            (VerifierMessage::Bits(expected), VerifierMessageVar::Bits(actual)) => {
-                                assert_eq!(
-                                    expected.as_slice(),
-                                    actual.value().expect("value not assigned").as_slice()
-                                )
-                            }
-                            _ => panic!("verification message type mismatch!"),
-                        })
+                        },
+                    )
                 })
         }
     }
