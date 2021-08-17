@@ -140,7 +140,6 @@ impl<F: PrimeField + Absorb> Default for PendingMessage<F> {
 }
 
 /// A communication protocol for IOP prover.
-#[derive(Clone)]
 pub struct Transcript<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
 where
     P::InnerDigest: Absorb,
@@ -162,6 +161,8 @@ where
     /// Random Oracle to sample verifier messages.
     pub sponge: S,
     pending_message_for_current_round: PendingMessage<F>,
+    /// ldt domain checker. Checker takes argument
+    domain_checker: Box<dyn Fn(usize, &Radix2CosetDomain<F>) -> bool>,
 }
 
 impl<P, S, F> Transcript<P, S, F>
@@ -172,7 +173,11 @@ where
     P::InnerDigest: Absorb,
 {
     /// Return a new BCS transcript.
-    pub fn new(sponge: S, hash_params: MTHashParameters<P>) -> Self {
+    pub fn new(
+        sponge: S,
+        hash_params: MTHashParameters<P>,
+        domain_checker: impl Fn(usize, &Radix2CosetDomain<F>) -> bool + 'static,
+    ) -> Self {
         Self {
             prover_message_oracles: Vec::new(),
             merkle_tree_for_each_round: Vec::new(),
@@ -181,6 +186,7 @@ where
             sponge,
             hash_params,
             pending_message_for_current_round: PendingMessage::default(),
+            domain_checker: Box::new(domain_checker),
         }
     }
 
@@ -238,6 +244,10 @@ where
         if poly.degree() > degree_bound {
             panic!("polynomial degree is greater than degree bound!");
         }
+        // check domain
+        if !(self.domain_checker)(degree_bound, &domain) {
+            panic!("domain checker failed")
+        }
         // evaluate the poly using ldt domain
         let evaluations = domain.evaluate(poly);
         self.send_oracle_evaluations_unchecked(evaluations, degree_bound)?;
@@ -251,7 +261,12 @@ where
         &mut self,
         msg: impl IntoIterator<Item = F>,
         degree_bound: usize,
+        domain: Radix2CosetDomain<F>,
     ) -> Result<(), Error> {
+        assert!(
+            (self.domain_checker)(degree_bound, &domain),
+            "invalid domain"
+        );
         self.send_oracle_evaluations_unchecked(msg, degree_bound)?;
         Ok(())
     }

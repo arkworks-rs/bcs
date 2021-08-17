@@ -1,4 +1,4 @@
-use crate::bcs::message::{ProverRoundMessageInfo, RoundOracle, VerifierMessage};
+use crate::bcs::message::{LeafStructure, ProverRoundMessageInfo, RoundOracle, VerifierMessage};
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript, Transcript};
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
@@ -32,7 +32,8 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
         _state: &mut Self::ProverState,
         transcript: &mut Transcript<MT, S, F>,
         _prover_parameter: &Self::ProverParameter,
-    ) -> Result<(), crate::Error> where
+    ) -> Result<(), Error>
+    where
         MT::InnerDigest: Absorb,
     {
         let mut rng = test_rng();
@@ -102,6 +103,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             num_message_oracles: 2,
             num_short_messages: 1,
             oracle_length: 256,
+            leaf_info: LeafStructure::default(),
         };
         transcript.receive_prover_current_round(namespace, &expected_info);
 
@@ -124,6 +126,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             num_message_oracles: 1,
             num_short_messages: 1,
             oracle_length: 256,
+            leaf_info: LeafStructure::default(),
         };
         transcript.receive_prover_current_round(namespace, &expected_info);
 
@@ -133,6 +136,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             num_message_oracles: 0,
             num_short_messages: 1,
             oracle_length: 0,
+            leaf_info: LeafStructure::default(),
         };
         transcript.receive_prover_current_round(namespace, &expected_info);
     }

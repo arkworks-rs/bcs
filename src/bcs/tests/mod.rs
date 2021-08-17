@@ -40,7 +40,7 @@ pub(crate) fn mock_test1_prove_with_transcript() -> (
         inner_hash_param: poseidon_parameters(),
     };
     // create a BCS transcript
-    let mut expected_prove_transcript = Transcript::new(sponge, mt_hash_param.clone());
+    let mut expected_prove_transcript = Transcript::new(sponge, mt_hash_param.clone(), |_, _| true);
 
     // run prover code, using transcript to sample verifier message
     // This is not a subprotocol, so we use root namespace (/).
@@ -49,7 +49,8 @@ pub(crate) fn mock_test1_prove_with_transcript() -> (
         &mut (),
         &mut expected_prove_transcript,
         &(),
-    );
+    )
+    .unwrap();
 
     // generate bcs proof
     let sponge = PoseidonSponge::new(&poseidon_parameters());

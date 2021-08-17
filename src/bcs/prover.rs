@@ -62,7 +62,7 @@ where
         S: CryptographicSponge,
     {
         // create a BCS transcript
-        let mut transcript = Transcript::new(sponge, hash_params.clone());
+        let mut transcript = Transcript::new(sponge, hash_params.clone(), |_, _| true);
 
         // run prover code, using transcript to sample verifier message
         // This is not a subprotocol, so we use root namespace (/).
@@ -80,7 +80,7 @@ where
         );
 
         // perform LDT to enforce degree bound on low-degree oracles
-        let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params);
+        let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params, |_, _| true);
         {
             // TODO: verify the domain here
             let codeword_oracles_ref = transcript

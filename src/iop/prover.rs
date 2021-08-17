@@ -35,6 +35,7 @@ pub trait IOPProver<F: PrimeField + Absorb> {
         state: &mut Self::ProverState,
         transcript: &mut Transcript<MT, S, F>,
         prover_parameter: &Self::ProverParameter,
-    ) -> Result<(), crate::Error> where
+    ) -> Result<(), crate::Error>
+    where
         MT::InnerDigest: Absorb;
 }
