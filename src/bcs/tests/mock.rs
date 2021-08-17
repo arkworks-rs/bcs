@@ -32,7 +32,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
         _state: &mut Self::ProverState,
         transcript: &mut Transcript<MT, S, F>,
         _prover_parameter: &Self::ProverParameter,
-    ) where
+    ) -> Result<(), crate::Error> where
         MT::InnerDigest: Absorb,
     {
         let mut rng = test_rng();
@@ -73,6 +73,8 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
         let msg1 = (0..6).map(|_| F::rand(&mut rng));
         transcript.send_message(msg1);
         transcript.submit_prover_current_round(namespace).unwrap();
+
+        Ok(())
     }
 }
 

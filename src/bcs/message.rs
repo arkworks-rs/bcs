@@ -24,6 +24,7 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     ///
     fn query_rs_code(&mut self, _starting_index: usize, _stride: usize) -> Vec<Vec<F>> {
         todo!("implement this once LDT is implemented")
+        // two merkle trees: do we need to absorb the root of coset merkle tree as well?
     }
 
     /// Number of reed_solomon_codes oracles in this round.
@@ -57,6 +58,31 @@ pub struct RecordingRoundOracle<F: PrimeField> {
     pub(crate) oracle_length: usize,
     /// Store the query position, in order
     pub queries: Vec<usize>,
+    /// Contains information about leaf structure
+    pub leaf_info: LeafStructure,
+}
+
+/// Stores whether the leaf of merkle tree contains a coset, or is individual leaf.
+/// If the leaf is coset, the info also contains information about the stride of coset, and
+/// each leaf will be a flattened 2d array where first axis is oracle index, and second axis is leaf positions.
+///
+/// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the leaf will be
+/// `[oracle[0][3], oracle[0][6], oracle[0][9], oracle[1][3], oracle[1][6], oracle[1][9]]`
+/// 
+/// TODO: implement coset as leaf 
+#[derive(Eq, PartialEq, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+pub struct LeafStructure {
+    pub leaf_as_coset: bool,
+    pub stride: usize
+}
+
+impl Default for LeafStructure {
+    fn default() -> Self {
+        Self{
+            leaf_as_coset: false,
+            stride: 0
+        }
+    }
 }
 
 /// Contains structure and degree bound information about prover round messages, but does not contain real messages.
@@ -66,6 +92,7 @@ pub struct ProverRoundMessageInfo {
     pub num_message_oracles: usize,
     pub num_short_messages: usize,
     pub oracle_length: usize,
+    pub leaf_info: LeafStructure
 }
 
 impl<F: PrimeField> Default for RecordingRoundOracle<F> {
@@ -76,11 +103,16 @@ impl<F: PrimeField> Default for RecordingRoundOracle<F> {
             short_messages: Vec::new(),
             oracle_length: 0,
             queries: Vec::new(),
+            leaf_info: LeafStructure::default()
         }
     }
 }
 
 impl<F: PrimeField> RecordingRoundOracle<F> {
+    pub fn set_leaf_structure(&mut self, leaf_structure: &LeafStructure){
+        todo!()
+    }
+    
     /// Generate a merkle tree of `Self`.
     pub fn generate_merkle_tree<P: MTConfig<Leaf = [F]>>(
         &self, // all RS-codes, all message oracles
@@ -164,6 +196,7 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
             num_message_oracles: self.message_oracles.len(),
             num_short_messages: self.short_messages.len(),
             oracle_length: self.oracle_length,
+            leaf_info: self.leaf_info.clone(),
         }
     }
 }

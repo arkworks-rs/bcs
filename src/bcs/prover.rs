@@ -71,7 +71,7 @@ where
             &mut P::initial_state(public_input, private_input),
             &mut transcript,
             prover_parameter,
-        );
+        )?;
 
         // sanity check: pending message should be None
         debug_assert!(
