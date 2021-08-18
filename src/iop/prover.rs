@@ -21,6 +21,7 @@ pub trait IOPProver<F: PrimeField + Absorb> {
 
     /// Returns the initial state of the prover.
     fn initial_state(
+        params: &Self::ProverParameter,
         public_input: &Self::PublicInput,
         private_input: &Self::PrivateInput,
     ) -> Self::ProverState;

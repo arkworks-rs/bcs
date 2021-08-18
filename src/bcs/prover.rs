@@ -73,7 +73,7 @@ where
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(
             &ROOT_NAMESPACE,
-            &mut P::initial_state(public_input, private_input),
+            &mut P::initial_state(prover_parameter, public_input, private_input),
             &mut transcript,
             prover_parameter,
         )?;
@@ -131,7 +131,10 @@ where
             V::query_and_decide(
                 &ROOT_NAMESPACE,
                 verifier_parameter,
-                &mut V::initial_state_for_query_and_decision_phase(public_input),
+                &mut V::initial_state_for_query_and_decision_phase(
+                    verifier_parameter,
+                    public_input,
+                ),
                 &mut sponge,
                 prover_message_oracles.iter_mut().collect(),
                 &verifier_messages,

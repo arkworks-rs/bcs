@@ -83,36 +83,22 @@ impl MessageBookkeeper {
         self.map.get(namespace).expect("message indices not exist")
     }
 
-    /// Get verifier messages in this namespace.
-    /// If bookkeeper points to some invalid message locations, return None.
-    pub fn get_verifier_messages_in_namespace<'a, T: 'a>(
+    /// Get verifier messages indices in this namespace.
+    pub fn get_verifier_messages_indices_in_namespace<'a, T: 'a>(
         &self,
         namespace: &NameSpace,
-        verifier_messages: &'a [T],
-    ) -> Option<Vec<&'a T>> {
+    ) -> Vec<usize> {
         let indices = self.get_message_indices(namespace);
-        let messages: Option<Vec<_>> = indices
-            .verifier_message_locations
-            .iter()
-            .map(|&x| verifier_messages.get(x))
-            .collect();
-        messages
+        indices.verifier_message_locations.clone()
     }
 
-    /// Get prover message oracles in this namespace.
-    /// If bookkeeper points to some invalid message locations, return None.
-    pub fn get_prover_message_oracles_in_namespace<'a, T: 'a>(
+    /// Get prover message oracles indices in this namespace.
+    pub fn get_prover_message_oracle_indices_in_namespace(
         &self,
         namespace: &NameSpace,
-        prover_messages: &'a [T],
-    ) -> Option<Vec<&'a T>> {
+    ) -> Vec<usize> {
         let indices = self.get_message_indices(namespace);
-        let messages: Option<Vec<_>> = indices
-            .prover_message_locations
-            .iter()
-            .map(|&x| prover_messages.get(x))
-            .collect();
-        messages
+        indices.prover_message_locations.clone()
     }
 }
 
@@ -277,10 +263,19 @@ where
         degree_bound: usize,
     ) -> Result<(), Error> {
         // encode the message
-        let oracle = msg.into_iter().collect();
+        let oracle = msg.into_iter().collect::<Vec<_>>();
+        let oracle_len = oracle.len();
         self.current_prover_pending_message()
             .reed_solomon_codes
             .push((oracle, degree_bound));
+        let current_prover_pending_message = self.current_prover_pending_message();
+        if current_prover_pending_message.oracle_length != 0 {
+            if oracle_len != current_prover_pending_message.oracle_length {
+                panic!("Oracles have different length in one round!");
+            }
+        } else {
+            current_prover_pending_message.oracle_length = oracle_len
+        }
         Ok(())
     }
 

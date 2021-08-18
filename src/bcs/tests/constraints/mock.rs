@@ -1,6 +1,6 @@
 use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::message::{LeafStructure, ProverRoundMessageInfo};
+use crate::bcs::message::ProverRoundMessageInfo;
 use crate::bcs::tests::mock::MockTest1Verifier;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 use crate::iop::constraints::IOPVerifierWithGadget;
@@ -42,7 +42,6 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 2,
             num_short_messages: 1,
             oracle_length: 256,
-            leaf_info: LeafStructure::default(),
         };
         transcript.receive_prover_current_round(namespace, &expected_info)?;
 
@@ -61,7 +60,6 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 1,
             num_short_messages: 1,
             oracle_length: 256,
-            leaf_info: LeafStructure::default(),
         };
         transcript.receive_prover_current_round(namespace, &expected_info)?;
 
@@ -71,7 +69,6 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 0,
             num_short_messages: 1,
             oracle_length: 0,
-            leaf_info: LeafStructure::default(),
         };
         transcript.receive_prover_current_round(namespace, &expected_info)?;
 

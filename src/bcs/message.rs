@@ -58,8 +58,6 @@ pub struct RecordingRoundOracle<F: PrimeField> {
     pub(crate) oracle_length: usize,
     /// Store the query position, in order
     pub queries: Vec<usize>,
-    /// Contains information about leaf structure
-    pub leaf_info: LeafStructure,
 }
 
 /// Stores whether the leaf of merkle tree contains a coset, or is individual leaf.
@@ -68,22 +66,6 @@ pub struct RecordingRoundOracle<F: PrimeField> {
 ///
 /// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the leaf will be
 /// `[oracle[0][3], oracle[0][6], oracle[0][9], oracle[1][3], oracle[1][6], oracle[1][9]]`
-///
-/// TODO: implement coset as leaf
-#[derive(Eq, PartialEq, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
-pub struct LeafStructure {
-    pub leaf_as_coset: bool,
-    pub stride: usize,
-}
-
-impl Default for LeafStructure {
-    fn default() -> Self {
-        Self {
-            leaf_as_coset: false,
-            stride: 0,
-        }
-    }
-}
 
 /// Contains structure and degree bound information about prover round messages, but does not contain real messages.
 #[derive(Eq, PartialEq, Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
@@ -92,7 +74,6 @@ pub struct ProverRoundMessageInfo {
     pub num_message_oracles: usize,
     pub num_short_messages: usize,
     pub oracle_length: usize,
-    pub leaf_info: LeafStructure,
 }
 
 impl<F: PrimeField> Default for RecordingRoundOracle<F> {
@@ -103,16 +84,11 @@ impl<F: PrimeField> Default for RecordingRoundOracle<F> {
             short_messages: Vec::new(),
             oracle_length: 0,
             queries: Vec::new(),
-            leaf_info: LeafStructure::default(),
         }
     }
 }
 
 impl<F: PrimeField> RecordingRoundOracle<F> {
-    pub fn set_leaf_structure(&mut self, _leaf_structure: &LeafStructure) {
-        todo!()
-    }
-
     /// Generate a merkle tree of `Self`.
     pub fn generate_merkle_tree<P: MTConfig<Leaf = [F]>>(
         &self, // all RS-codes, all message oracles
@@ -196,7 +172,6 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
             num_message_oracles: self.message_oracles.len(),
             num_short_messages: self.short_messages.len(),
             oracle_length: self.oracle_length,
-            leaf_info: self.leaf_info.clone(),
         }
     }
 }

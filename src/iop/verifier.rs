@@ -38,6 +38,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
 
     /// Returns the initial state for query and decision phase.
     fn initial_state_for_query_and_decision_phase(
+        params: &Self::VerifierParameter,
         public_input: &Self::PublicInput,
     ) -> Self::VerifierState;
 
