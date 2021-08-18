@@ -109,7 +109,7 @@ impl<F: PrimeField> Default for RecordingRoundOracle<F> {
 }
 
 impl<F: PrimeField> RecordingRoundOracle<F> {
-    pub fn set_leaf_structure(&mut self, leaf_structure: &LeafStructure) {
+    pub fn set_leaf_structure(&mut self, _leaf_structure: &LeafStructure) {
         todo!()
     }
 
