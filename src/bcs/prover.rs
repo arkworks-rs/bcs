@@ -8,10 +8,11 @@ use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::Path;
 use ark_ff::PrimeField;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_sponge::{Absorb, CryptographicSponge};
 
 /// BCSProof contains all prover messages that use succinct oracle, and thus is itself succinct.
-#[derive(Derivative)]
+#[derive(CanonicalSerialize, CanonicalDeserialize, Derivative)]
 #[derivative(Clone(bound = "MT: MTConfig, F: PrimeField"))]
 pub struct BCSProof<MT, F>
 where

@@ -21,7 +21,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
     type PrivateInput = ();
 
     fn initial_state(
-        params: &Self::ProverParameter,
+        _params: &Self::ProverParameter,
         _public_input: &Self::PublicInput,
         _private_input: &Self::PrivateInput,
     ) -> Self::ProverState {
@@ -140,7 +140,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
     }
 
     fn initial_state_for_query_and_decision_phase(
-        params: &Self::VerifierParameter,
+        _params: &Self::VerifierParameter,
         _public_input: &Self::PublicInput,
     ) -> Self::VerifierState {
         /*none*/

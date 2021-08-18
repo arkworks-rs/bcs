@@ -15,11 +15,11 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::univariate::{DenseOrSparsePolynomial, DensePolynomial};
 use ark_poly::{EvaluationDomain, Polynomial, Radix2EvaluationDomain, UVPolynomial};
+use ark_serialize::CanonicalSerialize;
 use ark_sponge::poseidon::PoseidonSponge;
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
 use ark_std::{test_rng, One, Zero};
-
 pub struct SimpleSumcheckProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
@@ -177,7 +177,9 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
     }
 }
 
-/// A simple univariate sumcheck.
+/// A simple univariate sumcheck (currently without ldt, which is completely insecure).
+/// TODO: add ldt after ldt trait (using FRI) is implemented
+/// We assume that size of summation domain < degree of testing poly < size of evaluation domain
 fn main() {
     let mut rng = test_rng();
     let poly = DensePolynomial::<Fr>::rand(69, &mut rng);
@@ -226,5 +228,8 @@ fn main() {
     // for now verifier output is just a simple boolean. In real scenario, verifier can output a subclaim if it does not have
     // direct access to testing polynomial.
     assert!(verifier_output);
-    println!("success")
+    println!("success");
+
+    let proof_size = proof.serialized_size();
+    println!("proof size: {} bytes", proof_size);
 }

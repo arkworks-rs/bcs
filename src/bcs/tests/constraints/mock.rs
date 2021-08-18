@@ -76,7 +76,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
     }
 
     fn initial_state_for_query_and_decision_phase_var(
-        public_input: &Self::PublicInputVar,
+        _public_input: &Self::PublicInputVar,
     ) -> Result<Self::VerifierStateVar, SynthesisError> {
         Ok(())
     }
