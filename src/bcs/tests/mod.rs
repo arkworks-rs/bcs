@@ -32,7 +32,7 @@ impl Config for FieldMTConfig {
 
 pub(crate) fn mock_test1_prove_with_transcript() -> (
     BCSProof<FieldMTConfig, Fr>,
-    Transcript<FieldMTConfig, PoseidonSponge<Fr>, Fr>,
+    Transcript<'static, FieldMTConfig, PoseidonSponge<Fr>, Fr>,
 ) {
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     let mt_hash_param = MTHashParameters::<FieldMTConfig> {

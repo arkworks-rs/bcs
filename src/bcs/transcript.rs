@@ -140,7 +140,7 @@ impl<F: PrimeField + Absorb> Default for PendingMessage<F> {
 }
 
 /// A communication protocol for IOP prover.
-pub struct Transcript<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
+pub struct Transcript<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
 where
     P::InnerDigest: Absorb,
 {
@@ -162,10 +162,10 @@ where
     pub sponge: S,
     pending_message_for_current_round: PendingMessage<F>,
     /// ldt domain checker. Checker takes argument
-    domain_checker: Box<dyn Fn(usize, &Radix2CosetDomain<F>) -> bool>,
+    domain_checker: Box<dyn Fn(usize, &Radix2CosetDomain<F>) -> bool + 'a>,
 }
 
-impl<P, S, F> Transcript<P, S, F>
+impl<'a, P, S, F> Transcript<'a, P, S, F>
 where
     P: MTConfig<Leaf = [F]>,
     S: CryptographicSponge,
@@ -176,7 +176,7 @@ where
     pub fn new(
         sponge: S,
         hash_params: MTHashParameters<P>,
-        domain_checker: impl Fn(usize, &Radix2CosetDomain<F>) -> bool + 'static,
+        domain_checker: impl Fn(usize, &Radix2CosetDomain<F>) -> bool + 'a,
     ) -> Self {
         Self {
             prover_message_oracles: Vec::new(),

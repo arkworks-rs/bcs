@@ -9,18 +9,29 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_sponge::{Absorb, CryptographicSponge};
+use ark_std::borrow::Borrow;
 use std::marker::PhantomData;
 
 /// Trait for LDT, which is an interactive oracle proof system.
 /// TODO: move this into `ark-ldt`
 pub trait LDT<F: PrimeField + Absorb> {
     type LDTProof: Clone + CanonicalSerialize + CanonicalDeserialize;
-    type LDTParameters;
+    type LDTParameters: Clone; // we use this static lifetime bound to make sure it does not contain reference
 
     /// Given the degree bound, return the enforced bound and poly domain used.
     /// # Panics
     /// `ldt_info` will panic if `degree_bound` is not supported by this LDT.
     fn ldt_info(param: &Self::LDTParameters, degree_bound: usize) -> (usize, Radix2CosetDomain<F>);
+
+    /// Returns if the domain is valid for this degree bound.
+    fn is_valid_domain(
+        param: &Self::LDTParameters,
+        degree_bound: usize,
+        domain: Radix2CosetDomain<F>,
+    ) -> bool {
+        let (_, expected) = Self::ldt_info(param.borrow(), degree_bound);
+        expected == domain
+    }
 
     /// Given the list of codewords along with its degree bound, send LDT prover messages.
     /// `codewords[i][j][k]` is the `k`th leaf of `j`th RS oracle at IOP round `i`.
@@ -67,6 +78,14 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
         _degree_bound: usize,
     ) -> (usize, Radix2CosetDomain<F>) {
         panic!("NoLDT is only a placeholder, and does nothing.")
+    }
+
+    fn is_valid_domain(
+        _param: &Self::LDTParameters,
+        _degree_bound: usize,
+        _domain: Radix2CosetDomain<F>,
+    ) -> bool {
+        true
     }
 
     fn prove<'a, MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(

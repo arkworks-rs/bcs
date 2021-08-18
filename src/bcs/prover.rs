@@ -62,7 +62,12 @@ where
         S: CryptographicSponge,
     {
         // create a BCS transcript
-        let mut transcript = Transcript::new(sponge, hash_params.clone(), |_, _| true);
+        let mut transcript = {
+            let ldt_params = ldt_params.clone();
+            Transcript::new(sponge, hash_params.clone(), move |degree, domain| {
+                L::is_valid_domain(&ldt_params, degree, *domain)
+            })
+        };
 
         // run prover code, using transcript to sample verifier message
         // This is not a subprotocol, so we use root namespace (/).
