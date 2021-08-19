@@ -9,35 +9,22 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_sponge::{Absorb, CryptographicSponge};
-use ark_std::borrow::Borrow;
 use std::marker::PhantomData;
 
-/// Trait for LDT, which is an interactive oracle proof system.
-/// TODO: move this into `ark-ldt`
+/// Trait for LDT, which is an public coin IOP.
 pub trait LDT<F: PrimeField + Absorb> {
     type LDTProof: Clone + CanonicalSerialize + CanonicalDeserialize;
-    type LDTParameters: Clone; // we use this static lifetime bound to make sure it does not contain reference
+    type LDTParameters: Clone;
 
-    /// Given the degree bound, return the enforced bound and poly domain used.
+    /// Given the degree bound of codeword, return the expected evaluation domain and localization_parameter.
+    /// localization parameter is log2(size of query coset)
     /// # Panics
     /// `ldt_info` will panic if `degree_bound` is not supported by this LDT.
-    fn ldt_info(param: &Self::LDTParameters, degree_bound: usize) -> (usize, Radix2CosetDomain<F>);
-
-    /// Returns if the domain is valid for this degree bound.
-    fn is_valid_domain(
-        param: &Self::LDTParameters,
-        degree_bound: usize,
-        domain: Radix2CosetDomain<F>,
-    ) -> bool {
-        let (_, expected) = Self::ldt_info(param.borrow(), degree_bound);
-        expected == domain
-    }
+    fn ldt_info(param: &Self::LDTParameters, degree_bound: usize) -> (Radix2CosetDomain<F>, usize);
 
     /// Given the list of codewords along with its degree bound, send LDT prover messages.
     /// `codewords[i][j][k]` is the `k`th leaf of `j`th RS oracle at IOP round `i`.
-    ///
-    /// **important**: when simulating verifier in LDT, make sure verifier can only access prover message
-    /// though `oracle.query`.  
+    /// LDT prover cannot send LDT oracles through `ldt_transcript`.
     fn prove<'a, MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
         codewords: impl IntoIterator<Item = &'a Vec<(Vec<F>, usize)>>,
@@ -69,23 +56,29 @@ pub struct NoLDT<F: PrimeField + Absorb> {
     _do_nothing: PhantomData<F>,
 }
 
+impl<F: PrimeField + Absorb> NoLDT<F> {
+    /// Specify the evaluation domain and localization_parameter of the codeword, using this dummy LDT.
+    pub fn parameter(
+        evaluation_domain: Radix2CosetDomain<F>,
+        localization_parameter: usize,
+    ) -> (Radix2CosetDomain<F>, usize) {
+        (evaluation_domain, localization_parameter)
+    }
+}
+
 impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
     type LDTProof = ();
-    type LDTParameters = ();
+    /// If LDTParameters is None, `ldt_info` will panic, so transcript would not allow low degree oracles to be sent.
+    type LDTParameters = Option<(Radix2CosetDomain<F>, usize)>;
 
     fn ldt_info(
-        _param: &Self::LDTParameters,
+        param: &Self::LDTParameters,
         _degree_bound: usize,
-    ) -> (usize, Radix2CosetDomain<F>) {
-        panic!("NoLDT is only a placeholder, and does nothing.")
-    }
-
-    fn is_valid_domain(
-        _param: &Self::LDTParameters,
-        _degree_bound: usize,
-        _domain: Radix2CosetDomain<F>,
-    ) -> bool {
-        true
+    ) -> (Radix2CosetDomain<F>, usize) {
+        param
+            .as_ref()
+            .expect("NoLDT has no evaluation domain configured")
+            .clone()
     }
 
     fn prove<'a, MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(

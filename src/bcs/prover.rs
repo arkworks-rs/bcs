@@ -8,6 +8,7 @@ use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::Path;
 use ark_ff::PrimeField;
+use ark_ldt::domain::Radix2CosetDomain;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_sponge::{Absorb, CryptographicSponge};
 
@@ -21,16 +22,10 @@ where
     MT::InnerDigest: Absorb,
 {
     /// Messages sent by prover in commit phase. Each item in the vector represents a list of
-    /// message oracles with same length. The length constraints do not hold for short messages (IP message).
-    /// All non-IP messages in the same prover round should share the same merkle tree. Each merkle tree leaf is
-    /// a vector which each element correspond to the same location of different oracles.
-    ///
-    /// Prover succinct oracle message. If the user uses RSIOP, the oracles in last `n` rounds will be used for LDT with
-    /// `n` queries.
+    /// message oracles (reed solomon codes go first) with same length. The length constraints do not hold for short messages (IP message).
+    /// All non-IP messages in the same prover round share the same merkle tree. Each merkle tree leaf is
+    /// a vector which each element correspond to the same coset of different oracles.
     pub prover_iop_messages_by_round: Vec<SuccinctRoundOracle<F>>,
-    // pub prover_iop_messages_by_round: Vec<SuccinctRoundOracle<F>>,
-    // /// Extra Prover messages used for LDT. If the prover is not RS-IOP, this vector should be empty.
-    // pub ldt_prover_iop_messages_by_round: Vec<SuccinctRoundOracle<F>>,
 
     // BCS data below: maybe combine
     /// Merkle tree roots for all prover messages (including main prover and ldt prover).
@@ -64,9 +59,8 @@ where
     {
         // create a BCS transcript
         let mut transcript = {
-            let ldt_params = ldt_params.clone();
-            Transcript::new(sponge, hash_params.clone(), move |degree, domain| {
-                L::is_valid_domain(&ldt_params, degree, *domain)
+            Transcript::new(sponge, hash_params.clone(), move |degree| {
+                L::ldt_info(&ldt_params, degree)
             })
         };
 
@@ -86,9 +80,10 @@ where
         );
 
         // perform LDT to enforce degree bound on low-degree oracles
-        let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params, |_, _| true);
+        let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params, move |_| {
+            panic!("LDT transcript cannot send LDT oracle.")
+        });
         {
-            // TODO: verify the domain here
             let codeword_oracles_ref = transcript
                 .prover_message_oracles
                 .iter()
@@ -155,7 +150,7 @@ where
             .collect();
 
         let all_queries: Vec<_> = all_message_oracles()
-            .map(|msg| msg.queries.clone())
+            .map(|msg| msg.queried_coset_index.clone())
             .collect();
 
         // generate all merkle tree paths
@@ -186,16 +181,14 @@ where
             .collect();
 
         Ok(BCSProof {
-            // todo: maybe combine prover and ldt?
             prover_iop_messages_by_round: all_succinct_oracles,
             prover_messages_mt_root: all_mt_roots,
             prover_oracles_mt_path: all_mt_paths,
         })
     }
 
-    /// Generate proof
-    /// do it in future: derive verifier param from prover param
-    pub fn generate_without_ldt<V, P, S>(
+    /// Generate proof without LDT. Panic if prover tries to send lower degree oracles.
+    pub fn generate_with_ldt_disabled<V, P, S>(
         sponge: S,
         public_input: &P::PublicInput,
         private_input: &P::PrivateInput,
@@ -214,7 +207,35 @@ where
             private_input,
             prover_parameter,
             verifier_parameter,
-            &(),
+            &None,
+            hash_params,
+        )
+    }
+
+    /// Generate proof without LDT. Prover send low degree oracles using
+    /// `ldt_codeword_domain` and `ldt_codeword_localization_parameter`.
+    pub fn generate_with_dummy_ldt<V, P, S>(
+        sponge: S,
+        public_input: &P::PublicInput,
+        private_input: &P::PrivateInput,
+        prover_parameter: &P::ProverParameter,
+        verifier_parameter: &V::VerifierParameter,
+        hash_params: MTHashParameters<MT>,
+        ldt_codeword_domain: Radix2CosetDomain<F>,
+        ldt_codeword_localization_parameter: usize,
+    ) -> Result<Self, Error>
+    where
+        V: IOPVerifier<S, F, PublicInput = P::PublicInput>,
+        P: IOPProver<F>,
+        S: CryptographicSponge,
+    {
+        Self::generate::<V, P, NoLDT<F>, _>(
+            sponge,
+            public_input,
+            private_input,
+            prover_parameter,
+            verifier_parameter,
+            &Some((ldt_codeword_domain, ldt_codeword_localization_parameter)),
             hash_params,
         )
     }

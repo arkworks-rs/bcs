@@ -43,9 +43,13 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
         let msg1 = (0..4).map(|_| F::rand(&mut rng));
         transcript.send_message(msg1);
         let msg2 = (0..256).map(|_| F::rand(&mut rng));
-        transcript.send_message_oracle(msg2).unwrap();
+        transcript
+            .send_message_oracle_with_localization(msg2, 2)
+            .unwrap();
         let msg3 = (0..256).map(|_| F::rand(&mut rng));
-        transcript.send_message_oracle(msg3).unwrap();
+        transcript
+            .send_message_oracle_with_localization(msg3, 2)
+            .unwrap();
         transcript.submit_prover_current_round(namespace).unwrap();
 
         // verifier send
@@ -104,6 +108,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             num_message_oracles: 2,
             num_short_messages: 1,
             oracle_length: 256,
+            localization_parameter: 2,
         };
         transcript.receive_prover_current_round(namespace, &expected_info);
 
@@ -126,6 +131,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             num_message_oracles: 1,
             num_short_messages: 1,
             oracle_length: 256,
+            localization_parameter: 0,
         };
         transcript.receive_prover_current_round(namespace, &expected_info);
 
@@ -135,6 +141,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             num_message_oracles: 0,
             num_short_messages: 1,
             oracle_length: 0,
+            localization_parameter: 0,
         };
         transcript.receive_prover_current_round(namespace, &expected_info);
     }

@@ -6,6 +6,7 @@ use crate::ldt_trait::{NoLDT, LDT};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
+use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
 
@@ -147,13 +148,13 @@ where
             .zip(all_paths)
             .zip(all_mt_roots)
             .for_each(|((round_oracle, paths), mt_root)| {
-                assert_eq!(round_oracle.queries.len(), paths.len());
+                assert_eq!(round_oracle.coset_queries.len(), paths.len());
                 assert_eq!(
-                    round_oracle.queries.len(),
-                    round_oracle.oracle.queried_leaves.len(),
+                    round_oracle.coset_queries.len(),
+                    round_oracle.oracle.queried_cosets.len(),
                     "insufficient queries in verifier code"
                 );
-                let mt_root = if round_oracle.queries.len() > 0 {
+                let mt_root = if round_oracle.coset_queries.len() > 0 {
                     mt_root
                         .as_ref()
                         .expect("round oracle has query but has no mt_root")
@@ -161,11 +162,11 @@ where
                     return;
                 };
                 round_oracle
-                    .queries
+                    .coset_queries
                     .iter()
-                    .zip(round_oracle.oracle.queried_leaves.iter())
+                    .zip(round_oracle.oracle.queried_cosets.iter())
                     .zip(paths.into_iter())
-                    .for_each(|((index, leaf), mut path)| {
+                    .for_each(|((index, coset), mut path)| {
                         debug_assert_eq!(path.leaf_index, *index);
                         path.leaf_index = *index;
                         assert!(
@@ -173,7 +174,13 @@ where
                                 &hash_params.leaf_hash_param,
                                 &hash_params.inner_hash_param,
                                 &mt_root,
-                                leaf.as_slice()
+                                // flatten by concatenating cosets of all oracles
+                                coset
+                                    .clone()
+                                    .into_iter()
+                                    .flatten()
+                                    .collect::<Vec<_>>()
+                                    .as_slice()
                             )
                             .expect("cannot verify"),
                             "merkle tree verification failed"
@@ -184,7 +191,8 @@ where
         Ok(verifier_result)
     }
 
-    pub fn verify_without_ldt<V, S>(
+    /// Verify without LDT. If verifier tries to get a low-degree oracle, this function will panic.
+    pub fn verify_with_ldt_disabled<V, S>(
         sponge: S,
         proof: &BCSProof<MT, F>,
         public_input: &V::PublicInput,
@@ -200,7 +208,30 @@ where
             proof,
             public_input,
             verifier_parameter,
-            &(),
+            &None,
+            hash_params,
+        )
+    }
+
+    pub fn verify_with_dummy_ldt<V, S>(
+        sponge: S,
+        proof: &BCSProof<MT, F>,
+        public_input: &V::PublicInput,
+        verifier_parameter: &V::VerifierParameter,
+        hash_params: MTHashParameters<MT>,
+        ldt_codeword_domain: Radix2CosetDomain<F>,
+        ldt_codeword_localization_parameter: usize,
+    ) -> Result<V::VerifierOutput, Error>
+    where
+        V: IOPVerifier<S, F>,
+        S: CryptographicSponge,
+    {
+        Self::verify::<V, NoLDT<_>, S>(
+            sponge,
+            proof,
+            public_input,
+            verifier_parameter,
+            &Some((ldt_codeword_domain, ldt_codeword_localization_parameter)),
             hash_params,
         )
     }

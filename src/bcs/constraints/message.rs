@@ -108,7 +108,6 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
         &mut self,
         position: &[Vec<Boolean<F>>],
     ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
-        // TODO: record the position somewhere (instead of enforcing equality)
         self.queries.extend_from_slice(position);
         assert!(
             self.current_query_pos + position.len() <= self.oracle.queried_leaves.len(),

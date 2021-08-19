@@ -16,16 +16,38 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     fn get_short_message(&self, index: usize) -> &Vec<F>;
 
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
-    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>>;
+    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
+        // convert the position to coset_index
+        let log_coset_size = self.get_info().localization_parameter;
+        let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
+        // coset index = position % num_cosets = the least significant `log_num_cosets` bits of pos
+        // element index in coset = position / num_cosets = all other bits
+        let coset_index = position
+            .iter()
+            .map(|&pos| pos & ((1 << log_num_cosets) - 1))
+            .collect::<Vec<_>>();
+        let element_index_in_coset = position
+            .iter()
+            .map(|&pos| pos >> log_num_cosets)
+            .collect::<Vec<_>>();
 
-    /// Return the leaves of at `position` of reed_solomon code oracle. `result[i][j]` is leaf `i` at oracle `j`.
-    /// This method is convenient for LDT.
-    /// Query position should be a coset, that has a starting index and stride.
-    ///
-    fn query_rs_code(&mut self, _starting_index: usize, _stride: usize) -> Vec<Vec<F>> {
-        todo!("implement this once LDT is implemented")
-        // two merkle trees: do we need to absorb the root of coset merkle tree as well?
+        let queried_coset = self.query_coset(&coset_index);
+
+        queried_coset
+            .into_iter()
+            .zip(element_index_in_coset.into_iter())
+            .map(|(coset_for_all_oracles, element_index)| {
+                coset_for_all_oracles
+                    .into_iter()
+                    .map(|coset| coset[element_index])
+                    .collect::<Vec<_>>()
+            })
+            .collect()
     }
+
+    /// Return the queried coset at `coset_index` of all oracles.
+    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
+    fn query_coset(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>>;
 
     /// Number of reed_solomon_codes oracles in this round.
     fn num_reed_solomon_codes_oracles(&self) -> usize;
@@ -42,25 +64,126 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     }
 }
 
+pub(crate) struct PendingProverMessage<F: PrimeField> {
+    /// Oracle evaluations with a degree bound.
+    pub(crate) reed_solomon_codes: Vec<(Vec<F>, usize)>,
+    /// Message oracles without a degree bound
+    pub(crate) message_oracles: Vec<Vec<F>>,
+    /// Messages without oracle sent in current round
+    pub(crate) short_messages: Vec<Vec<F>>,
+    /// length of each oracle message. `oracle_length` is 0 if in this round, prover sends only
+    /// short messages.
+    pub(crate) oracle_length: usize,
+    /// localization parameter is log2(coset_size)
+    /// Set it to zero to disable leaf as coset.
+    pub(crate) localization_parameter: usize,
+}
+
+impl<F: PrimeField> Default for PendingProverMessage<F> {
+    fn default() -> Self {
+        Self {
+            reed_solomon_codes: Vec::new(),
+            message_oracles: Vec::new(),
+            short_messages: Vec::new(),
+            oracle_length: 0,
+            localization_parameter: 0,
+        }
+    }
+}
+
+impl<F: PrimeField> PendingProverMessage<F> {
+    fn has_oracle(&self) -> bool {
+        self.oracle_length != 0
+    }
+
+    /// Generate a merkle tree of `Self` where each leaf is a coset.
+    /// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the leaf will be
+    /// `[oracle[0][3], oracle[0][6], oracle[0][9], oracle[1][3], oracle[1][6], oracle[1][9]]`
+    pub(crate) fn into_merkle_tree_and_recording_oracle<P: MTConfig<Leaf = [F]>>(
+        self, // all RS-codes, all message oracles
+        hash_params: &MTHashParameters<P>,
+    ) -> Result<(Option<MerkleTree<P>>, RecordingRoundOracle<F>), Error> {
+        let all_coset_elements = self.generate_all_cosets();
+        let flattened_leaves = all_coset_elements
+            .iter()
+            .map(|oracles| oracles.iter().flatten().map(|x| *x).collect::<Vec<_>>());
+        let mt = if self.has_oracle() {
+            Some(MerkleTree::new(
+                &hash_params.leaf_hash_param,
+                &hash_params.inner_hash_param,
+                flattened_leaves,
+            )?)
+        } else {
+            None
+        };
+        let info = ProverRoundMessageInfo {
+            oracle_length: self.oracle_length,
+            reed_solomon_code_degree_bound: self
+                .reed_solomon_codes
+                .iter()
+                .map(|(_, degree)| *degree)
+                .collect(),
+            localization_parameter: self.localization_parameter,
+            num_short_messages: self.short_messages.len(),
+            num_message_oracles: self.reed_solomon_codes.len() + self.message_oracles.len(),
+        };
+        let recording_oracle = RecordingRoundOracle {
+            info,
+            reed_solomon_codes: self.reed_solomon_codes,
+            short_messages: self.short_messages,
+            all_coset_elements,
+            queried_coset_index: Vec::new(),
+        };
+        Ok((mt, recording_oracle))
+    }
+
+    /// Generate a un-flattened merkle tree leaves
+    ///
+    /// result axes:`[coset index, oracle index, element index in coset]`
+    pub(crate) fn generate_all_cosets(&self) -> Vec<Vec<Vec<F>>> {
+        if !self.has_oracle() {
+            return Vec::new();
+        }
+        let coset_size = 1 << self.localization_parameter;
+        debug_assert_eq!(self.oracle_length & coset_size, 0);
+        let num_cosets = self.oracle_length / coset_size;
+        let stride = num_cosets;
+        // axes: [coset index, oracle index, element index in coset]
+        // absolute position = coset index + stride * element_index
+        (0..num_cosets)
+            .map(|coset_index| {
+                self.reed_solomon_codes
+                    .iter()
+                    .map(|(oracle, _)| oracle)
+                    .chain(self.message_oracles.iter())
+                    .map(|oracle| {
+                        (0..coset_size)
+                            .map(|element_index| oracle[coset_index + stride * element_index])
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    }
+}
+
 #[derive(Clone)]
 /// Contains all oracle messages in this round, and is storing queries, in order.
 /// **Sponge absorb order**: Sponge will first absorb all merkle tree roots for `reed_solomon_codes`, then all merkle tree
 /// roots for `message_oracles`, then all entire messages for `short_messages`.
 pub struct RecordingRoundOracle<F: PrimeField> {
-    /// Oracle evaluations with a degree bound.
+    /// Oracle Info
+    pub info: ProverRoundMessageInfo,
+    /// Store the queried coset index, in order
+    pub queried_coset_index: Vec<usize>,
+    /// All cosets. Axes: `[coset index, oracle index (RS-code first), element position in coset]`
+    pub all_coset_elements: Vec<Vec<Vec<F>>>,
+    /// low degree oracle evaluations in this round. The data stored is a duplicate to part of `all_coset_elements`, but is handy for LDT to process.
     pub reed_solomon_codes: Vec<(Vec<F>, usize)>,
-    /// Message oracles without a degree bound
-    pub message_oracles: Vec<Vec<F>>,
-    /// Messages without oracle sent in current round
+    /// Store the non-oracle IP messages in this round
     pub short_messages: Vec<Vec<F>>,
-    /// length of each oracle message. `oracle_length` is 0 if in this round, prover sends only
-    /// short messages.
-    pub(crate) oracle_length: usize,
-    /// Store the query position, in order
-    pub queries: Vec<usize>,
 }
 
-/// Stores whether the leaf of merkle tree contains a coset, or is individual leaf.
 /// If the leaf is coset, the info also contains information about the stride of coset, and
 /// each leaf will be a flattened 2d array where first axis is oracle index, and second axis is leaf positions.
 ///
@@ -74,73 +197,30 @@ pub struct ProverRoundMessageInfo {
     pub num_message_oracles: usize,
     pub num_short_messages: usize,
     pub oracle_length: usize,
+    /// log2(coset size)
+    /// Set it to zero to disable leaf as coset.
+    pub localization_parameter: usize,
 }
 
-impl<F: PrimeField> Default for RecordingRoundOracle<F> {
-    fn default() -> Self {
-        RecordingRoundOracle {
-            reed_solomon_codes: Vec::new(),
-            message_oracles: Vec::new(),
-            short_messages: Vec::new(),
-            oracle_length: 0,
-            queries: Vec::new(),
-        }
+impl ProverRoundMessageInfo {
+    pub fn num_reed_solomon_codes_oracles(&self) -> usize {
+        self.reed_solomon_code_degree_bound.len()
     }
 }
 
 impl<F: PrimeField> RecordingRoundOracle<F> {
-    /// Generate a merkle tree of `Self`.
-    pub fn generate_merkle_tree<P: MTConfig<Leaf = [F]>>(
-        &self, // all RS-codes, all message oracles
-        hash_params: &MTHashParameters<P>,
-        // todo (future): serialize by coset (stride) (element in same coset in same leaf): add addition
-        // stride 3: [0: {oracle_1[0], oracle_2[0], ...},3,6,...], [1,4,7], ....
-        // panic if stride is not divisible by oracle length
-    ) -> Result<Option<MerkleTree<P>>, Error> {
-        if self.oracle_length() == 0 {
-            // oracle does not contain any message oracle
-            debug_assert!(self.reed_solomon_codes.is_empty() && self.message_oracles.is_empty());
-            return Ok(None);
-        }
-        if !self.oracle_length().is_power_of_two() {
-            panic!("oracle length need to be power of two")
-        }
-        let all_positions: Vec<_> = (0..self.oracle_length).collect();
-        let mt_leaves: Vec<_> = self.query_without_recording(&all_positions);
-
-        Ok(Some(MerkleTree::<P>::new(
-            &hash_params.leaf_hash_param,
-            &hash_params.inner_hash_param,
-            mt_leaves,
-        )?))
-    }
-
     pub fn get_succinct_oracle(&self) -> SuccinctRoundOracle<F> {
         let info = self.get_info();
-        let leaves = self.query_without_recording(&self.queries);
+        let queried_cosets = self
+            .queried_coset_index
+            .iter()
+            .map(|coset_index| self.all_coset_elements[*coset_index].clone())
+            .collect::<Vec<_>>();
         SuccinctRoundOracle {
             info,
-            queried_leaves: leaves,
+            queried_cosets,
             short_messages: self.short_messages.clone(),
         }
-    }
-
-    fn query_without_recording(&self, position: &[usize]) -> Vec<Vec<F>> {
-        let mut leaves: Vec<_> = (0..position.len()).map(|_| Vec::new()).collect();
-        self.reed_solomon_codes
-            .iter()
-            .map(|msg| &msg.0)
-            .chain(&self.message_oracles) // the oracles
-            .for_each(|oracle| {
-                if oracle.len() != self.oracle_length {
-                    panic!("invalid oracle leaves");
-                }
-
-                for (i, pos) in position.into_iter().enumerate() {
-                    leaves[i].push(oracle[*pos]);
-                }
-            });
-        leaves
     }
 }
 
@@ -149,30 +229,25 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
         &self.short_messages[index]
     }
 
-    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
-        self.queries.extend_from_slice(position);
-        self.query_without_recording(position)
+    fn query_coset(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
+        // record the coset query
+        self.queried_coset_index.extend_from_slice(coset_index);
+        coset_index
+            .iter()
+            .map(|coset_index| self.all_coset_elements[*coset_index].clone())
+            .collect()
     }
 
     fn num_reed_solomon_codes_oracles(&self) -> usize {
-        self.reed_solomon_codes.len()
+        self.info.num_reed_solomon_codes_oracles()
     }
 
     fn oracle_length(&self) -> usize {
-        self.oracle_length
+        self.info.oracle_length
     }
 
     fn get_info(&self) -> ProverRoundMessageInfo {
-        ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: self
-                .reed_solomon_codes
-                .iter()
-                .map(|(_, degree)| *degree)
-                .collect(),
-            num_message_oracles: self.message_oracles.len(),
-            num_short_messages: self.short_messages.len(),
-            oracle_length: self.oracle_length,
-        }
+        self.info.clone()
     }
 }
 
@@ -181,8 +256,8 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
 pub struct SuccinctRoundOracle<F: PrimeField> {
     /// Oracle Info
     pub info: ProverRoundMessageInfo,
-    /// Leaves at query indices.
-    pub queried_leaves: Vec<Vec<F>>,
+    /// Queried cosets. Axes `[query order, oracle index (RS-code first), element position in coset]`
+    pub queried_cosets: Vec<Vec<Vec<F>>>,
     // note that we do not store query position here, as they will be calculated in verifier
     /// Store the non-oracle IP messages in this round
     pub short_messages: Vec<Vec<F>>,
@@ -192,7 +267,7 @@ impl<F: PrimeField> SuccinctRoundOracle<F> {
     pub fn get_view(&self) -> SuccinctRoundOracleView<F> {
         SuccinctRoundOracleView {
             oracle: &self,
-            queries: Vec::new(),
+            coset_queries: Vec::new(),
             current_query_pos: 0,
         }
     }
@@ -203,7 +278,7 @@ impl<F: PrimeField> SuccinctRoundOracle<F> {
 pub struct SuccinctRoundOracleView<'a, F: PrimeField> {
     pub(crate) oracle: &'a SuccinctRoundOracle<F>,
     /// Supposed queries of the verifier in order.
-    pub queries: Vec<usize>,
+    pub coset_queries: Vec<usize>,
     current_query_pos: usize,
 }
 
@@ -212,17 +287,16 @@ impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
         &self.oracle.short_messages[index]
     }
 
-    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
-        // maybe: type QueryEvaluations<F> = Vec<F>
-        self.queries.extend_from_slice(position);
+    fn query_coset(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
+        self.coset_queries.extend_from_slice(coset_index);
         assert!(
-            self.current_query_pos + position.len() <= self.oracle.queried_leaves.len(),
-            "too many queries"
+            self.current_query_pos + coset_index.len() <= self.oracle.queried_cosets.len(),
+            "too many queries!"
         );
-        let result = self.oracle.queried_leaves
-            [self.current_query_pos..self.current_query_pos + position.len()]
+        let result = self.oracle.queried_cosets
+            [self.current_query_pos..self.current_query_pos + coset_index.len()]
             .to_vec();
-        self.current_query_pos += position.len();
+        self.current_query_pos += coset_index.len();
         result
     }
 

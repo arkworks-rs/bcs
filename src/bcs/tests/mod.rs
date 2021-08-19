@@ -10,6 +10,7 @@ use crate::bcs::verifier::BCSVerifier;
 use crate::bcs::MTHashParameters;
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
+use crate::ldt_trait::{NoLDT, LDT};
 use crate::test_utils::poseidon_parameters;
 use ark_crypto_primitives::crh::poseidon;
 use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};
@@ -40,7 +41,9 @@ pub(crate) fn mock_test1_prove_with_transcript() -> (
         inner_hash_param: poseidon_parameters(),
     };
     // create a BCS transcript
-    let mut expected_prove_transcript = Transcript::new(sponge, mt_hash_param.clone(), |_, _| true);
+    let mut expected_prove_transcript = Transcript::new(sponge, mt_hash_param.clone(), |degree| {
+        NoLDT::ldt_info(&None, degree)
+    });
 
     // run prover code, using transcript to sample verifier message
     // This is not a subprotocol, so we use root namespace (/).
@@ -54,16 +57,12 @@ pub(crate) fn mock_test1_prove_with_transcript() -> (
 
     // generate bcs proof
     let sponge = PoseidonSponge::new(&poseidon_parameters());
-    let bcs_proof =
-        BCSProof::generate_without_ldt::<MockTest1Verifier<Fr>, MockTest1Prover<Fr>, _>(
-            sponge,
-            &(),
-            &(),
-            &(),
-            &(),
-            mt_hash_param.clone(),
-        )
-        .expect("fail to prove");
+    let bcs_proof = BCSProof::generate_with_ldt_disabled::<
+        MockTest1Verifier<Fr>,
+        MockTest1Prover<Fr>,
+        _,
+    >(sponge, &(), &(), &(), &(), mt_hash_param.clone())
+    .expect("fail to prove");
 
     (bcs_proof, expected_prove_transcript)
 }
@@ -92,7 +91,7 @@ fn test_bcs_no_ldt() {
     // verify should return no error
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     assert!(
-        BCSVerifier::verify_without_ldt::<MockTest1Verifier<Fr>, _>(
+        BCSVerifier::verify_with_ldt_disabled::<MockTest1Verifier<Fr>, _>(
             sponge,
             &bcs_proof,
             &(),

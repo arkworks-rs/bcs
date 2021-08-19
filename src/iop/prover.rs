@@ -7,7 +7,6 @@ use ark_sponge::{Absorb, CryptographicSponge};
 /// degree test. Use RS-IOP Prover instead if the prover sends
 /// polynomial using RS-code.
 pub trait IOPProver<F: PrimeField + Absorb> {
-    /// TODO doc
     /// Prover parameter should be a superset of verifier parameter.
     type ProverParameter: ?Sized;
 

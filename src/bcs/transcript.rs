@@ -3,7 +3,8 @@ use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 
 use crate::bcs::message::{
-    ProverRoundMessageInfo, RecordingRoundOracle, RoundOracle, VerifierMessage,
+    PendingProverMessage, ProverRoundMessageInfo, RecordingRoundOracle, RoundOracle,
+    VerifierMessage,
 };
 use crate::bcs::prover::BCSProof;
 use crate::bcs::MTHashParameters;
@@ -37,7 +38,6 @@ pub fn create_subprotocol_namespace(
 #[derive(Clone, Eq, PartialEq, Debug)]
 /// Stores the ownership relation of each message to its protocol.
 pub struct MessageBookkeeper {
-    /// TODO doc
     pub map: BTreeMap<NameSpace, MessageIndices>,
 }
 
@@ -109,12 +109,11 @@ pub struct MessageIndices {
     pub verifier_message_locations: Vec<usize>,
 }
 
-#[derive(Clone)]
 #[allow(variant_size_differences)]
 /// Pending message for current transcript. We allow `variant_size_differences` here because there will
 /// only be one `PendingMessage` per transcript.
 enum PendingMessage<F: PrimeField + Absorb> {
-    ProverMessage(RecordingRoundOracle<F>),
+    ProverMessage(PendingProverMessage<F>),
     VerifierMessage(Vec<VerifierMessage<F>>),
     None,
 }
@@ -147,8 +146,9 @@ where
     /// Random Oracle to sample verifier messages.
     pub sponge: S,
     pending_message_for_current_round: PendingMessage<F>,
-    /// ldt domain checker. Checker takes argument
-    domain_checker: Box<dyn Fn(usize, &Radix2CosetDomain<F>) -> bool + 'a>,
+    /// Given the degree bound of polynomial, return the evaluation domain and localization parameter.
+    /// **Domain for all low-degree oracles are managed by this function.**
+    ldt_info: Box<dyn Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a>,
 }
 
 impl<'a, P, S, F> Transcript<'a, P, S, F>
@@ -162,7 +162,7 @@ where
     pub fn new(
         sponge: S,
         hash_params: MTHashParameters<P>,
-        domain_checker: impl Fn(usize, &Radix2CosetDomain<F>) -> bool + 'a,
+        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
     ) -> Self {
         Self {
             prover_message_oracles: Vec::new(),
@@ -172,7 +172,7 @@ where
             sponge,
             hash_params,
             pending_message_for_current_round: PendingMessage::default(),
-            domain_checker: Box::new(domain_checker),
+            ldt_info: Box::new(ldt_info),
         }
     }
 
@@ -187,15 +187,17 @@ where
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
             // generate merkle tree
-            let mt = round_msg.generate_merkle_tree(&self.hash_params)?;
+            // extract short messages
+            let (mt, recording_oracle) =
+                round_msg.into_merkle_tree_and_recording_oracle(&self.hash_params)?;
             // if this round prover message contains oracle messages, absorb merkle tree root
             self.sponge.absorb(&mt.as_ref().map(|x| x.root()));
             // if this round prover message has non-oracle messages, absorb them in entirety
-            round_msg
+            recording_oracle
                 .short_messages
                 .iter()
                 .for_each(|msg| self.sponge.absorb(msg));
-            self.prover_message_oracles.push(round_msg);
+            self.prover_message_oracles.push(recording_oracle);
             self.merkle_tree_for_each_round.push(mt);
             self.attach_latest_prover_round_to_namespace(namespace);
             Ok(())
@@ -218,42 +220,35 @@ where
     }
 
     /// Send univariate polynomial with LDT.
-    /// `domain` should be consistent with LDT that user provides.
-    /// TODO: check domain during BCS prove.
+    /// Evaluation domain and localization parameter is managed by LDT.
     pub fn send_univariate_polynomial(
         &mut self,
         degree_bound: usize,
         poly: &DensePolynomial<F>,
-        domain: Radix2CosetDomain<F>,
     ) -> Result<(), Error> {
         // check degree bound
         if poly.degree() > degree_bound {
             panic!("polynomial degree is greater than degree bound!");
         }
-        // check domain
-        if !(self.domain_checker)(degree_bound, &domain) {
-            panic!("domain checker failed")
-        }
+        let (domain, localization_parameter) = self.ldt_info(degree_bound);
         // evaluate the poly using ldt domain
         let evaluations = domain.evaluate(poly);
-        self.send_oracle_evaluations_unchecked(evaluations, degree_bound)?;
+        self.send_oracle_evaluations_unchecked(evaluations, degree_bound, localization_parameter)?;
         Ok(())
     }
 
     /// Send Reed-Solomon codes of a polynomial.
     /// Domain should be consistent with LDT that user provides.
-    /// todo: remove LDT, and check domain afterwards
+    /// Localization parameter is managed by LDT.
     pub fn send_oracle_evaluations(
         &mut self,
         msg: impl IntoIterator<Item = F>,
         degree_bound: usize,
         domain: Radix2CosetDomain<F>,
     ) -> Result<(), Error> {
-        assert!(
-            (self.domain_checker)(degree_bound, &domain),
-            "invalid domain"
-        );
-        self.send_oracle_evaluations_unchecked(msg, degree_bound)?;
+        let (expected_domain, localization_parameter) = self.ldt_info(degree_bound);
+        assert_eq!(expected_domain, domain, "inconsistent domain with LDT");
+        self.send_oracle_evaluations_unchecked(msg, degree_bound, localization_parameter)?;
         Ok(())
     }
 
@@ -261,45 +256,73 @@ where
         &mut self,
         msg: impl IntoIterator<Item = F>,
         degree_bound: usize,
+        localization_parameter: usize,
     ) -> Result<(), Error> {
         // encode the message
         let oracle = msg.into_iter().collect::<Vec<_>>();
-        let oracle_len = oracle.len();
+        self.set_length_and_localization(oracle.len(), localization_parameter);
         self.current_prover_pending_message()
             .reed_solomon_codes
             .push((oracle, degree_bound));
-        let current_prover_pending_message = self.current_prover_pending_message();
-        if current_prover_pending_message.oracle_length != 0 {
-            if oracle_len != current_prover_pending_message.oracle_length {
-                panic!("Oracles have different length in one round!");
-            }
-        } else {
-            current_prover_pending_message.oracle_length = oracle_len
-        }
         Ok(())
     }
 
-    /// Send prover message oracles.
-    /// Note that transcript will not do low-degree test on this oracle.
-    /// Returns the index of message.
+    /// Send prover message oracles without LDT. Each position will be an individual leaf (no localization).
     pub fn send_message_oracle(&mut self, msg: impl IntoIterator<Item = F>) -> Result<(), Error> {
+        self.send_message_oracle_with_localization(msg, 0)
+    }
+
+    /// Send prover message oracles without LDT. Encode each leaf as a coset of the oracle.
+    /// `localization_parameter` is log2(size of each coset).
+    /// For example, if the oracle is `[0,1,2,3,4,5,6,7]` and localization_parameter is 1, leaf will
+    /// be `[[0,4],[1,5],[2,6],[3,7]]`.
+    /// Larger localization parameter leads larger proof size, and each queried leaf is larger.
+    ///
+    /// # Panics
+    /// All oracles in the same round need to have same length and same localization parameter. This
+    /// function will panic if length or localization parameter is not consistent with previous oracle.
+    pub fn send_message_oracle_with_localization(
+        &mut self,
+        msg: impl IntoIterator<Item = F>,
+        localization_parameter: usize,
+    ) -> Result<(), Error> {
         // encode the message
         let oracle: Vec<_> = msg.into_iter().collect();
         debug_assert!(oracle.len().is_power_of_two());
-        let current_prover_pending_message = self.current_prover_pending_message();
-        if current_prover_pending_message.oracle_length != 0 {
-            if oracle.len() != current_prover_pending_message.oracle_length {
-                panic!("Oracles have different length in one round!");
-            }
-        } else {
-            current_prover_pending_message.oracle_length = oracle.len()
-        }
+        self.set_length_and_localization(oracle.len(), localization_parameter);
         // store the encoded prover message for generating proof
         self.current_prover_pending_message()
             .message_oracles
             .push(oracle);
 
         Ok(())
+    }
+
+    /// Set the oracle length and localization parameter of this round oracle.
+    /// # Panics
+    /// * This function will panic if current value is inconsistent with previously set value.
+    /// For example, if first oracle has length 128, and second oracle will have length 256, this function
+    /// will panic. Same for localization parameter.
+    ///
+    /// * This function will also panic if current pending message is not prover message.
+    fn set_length_and_localization(&mut self, oracle_length: usize, localization_parameter: usize) {
+        let current_prover_pending_message = self.current_prover_pending_message();
+        // set if incoming message is the first oracle
+        if current_prover_pending_message.reed_solomon_codes.len()
+            + current_prover_pending_message.message_oracles.len()
+            == 0
+        {
+            current_prover_pending_message.oracle_length = oracle_length;
+            current_prover_pending_message.localization_parameter = localization_parameter;
+            return;
+        }
+        // check consistency
+        if oracle_length != current_prover_pending_message.oracle_length {
+            panic!("Oracles have different length in one round");
+        }
+        if localization_parameter != current_prover_pending_message.localization_parameter {
+            panic!("oracles have different localization parameter in one round");
+        }
     }
 
     /// Send short message that does not need to be an oracle. The entire message will be included
@@ -363,10 +386,10 @@ where
     /// Get reference to current prover pending message.
     /// If current round pending message to `None`, current round message will become prover message type.
     /// Panic if current pending message is not prover message.
-    fn current_prover_pending_message(&mut self) -> &mut RecordingRoundOracle<F> {
+    fn current_prover_pending_message(&mut self) -> &mut PendingProverMessage<F> {
         if let PendingMessage::None = &self.pending_message_for_current_round {
             self.pending_message_for_current_round =
-                PendingMessage::ProverMessage(RecordingRoundOracle::default());
+                PendingMessage::ProverMessage(PendingProverMessage::default());
         }
         match &mut self.pending_message_for_current_round {
             PendingMessage::ProverMessage(msg) => msg,
@@ -407,6 +430,12 @@ where
             .expect("namespace not found")
             .verifier_message_locations
             .push(index);
+    }
+
+    /// returns evaluation domain and localization_parameter of codewords, maganed by LDT
+    #[inline]
+    fn ldt_info(&self, degree_bound: usize) -> (Radix2CosetDomain<F>, usize) {
+        (self.ldt_info)(degree_bound)
     }
 }
 
