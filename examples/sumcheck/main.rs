@@ -123,7 +123,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
             reed_solomon_code_degree_bound: vec![hx_degree_bound, px_degree_bound],
             oracle_length: public_input.evaluation_domain.size(),
             num_short_messages: 0,
-            localization_parameter: 0 // ignored
+            localization_parameter: 0, // ignored
         };
         transcript.receive_prover_current_round(namespace, expected_round_info);
     }
@@ -205,18 +205,21 @@ fn main() {
         claimed_sum,
     };
 
-    let proof =
-        BCSProof::generate_with_dummy_ldt::<SimpleSumcheckVerifier<Fr>, SimpleSumcheckProver<Fr>, _>(
-            sponge,
-            &vp,
-            &(),
-            &testing_poly,
-            &testing_poly,
-            mt_hash_parameters.clone(),
-            Radix2CosetDomain::new(evaluation_domain.clone(), Fr::one()),
-            2
-        )
-        .expect("fail to generate proof");
+    let proof = BCSProof::generate_with_dummy_ldt::<
+        SimpleSumcheckVerifier<Fr>,
+        SimpleSumcheckProver<Fr>,
+        _,
+    >(
+        sponge,
+        &vp,
+        &(),
+        &testing_poly,
+        &testing_poly,
+        mt_hash_parameters.clone(),
+        Radix2CosetDomain::new(evaluation_domain.clone(), Fr::one()),
+        2,
+    )
+    .expect("fail to generate proof");
 
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     let verifier_output = BCSVerifier::verify_with_dummy_ldt::<SimpleSumcheckVerifier<Fr>, _>(
@@ -226,7 +229,7 @@ fn main() {
         &testing_poly,
         mt_hash_parameters,
         Radix2CosetDomain::new(evaluation_domain.clone(), Fr::one()),
-        2
+        2,
     )
     .expect("fail to verify proof");
 

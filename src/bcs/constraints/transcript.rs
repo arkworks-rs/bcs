@@ -5,12 +5,12 @@ use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
+use ark_ldt::domain::Radix2CosetDomain;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::SynthesisError;
 use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
 use ark_sponge::Absorb;
 use ark_std::mem::take;
-use ark_ldt::domain::Radix2CosetDomain;
 
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
 where
@@ -47,7 +47,7 @@ where
     pub(crate) fn new_transcript(
         bcs_proof: &'a BCSProofVar<MT, MTG, F>,
         sponge: &'a mut S::Var,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a
+        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
     ) -> Self {
         Self::new_transcript_with_offset(bcs_proof, 0, sponge, ldt_info)
     }
@@ -56,7 +56,7 @@ where
         bcs_proof: &'a BCSProofVar<MT, MTG, F>,
         round_offset: usize,
         sponge: &'a mut S::Var,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a
+        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
     ) -> Self {
         let prover_short_messages: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
             .iter()
@@ -75,7 +75,7 @@ where
             bookkeeper: MessageBookkeeper::default(),
             reconstructed_verifer_messages: Vec::new(),
             pending_verifier_messages: Vec::new(),
-            ldt_info: Box::new(ldt_info)
+            ldt_info: Box::new(ldt_info),
         }
     }
 
@@ -90,12 +90,18 @@ where
     ) -> Result<(), SynthesisError> {
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
             // LDT is used, so replace its localization parameter with the one given by LDT
-            let localization_parameters_from_ldt = expected_message_info.reed_solomon_code_degree_bound.iter()
-                .map(|&degree|self.ldt_info(degree).1).collect::<Vec<_>>();
+            let localization_parameters_from_ldt = expected_message_info
+                .reed_solomon_code_degree_bound
+                .iter()
+                .map(|&degree| self.ldt_info(degree).1)
+                .collect::<Vec<_>>();
             // check all localization are equal, for consistency
-            localization_parameters_from_ldt.iter().for_each(|&p|assert_eq!(p,
-                                                                            localization_parameters_from_ldt[0],
-                                                                            "different localization parameters in one round is not allowed"));
+            localization_parameters_from_ldt.iter().for_each(|&p| {
+                assert_eq!(
+                    p, localization_parameters_from_ldt[0],
+                    "different localization parameters in one round is not allowed"
+                )
+            });
             expected_message_info.localization_parameter = localization_parameters_from_ldt[0]
         }
 

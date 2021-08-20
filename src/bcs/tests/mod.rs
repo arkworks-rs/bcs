@@ -79,7 +79,8 @@ fn test_bcs_no_ldt() {
 
     // verify if simulation transcript reconstructs correctly
     let mut sponge = PoseidonSponge::new(&poseidon_parameters());
-    let mut simulation_transcript = SimulationTranscript::new_transcript(&bcs_proof, &mut sponge, |_|panic!("ldt not used"));
+    let mut simulation_transcript =
+        SimulationTranscript::new_transcript(&bcs_proof, &mut sponge, |_| panic!("ldt not used"));
     MockTest1Verifier::restore_from_commit_phase(
         &ROOT_NAMESPACE,
         &(),

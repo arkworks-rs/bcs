@@ -41,7 +41,10 @@ where
     {
         // simulate main prove: reconstruct verifier messages to restore verifier state
         let (verifier_messages, bookkeeper, num_rounds_submitted) = {
-            let mut transcript = SimulationTranscript::new_transcript(proof, &mut sponge, |degree|L::ldt_info(ldt_params, degree));
+            let mut transcript =
+                SimulationTranscript::new_transcript(proof, &mut sponge, |degree| {
+                    L::ldt_info(ldt_params, degree)
+                });
             V::restore_from_commit_phase::<MT>(
                 &ROOT_NAMESPACE,
                 public_input,
@@ -85,7 +88,7 @@ where
                 &proof,
                 num_rounds_submitted,
                 &mut sponge,
-                |_|panic!("LDT transcript cannot send LDT oracle.")
+                |_| panic!("LDT transcript cannot send LDT oracle."),
             );
             L::restore_from_commit_phase(
                 ldt_params,

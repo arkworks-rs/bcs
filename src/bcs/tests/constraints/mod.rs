@@ -52,7 +52,7 @@ fn test_bcs_var_no_ldt() {
         SimulationTranscriptVar::<_, _, _, PoseidonSponge<_>>::new_transcript(
             &bcs_proof_var,
             &mut sponge,
-            |_|panic!("ldt not used")
+            |_| panic!("ldt not used"),
         );
     MockTest1Verifier::restore_from_commit_phase_var(
         &ROOT_NAMESPACE,
@@ -65,16 +65,11 @@ fn test_bcs_var_no_ldt() {
 
     // verify should have all enforced constraints satisfied
     let sponge = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());
-    let result =
-        BCSVerifierGadget::verify_with_ldt_disabled::<MockTest1Verifier<Fr>, PoseidonSponge<Fr>>(
-            cs.clone(),
-            sponge,
-            &bcs_proof_var,
-            &(),
-            &(),
-            &mt_hash_param,
-        )
-        .expect("error during verify");
+    let result = BCSVerifierGadget::verify_with_ldt_disabled::<
+        MockTest1Verifier<Fr>,
+        PoseidonSponge<Fr>,
+    >(cs.clone(), sponge, &bcs_proof_var, &(), &(), &mt_hash_param)
+    .expect("error during verify");
     assert!(result.value().unwrap());
 
     assert!(cs.is_satisfied().unwrap());

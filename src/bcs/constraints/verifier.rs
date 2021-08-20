@@ -8,6 +8,7 @@ use crate::ldt_trait::NoLDT;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
+use ark_ldt::domain::Radix2CosetDomain;
 use ark_r1cs_std::boolean::Boolean;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::fields::fp::FpVar;
@@ -15,7 +16,6 @@ use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use std::marker::PhantomData;
-use ark_ldt::domain::Radix2CosetDomain;
 
 pub struct BCSVerifierGadget<MT, MTG, CF>
 where
@@ -51,7 +51,10 @@ where
     {
         // simulate main prove
         let (verifier_messages, bookkeeper, num_rounds_submitted) = {
-            let mut transcript = SimulationTranscriptVar::new_transcript(proof, &mut sponge, |degree|L::ldt_info(ldt_params, degree));
+            let mut transcript =
+                SimulationTranscriptVar::new_transcript(proof, &mut sponge, |degree| {
+                    L::ldt_info(ldt_params, degree)
+                });
             V::restore_from_commit_phase_var(
                 &ROOT_NAMESPACE,
                 public_input,
@@ -93,7 +96,7 @@ where
                 proof,
                 num_rounds_submitted,
                 &mut sponge,
-                |_|panic!("LDT transcript cannot send LDT oracle.")
+                |_| panic!("LDT transcript cannot send LDT oracle."),
             );
             L::restore_from_commit_phase_var::<_, _, S>(
                 ldt_params,
@@ -141,8 +144,14 @@ where
         let all_paths = &proof.prover_oracles_mt_path;
         let all_mt_roots = &proof.prover_messages_mt_root;
 
-        assert_eq!(prover_messages_view.len() + ldt_prover_messages_view.len(), all_paths.len());
-        assert_eq!(prover_messages_view.len() + ldt_prover_messages_view.len(), all_mt_roots.len());
+        assert_eq!(
+            prover_messages_view.len() + ldt_prover_messages_view.len(),
+            all_paths.len()
+        );
+        assert_eq!(
+            prover_messages_view.len() + ldt_prover_messages_view.len(),
+            all_mt_roots.len()
+        );
 
         all_prover_oracles
             .zip(all_paths)
@@ -175,7 +184,12 @@ where
                             &hash_params.inner_params,
                             mt_root,
                             // flatten by concatenating cosets of all queries
-                            coset.iter().flatten().map(|x|x.clone()).collect::<Vec<_>>().as_slice(),
+                            coset
+                                .iter()
+                                .flatten()
+                                .map(|x| x.clone())
+                                .collect::<Vec<_>>()
+                                .as_slice(),
                         )?
                         .enforce_equal(&Boolean::TRUE)
                     })?;
@@ -218,9 +232,9 @@ where
         ldt_codeword_domain: Radix2CosetDomain<CF>,
         ldt_codeword_localization_parameter: usize,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
-        where
-            V: IOPVerifierWithGadget<S, CF>,
-            S: SpongeWithGadget<CF>,
+    where
+        V: IOPVerifierWithGadget<S, CF>,
+        S: SpongeWithGadget<CF>,
     {
         Self::verify::<V, NoLDT<CF>, S>(
             cs,

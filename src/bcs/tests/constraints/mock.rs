@@ -42,7 +42,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 2,
             num_short_messages: 1,
             oracle_length: 256,
-            localization_parameter: 2
+            localization_parameter: 2,
         };
         transcript.receive_prover_current_round(namespace, expected_info)?;
 
@@ -61,7 +61,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 1,
             num_short_messages: 1,
             oracle_length: 256,
-            localization_parameter: 0
+            localization_parameter: 0,
         };
         transcript.receive_prover_current_round(namespace, expected_info)?;
 
@@ -71,7 +71,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 0,
             num_short_messages: 1,
             oracle_length: 0,
-            localization_parameter: 0
+            localization_parameter: 0,
         };
         transcript.receive_prover_current_round(namespace, expected_info)?;
 

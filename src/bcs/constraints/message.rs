@@ -6,9 +6,7 @@ use ark_relations::r1cs::{Namespace, SynthesisError};
 use ark_std::borrow::Borrow;
 
 /// Constraint Gadget for `RoundOracleVar`
-pub trait RoundOracleVar<F: PrimeField> {
-
-}
+pub trait RoundOracleVar<F: PrimeField> {}
 
 #[derive(Clone)]
 pub struct SuccinctRoundOracleVar<F: PrimeField> {
@@ -56,11 +54,11 @@ impl<F: PrimeField> AllocVar<SuccinctRoundOracle<F>, F> for SuccinctRoundOracleV
         let short_messages = native
             .short_messages
             .iter()
-            .map(|msg|
-                msg
-                    .iter()
+            .map(|msg| {
+                msg.iter()
                     .map(|x| FpVar::new_variable(cs.clone(), || Ok(*x), mode))
-                    .collect::<Result<Vec<_>, _>>())
+                    .collect::<Result<Vec<_>, _>>()
+            })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             info,
@@ -79,21 +77,25 @@ pub struct SuccinctRoundOracleVarView<'a, F: PrimeField> {
 }
 
 impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
-
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
-    pub fn query(&mut self, position: &[Vec<Boolean<F>>]) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
+    pub fn query(
+        &mut self,
+        position: &[Vec<Boolean<F>>],
+    ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
         let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
         let log_oracle_length = ark_std::log2(self.oracle.info.oracle_length) as usize;
-        assert_eq!(log_oracle_length,log_coset_size + log_num_cosets);
+        assert_eq!(log_oracle_length, log_coset_size + log_num_cosets);
         // coset index = position % num_cosets = the least significant `log_num_cosets` bits of pos
         // element index in coset = position / num_cosets = all other bits
-        let coset_index = position.iter()
-            .map(|pos|pos[..log_num_cosets].to_vec())
+        let coset_index = position
+            .iter()
+            .map(|pos| pos[..log_num_cosets].to_vec())
             .collect::<Vec<_>>();
-        let element_index_in_coset = position.iter()
-            .map(|pos|pos[log_num_cosets..log_oracle_length].to_vec())
+        let element_index_in_coset = position
+            .iter()
+            .map(|pos| pos[log_num_cosets..log_oracle_length].to_vec())
             .collect::<Vec<_>>();
         let queried_coset = self.query_coset(&coset_index);
         queried_coset.into_iter()
@@ -117,7 +119,9 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
             self.current_query_pos + coset_index.len() <= self.oracle.queried_cosets.len(),
             "too many queries!"
         );
-        let result = self.oracle.queried_cosets[self.current_query_pos..self.current_query_pos + coset_index.len()].to_vec();
+        let result = self.oracle.queried_cosets
+            [self.current_query_pos..self.current_query_pos + coset_index.len()]
+            .to_vec();
         self.current_query_pos += coset_index.len();
         result
     }
