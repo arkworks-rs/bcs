@@ -65,7 +65,7 @@ fn test_bcs_var_no_ldt() {
     // verify should have all enforced constraints satisfied
     let sponge = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());
     let result =
-        BCSVerifierGadget::verify_without_ldt::<MockTest1Verifier<Fr>, PoseidonSponge<Fr>>(
+        BCSVerifierGadget::verify_with_ldt_disabled::<MockTest1Verifier<Fr>, PoseidonSponge<Fr>>(
             cs.clone(),
             sponge,
             &bcs_proof_var,

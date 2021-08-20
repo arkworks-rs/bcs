@@ -42,6 +42,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 2,
             num_short_messages: 1,
             oracle_length: 256,
+            localization_parameter: 2
         };
         transcript.receive_prover_current_round(namespace, &expected_info)?;
 
@@ -60,6 +61,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 1,
             num_short_messages: 1,
             oracle_length: 256,
+            localization_parameter: 0
         };
         transcript.receive_prover_current_round(namespace, &expected_info)?;
 
@@ -69,6 +71,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             num_message_oracles: 0,
             num_short_messages: 1,
             oracle_length: 0,
+            localization_parameter: 0
         };
         transcript.receive_prover_current_round(namespace, &expected_info)?;
 
@@ -118,7 +121,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
                 .into_iter(),
             )
             .try_for_each(|(left, right)| left.enforce_equal(&right))?;
-
+        assert!(cs.cs().is_satisfied().unwrap());
         let vm1_1 = verifier_messages[0][0]
             .clone()
             .try_into_field_elements()

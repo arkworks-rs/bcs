@@ -15,6 +15,7 @@ use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use std::marker::PhantomData;
+use ark_ldt::domain::Radix2CosetDomain;
 
 pub struct BCSVerifierGadget<MT, MTG, CF>
 where
@@ -117,7 +118,7 @@ where
             ldt_prover_messages_view.iter_mut().collect(),
             &ldt_verifier_messages,
         )?;
-
+        
         // verify the protocol
         let verifier_result_var = V::query_and_decide_var(
             cs.clone(),
@@ -129,29 +130,31 @@ where
             &verifier_messages,
             &bookkeeper,
         )?;
-
+        
         // verify all authentication paths
 
         let all_prover_oracles = prover_messages_view
             .iter()
-            .chain(ldt_prover_messages_view.iter())
             .chain(ldt_prover_messages_view.iter());
         // we clone all the paths because we need to replace its leaf position with verifier calculated one
         let all_paths = &proof.prover_oracles_mt_path;
         let all_mt_roots = &proof.prover_messages_mt_root;
 
+        assert_eq!(prover_messages_view.len() + ldt_prover_messages_view.len(), all_paths.len());
+        assert_eq!(prover_messages_view.len() + ldt_prover_messages_view.len(), all_mt_roots.len());
+
         all_prover_oracles
             .zip(all_paths)
             .zip(all_mt_roots)
             .try_for_each(|((round_oracle, paths), mt_root)| {
-                assert_eq!(round_oracle.queries.len(), paths.len());
+                assert_eq!(round_oracle.coset_queries.len(), paths.len());
                 assert_eq!(
-                    round_oracle.queries.len(),
-                    round_oracle.oracle.queried_leaves.len(),
+                    round_oracle.coset_queries.len(),
+                    round_oracle.oracle.queried_cosets.len(),
                     "insufficient queries in verifier code"
                 );
 
-                let mt_root = if round_oracle.queries.len() > 0 {
+                let mt_root = if round_oracle.coset_queries.len() > 0 {
                     mt_root
                         .as_ref()
                         .expect("round oracle has query but has no mt_root")
@@ -159,18 +162,19 @@ where
                     return Ok(()); /*no queries this round: no need to verify*/
                 };
                 round_oracle
-                    .queries
+                    .coset_queries
                     .iter()
-                    .zip(round_oracle.oracle.queried_leaves.iter())
+                    .zip(round_oracle.oracle.queried_cosets.iter())
                     .zip(paths.iter())
-                    .try_for_each(|((index, leaf), path)| {
+                    .try_for_each(|((index, coset), path)| {
                         let mut path = path.clone();
                         path.set_leaf_position(index.clone());
                         path.verify_membership(
                             &hash_params.leaf_params,
                             &hash_params.inner_params,
                             mt_root,
-                            leaf.as_slice(),
+                            // flatten by concatenating cosets of all queries
+                            coset.iter().flatten().map(|x|x.clone()).collect::<Vec<_>>().as_slice(),
                         )?
                         .enforce_equal(&Boolean::TRUE)
                     })?;
@@ -180,7 +184,7 @@ where
         Ok(verifier_result_var)
     }
 
-    pub fn verify_without_ldt<V, S>(
+    pub fn verify_with_ldt_disabled<V, S>(
         cs: ConstraintSystemRef<CF>,
         sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
@@ -198,7 +202,32 @@ where
             proof,
             public_input,
             verifier_parameter,
-            &(),
+            &None,
+            hash_params,
+        )
+    }
+
+    pub fn verify_with_dummy_ldt<V, S>(
+        cs: ConstraintSystemRef<CF>,
+        sponge: S::Var,
+        proof: &BCSProofVar<MT, MTG, CF>,
+        public_input: &V::PublicInputVar,
+        verifier_parameter: &V::VerifierParameter,
+        hash_params: &MTHashParametersVar<CF, MT, MTG>,
+        ldt_codeword_domain: Radix2CosetDomain<CF>,
+        ldt_codeword_localization_parameter: usize,
+    ) -> Result<V::VerifierOutputVar, SynthesisError>
+        where
+            V: IOPVerifierWithGadget<S, CF>,
+            S: SpongeWithGadget<CF>,
+    {
+        Self::verify::<V, NoLDT<CF>, S>(
+            cs,
+            sponge,
+            proof,
+            public_input,
+            verifier_parameter,
+            &Some((ldt_codeword_domain, ldt_codeword_localization_parameter)),
             hash_params,
         )
     }

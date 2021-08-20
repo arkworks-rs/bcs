@@ -1,5 +1,4 @@
 use crate::bcs::message::{ProverRoundMessageInfo, SuccinctRoundOracle, VerifierMessage};
-use crate::Error;
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
@@ -8,26 +7,7 @@ use ark_std::borrow::Borrow;
 
 /// Constraint Gadget for `RoundOracleVar`
 pub trait RoundOracleVar<F: PrimeField> {
-    /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
-    fn query(&mut self, position: &[Vec<Boolean<F>>]) -> Result<Vec<Vec<FpVar<F>>>, Error>;
 
-    /// Number of reed_solomon_codes oracles in this round.
-    fn num_reed_solomon_codes_oracles(&self) -> usize {
-        self.get_info().reed_solomon_code_degree_bound.len()
-    }
-
-    /// length of each oracle
-    fn oracle_length(&self) -> usize {
-        self.get_info().oracle_length
-    }
-
-    /// Get oracle info, including number of oracles for each type and degree bound of each RS code oracle.
-    fn get_info(&self) -> ProverRoundMessageInfo;
-
-    /// Get degree bound of all reed-solomon codes in this round.
-    fn get_degree_bound(&self) -> Vec<usize> {
-        self.get_info().reed_solomon_code_degree_bound
-    }
 }
 
 #[derive(Clone)]
@@ -35,7 +15,7 @@ pub struct SuccinctRoundOracleVar<F: PrimeField> {
     /// Oracle Info
     pub info: ProverRoundMessageInfo,
     /// Leaves at query indices.
-    pub queried_leaves: Vec<Vec<FpVar<F>>>,
+    pub queried_cosets: Vec<Vec<Vec<FpVar<F>>>>,
     // note that queries will be provided by verifier instead
     /// Store the non-oracle IP messages in this round
     pub short_messages: Vec<Vec<FpVar<F>>>,
@@ -47,7 +27,7 @@ impl<F: PrimeField> SuccinctRoundOracleVar<F> {
     pub fn get_view(&self) -> SuccinctRoundOracleVarView<F> {
         SuccinctRoundOracleVarView {
             oracle: &self,
-            queries: Vec::new(),
+            coset_queries: Vec::new(),
             current_query_pos: 0,
         }
     }
@@ -63,33 +43,28 @@ impl<F: PrimeField> AllocVar<SuccinctRoundOracle<F>, F> for SuccinctRoundOracleV
         let native = f()?;
         let native = native.borrow();
         let info = native.info.clone();
-        let queried_leaves: Result<Vec<_>, _> = native
-            .queried_leaves
+        let queried_cosets = native
+            .queried_cosets
             .iter()
-            .map(|leaf| {
-                let leaf_var: Result<Vec<_>, _> = leaf
+            .map(|coset_for_all_oracles| {
+                coset_for_all_oracles
                     .iter()
-                    .map(|x| FpVar::new_variable(cs.clone(), || Ok(x.clone()), mode))
-                    .collect();
-                leaf_var
+                    .map(|x| Vec::new_variable(cs.clone(), || Ok(x.clone()), mode))
+                    .collect::<Result<Vec<_>, _>>()
             })
-            .collect();
-        let queried_leaves = queried_leaves?;
-        let short_messages: Result<Vec<_>, _> = native
+            .collect::<Result<Vec<_>, _>>()?;
+        let short_messages = native
             .short_messages
             .iter()
-            .map(|msg| {
-                let msg_var: Result<Vec<_>, _> = msg
+            .map(|msg|
+                msg
                     .iter()
                     .map(|x| FpVar::new_variable(cs.clone(), || Ok(*x), mode))
-                    .collect();
-                msg_var
-            })
-            .collect();
-        let short_messages = short_messages?;
+                    .collect::<Result<Vec<_>, _>>())
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             info,
-            queried_leaves,
+            queried_cosets,
             short_messages,
         })
     }
@@ -99,37 +74,72 @@ impl<F: PrimeField> AllocVar<SuccinctRoundOracle<F>, F> for SuccinctRoundOracleV
 pub struct SuccinctRoundOracleVarView<'a, F: PrimeField> {
     pub(crate) oracle: &'a SuccinctRoundOracleVar<F>,
     /// queries calculated by the verifier
-    pub queries: Vec<Vec<Boolean<F>>>,
+    pub coset_queries: Vec<Vec<Boolean<F>>>,
     current_query_pos: usize,
 }
 
 impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
-    pub fn query(
-        &mut self,
-        position: &[Vec<Boolean<F>>],
-    ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
-        self.queries.extend_from_slice(position);
+
+    /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
+    pub fn query(&mut self, position: &[Vec<Boolean<F>>]) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
+        // convert the position to coset_index
+        let log_coset_size = self.get_info().localization_parameter;
+        let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
+        // coset index = position % num_cosets = the least significant `log_num_cosets` bits of pos
+        // element index in coset = position / num_cosets = all other bits
+        let coset_index = position.iter()
+            .map(|pos|pos[..log_num_cosets].to_vec())
+            .collect::<Vec<_>>();
+        let element_index_in_coset = position.iter()
+            .map(|pos|pos[log_num_cosets..].to_vec())
+            .collect::<Vec<_>>();
+        let queried_coset = self.query_coset(&coset_index);
+
+        queried_coset.into_iter()
+            .zip(element_index_in_coset.into_iter())
+            .map(|(coset_for_all_oracles, element_index)|{
+                coset_for_all_oracles.into_iter()
+                    // number of constraints here is O(Log(coset size))
+                    .map(|coset|FpVar::conditionally_select_power_of_two_vector(&element_index, &coset))
+                    .collect::<Result<Vec<FpVar<_>>, _>>()
+            }).collect::<Result<Vec<Vec<FpVar<_>>>, _>>()
+    }
+
+    /// Return the queried coset at `coset_index` of all oracles.
+    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
+    pub fn query_coset(&mut self, coset_index: &[Vec<Boolean<F>>]) -> Vec<Vec<Vec<FpVar<F>>>> {
+        self.coset_queries.extend_from_slice(coset_index);
         assert!(
-            self.current_query_pos + position.len() <= self.oracle.queried_leaves.len(),
-            "too many queries"
+            self.current_query_pos + coset_index.len() <= self.oracle.queried_cosets.len(),
+            "too many queries!"
         );
-        let result = self.oracle.queried_leaves
-            [self.current_query_pos..self.current_query_pos + position.len()]
-            .to_vec();
-        Ok(result)
+        let result = self.oracle.queried_cosets[self.current_query_pos..self.current_query_pos + coset_index.len()].to_vec();
+        self.current_query_pos += coset_index.len();
+        result
     }
 
-    /// Return the leaves of at `position` of reed_solomon code oracle. `result[i][j]` is leaf `i` at oracle `j`.
-    /// This method is convenient for LDT.
-    /// Query position should be a coset, that has a starting index and stride.
-    pub fn query_rs_code(
-        &mut self,
-        _starting_index: Vec<Boolean<F>>,
-        _stride: u32,
-    ) -> Result<Vec<Vec<FpVar<F>>>, Error> {
-        todo!("implement this once LDT implementation is done.")
+    /// Number of reed_solomon_codes oracles in this round.
+    pub fn num_reed_solomon_codes_oracles(&self) -> usize {
+        self.get_info().reed_solomon_code_degree_bound.len()
     }
 
+    /// length of each oracle
+    pub fn oracle_length(&self) -> usize {
+        self.get_info().oracle_length
+    }
+
+    /// Get oracle info, including number of oracles for each type and degree bound of each RS code oracle.
+    #[inline]
+    pub fn get_info(&self) -> &ProverRoundMessageInfo {
+        &self.oracle.info
+    }
+
+    /// Get degree bound of all reed-solomon codes in this round.
+    pub fn get_degree_bound(&self) -> Vec<usize> {
+        self.get_info().reed_solomon_code_degree_bound.clone()
+    }
+
+    /// Get non-oracle `i`th non-oracle short message in this round.
     pub fn get_short_message(&self, index: usize) -> Vec<FpVar<F>> {
         self.oracle.short_messages[index].clone()
     }
