@@ -85,22 +85,26 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
         let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
+        let log_oracle_length = ark_std::log2(self.oracle.info.oracle_length) as usize;
+        assert_eq!(log_oracle_length,log_coset_size + log_num_cosets);
         // coset index = position % num_cosets = the least significant `log_num_cosets` bits of pos
         // element index in coset = position / num_cosets = all other bits
         let coset_index = position.iter()
             .map(|pos|pos[..log_num_cosets].to_vec())
             .collect::<Vec<_>>();
         let element_index_in_coset = position.iter()
-            .map(|pos|pos[log_num_cosets..].to_vec())
+            .map(|pos|pos[log_num_cosets..log_oracle_length].to_vec())
             .collect::<Vec<_>>();
         let queried_coset = self.query_coset(&coset_index);
-
         queried_coset.into_iter()
             .zip(element_index_in_coset.into_iter())
             .map(|(coset_for_all_oracles, element_index)|{
                 coset_for_all_oracles.into_iter()
                     // number of constraints here is O(Log(coset size))
-                    .map(|coset|FpVar::conditionally_select_power_of_two_vector(&element_index, &coset))
+                    .map(|coset|
+                        // `conditionally_select_power_of_two_vector` need big endian position
+                        FpVar::conditionally_select_power_of_two_vector(&element_index.clone().into_iter().rev().collect::<Vec<_>>(),
+                                                                        &coset))
                     .collect::<Result<Vec<FpVar<_>>, _>>()
             }).collect::<Result<Vec<Vec<FpVar<_>>>, _>>()
     }
