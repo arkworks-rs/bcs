@@ -51,7 +51,7 @@ where
     {
         // simulate main prove
         let (verifier_messages, bookkeeper, num_rounds_submitted) = {
-            let mut transcript = SimulationTranscriptVar::new_transcript(proof, &mut sponge);
+            let mut transcript = SimulationTranscriptVar::new_transcript(proof, &mut sponge, |degree|L::ldt_info(ldt_params, degree));
             V::restore_from_commit_phase_var(
                 &ROOT_NAMESPACE,
                 public_input,
@@ -93,6 +93,7 @@ where
                 proof,
                 num_rounds_submitted,
                 &mut sponge,
+                |_|panic!("LDT transcript cannot send LDT oracle.")
             );
             L::restore_from_commit_phase_var::<_, _, S>(
                 ldt_params,
@@ -118,7 +119,7 @@ where
             ldt_prover_messages_view.iter_mut().collect(),
             &ldt_verifier_messages,
         )?;
-        
+
         // verify the protocol
         let verifier_result_var = V::query_and_decide_var(
             cs.clone(),
@@ -130,7 +131,7 @@ where
             &verifier_messages,
             &bookkeeper,
         )?;
-        
+
         // verify all authentication paths
 
         let all_prover_oracles = prover_messages_view

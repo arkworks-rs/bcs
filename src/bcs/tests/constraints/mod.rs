@@ -52,6 +52,7 @@ fn test_bcs_var_no_ldt() {
         SimulationTranscriptVar::<_, _, _, PoseidonSponge<_>>::new_transcript(
             &bcs_proof_var,
             &mut sponge,
+            |_|panic!("ldt not used")
         );
     MockTest1Verifier::restore_from_commit_phase_var(
         &ROOT_NAMESPACE,

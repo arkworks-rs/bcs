@@ -467,6 +467,10 @@ pub struct SimulationTranscript<
 
     pending_verifier_messages: Vec<VerifierMessage<F>>,
     pub(crate) bookkeeper: MessageBookkeeper,
+
+    /// Given the degree bound of polynomial, return the evaluation domain and localization parameter.
+    /// **Domain for all low-degree oracles are managed by this function.**
+    ldt_info: Box<dyn Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a>,
 }
 
 impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
@@ -475,8 +479,10 @@ where
     P::InnerDigest: Absorb,
 {
     /// Returns a wrapper for BCS proof so that verifier can reconstruct verifier messages by simulating commit phase easily.
-    pub(crate) fn new_transcript(bcs_proof: &'a BCSProof<P, F>, sponge: &'a mut S) -> Self {
-        Self::new_transcript_with_offset(bcs_proof, 0, sponge)
+    pub(crate) fn new_transcript(bcs_proof: &'a BCSProof<P, F>,
+                                 sponge: &'a mut S,
+                                 ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a) -> Self {
+        Self::new_transcript_with_offset(bcs_proof, 0, sponge, ldt_info)
     }
 
     /// Returns a wrapper for BCS proof and first `round_offset` messages are ignored.
@@ -484,6 +490,7 @@ where
         bcs_proof: &'a BCSProof<P, F>,
         round_offset: usize,
         sponge: &'a mut S,
+        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a
     ) -> Self {
         let prover_short_messages: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
             .iter()
@@ -502,6 +509,7 @@ where
             bookkeeper: MessageBookkeeper::default(),
             reconstructed_verifer_messages: Vec::new(),
             pending_verifier_messages: Vec::new(),
+            ldt_info: Box::new(ldt_info)
         }
     }
 
@@ -512,18 +520,32 @@ where
 
     /// Receive prover's current round messages, which can possibly contain multiple oracles with same size.
     /// This function will absorb the merkle tree root and short messages (if any).
+    ///
+    /// If the function contains low-degree oracle, localization parameter in `expected_message_info` will be ignored,
+    /// because localization parameter is managed by LDT.
     /// # Panic
     /// This function will panic is prover message structure contained in proof is not consistent with `expected_message_structure`.
     pub fn receive_prover_current_round(
         &mut self,
         ns: &NameSpace,
-        expected_message_info: &ProverRoundMessageInfo,
+        mut expected_message_info: ProverRoundMessageInfo,
     ) {
+        if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
+            // LDT is used, so replace its localization parameter with the one given by LDT
+            let localization_parameters_from_ldt = expected_message_info.reed_solomon_code_degree_bound.iter()
+                .map(|&degree|self.ldt_info(degree).1).collect::<Vec<_>>();
+            // check all localization are equal, for consistency
+            localization_parameters_from_ldt.iter().for_each(|&p|assert_eq!(p,
+                                                                        localization_parameters_from_ldt[0],
+                                                                        "different localization parameters in one round is not allowed"));
+            expected_message_info.localization_parameter = localization_parameters_from_ldt[0]
+        }
+
         let index = self.current_prover_round;
         self.current_prover_round += 1;
 
         assert_eq!(
-            expected_message_info, &self.prover_messages_info[index],
+            &expected_message_info, &self.prover_messages_info[index],
             "prover message is not what verifier want at current round"
         );
 
@@ -605,6 +627,11 @@ where
             .expect("namespace not found")
             .verifier_message_locations
             .push(index);
+    }
+
+    /// returns the evaluation domain used by LDT and localization parameter, given the degree bound
+    fn ldt_info(&self, degree: usize) -> (Radix2CosetDomain<F>, usize) {
+        (self.ldt_info)(degree)
     }
 
     #[cfg(test)]

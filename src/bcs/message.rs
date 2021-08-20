@@ -125,7 +125,7 @@ impl<F: PrimeField> PendingProverMessage<F> {
                 .collect(),
             localization_parameter: self.localization_parameter,
             num_short_messages: self.short_messages.len(),
-            num_message_oracles: self.reed_solomon_codes.len() + self.message_oracles.len(),
+            num_message_oracles: self.message_oracles.len(),
         };
         let recording_oracle = RecordingRoundOracle {
             info,

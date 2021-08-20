@@ -110,7 +110,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             oracle_length: 256,
             localization_parameter: 2,
         };
-        transcript.receive_prover_current_round(namespace, &expected_info);
+        transcript.receive_prover_current_round(namespace, expected_info);
 
         // verifier send
         transcript.squeeze_verifier_field_elements(&[
@@ -133,7 +133,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             oracle_length: 256,
             localization_parameter: 0,
         };
-        transcript.receive_prover_current_round(namespace, &expected_info);
+        transcript.receive_prover_current_round(namespace, expected_info);
 
         // prover send2
         let expected_info = ProverRoundMessageInfo {
@@ -143,7 +143,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             oracle_length: 0,
             localization_parameter: 0,
         };
-        transcript.receive_prover_current_round(namespace, &expected_info);
+        transcript.receive_prover_current_round(namespace, expected_info);
     }
 
     fn initial_state_for_query_and_decision_phase(
