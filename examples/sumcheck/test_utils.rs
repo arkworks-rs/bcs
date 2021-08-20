@@ -14,7 +14,7 @@ impl Config for FieldMTConfig {
     type Leaf = [Fr];
     type LeafDigest = Fr;
     type LeafInnerDigestConverter = IdentityDigestConverter<Fr>;
-    // type InnerDigest = Fr;
+    type InnerDigest = Fr;
     type LeafHash = H;
     type TwoToOneHash = TwoToOneH;
 }
