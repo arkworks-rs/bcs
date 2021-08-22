@@ -3,7 +3,7 @@ use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
 use crate::bcs::MTHashParameters;
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
-use crate::ldt_trait::{NoLDT, LDT};
+use crate::ldt::{NoLDT, LDT};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::Path;

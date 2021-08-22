@@ -10,7 +10,7 @@ use crate::bcs::verifier::BCSVerifier;
 use crate::bcs::MTHashParameters;
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
-use crate::ldt_trait::{NoLDT, LDT};
+use crate::ldt::{NoLDT, LDT};
 use crate::test_utils::poseidon_parameters;
 use ark_crypto_primitives::crh::poseidon;
 use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};

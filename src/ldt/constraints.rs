@@ -1,6 +1,6 @@
 use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::ldt_trait::{NoLDT, LDT};
+use crate::ldt::{NoLDT, LDT};
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;

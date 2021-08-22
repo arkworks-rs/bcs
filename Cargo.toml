@@ -20,7 +20,7 @@ ark-poly = {version = "^0.3.0", default-features = false }
 ark-sponge = {version = "^0.3.0", default-features = false}
 ark-crypto-primitives = {version = "^0.3.0", default-features = false}
 ark-std = { version = "^0.3.0", default-features = false }
-ark-ldt = {git = "https://github.com/arkworks-rs/ldt", branch="experimental", default-features = false}
+ark-ldt = {git = "https://github.com/arkworks-rs/ldt", branch="clone_fix", default-features = false}
 
 ark-relations = { version = "^0.3.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.3.1", default-features = false, optional = true }

@@ -1,5 +1,6 @@
 #[cfg(feature = "r1cs")]
 pub mod constraints;
+pub mod rl_ldt;
 
 use crate::bcs::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};
 use crate::bcs::transcript::{SimulationTranscript, Transcript};
@@ -7,13 +8,11 @@ use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_sponge::{Absorb, CryptographicSponge};
 use std::marker::PhantomData;
 
 /// Trait for LDT, which is an public coin IOP.
 pub trait LDT<F: PrimeField + Absorb> {
-    type LDTProof: Clone + CanonicalSerialize + CanonicalDeserialize;
     type LDTParameters: Clone;
 
     /// Given the degree bound of codeword, return the expected evaluation domain and localization_parameter.
@@ -67,7 +66,7 @@ impl<F: PrimeField + Absorb> NoLDT<F> {
 }
 
 impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
-    type LDTProof = ();
+
     /// If LDTParameters is None, `ldt_info` will panic, so transcript would not allow low degree oracles to be sent.
     type LDTParameters = Option<(Radix2CosetDomain<F>, usize)>;
 

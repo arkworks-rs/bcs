@@ -21,7 +21,7 @@ pub mod iop;
 pub mod bcs;
 /// Defines trait for performing LDT.
 /// TODO: move this to `ark-ldt`
-pub mod ldt_trait;
+pub mod ldt;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
