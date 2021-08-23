@@ -234,7 +234,7 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
         self.queried_coset_index.extend_from_slice(coset_index);
         coset_index
             .iter()
-            .map(|coset_index| self.all_coset_elements[*coset_index].clone())
+            .map(|coset_index| self.all_coset_elements[*coset_index % self.all_coset_elements.len()].clone())
             .collect()
     }
 
@@ -322,4 +322,18 @@ pub enum VerifierMessage<F: PrimeField> {
     Bits(Vec<bool>),
     /// bytes
     Bytes(Vec<u8>),
+}
+
+impl<F: PrimeField> VerifierMessage<F> {
+    pub fn try_into_field_elements(self) -> Option<Vec<F>> {
+        if let Self::FieldElements(x) = self {Some(x)} else {None}
+    }
+
+    pub fn try_into_bits(self) -> Option<Vec<bool>> {
+        if let Self::Bits(x) = self {Some(x)} else {None}
+    }
+
+    pub fn try_into_bytes(self) -> Option<Vec<u8>> {
+        if let Self::Bytes(x) = self {Some(x)} else {None}
+    }
 }
