@@ -17,7 +17,7 @@ use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};
 use ark_sponge::poseidon::PoseidonSponge;
 use ark_sponge::CryptographicSponge;
 
-pub(crate) type Fr = ark_ed_on_bls12_381::Fr;
+pub(crate) type Fr = ark_bls12_381::Fr;
 pub(crate) type H = poseidon::CRH<Fr>;
 pub(crate) type TwoToOneH = poseidon::TwoToOneCRH<Fr>;
 

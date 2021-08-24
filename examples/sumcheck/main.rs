@@ -20,6 +20,9 @@ use ark_sponge::poseidon::PoseidonSponge;
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
 use ark_std::{test_rng, One, Zero};
+use ark_ldt::fri::FRIParameters;
+use ark_bcs::ldt::rl_ldt::{LinearCombinationFRI, LinearCombinationFRIParameters};
+
 pub struct SimpleSumcheckProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
@@ -185,7 +188,15 @@ fn main() {
     let mut rng = test_rng();
     let poly = DensePolynomial::<Fr>::rand(69, &mut rng);
     let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
-    let evaluation_domain = Radix2EvaluationDomain::new(128).unwrap();
+    let evaluation_domain = Radix2EvaluationDomain::new(256).unwrap();
+    let fri_parameters = FRIParameters::new(128,
+                                           vec![1,2,1],
+                                           Radix2CosetDomain::new(evaluation_domain,
+                                                                                   Fr::one()));
+    let ldt_parameter = LinearCombinationFRIParameters{
+        fri_parameters,
+        num_queries: 1
+    };
     let claimed_sum: Fr = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
         .evaluate(&poly)
         .into_iter()
@@ -205,9 +216,10 @@ fn main() {
         claimed_sum,
     };
 
-    let proof = BCSProof::generate_with_dummy_ldt::<
+    let proof = BCSProof::generate::<
         SimpleSumcheckVerifier<Fr>,
         SimpleSumcheckProver<Fr>,
+        LinearCombinationFRI<Fr>,
         _,
     >(
         sponge,
@@ -215,21 +227,19 @@ fn main() {
         &(),
         &testing_poly,
         &testing_poly,
+        &ldt_parameter,
         mt_hash_parameters.clone(),
-        Radix2CosetDomain::new(evaluation_domain.clone(), Fr::one()),
-        2,
     )
     .expect("fail to generate proof");
 
     let sponge = PoseidonSponge::new(&poseidon_parameters());
-    let verifier_output = BCSVerifier::verify_with_dummy_ldt::<SimpleSumcheckVerifier<Fr>, _>(
+    let verifier_output = BCSVerifier::verify::<SimpleSumcheckVerifier<Fr>,LinearCombinationFRI<Fr>, _>(
         sponge,
         &proof,
         &vp,
         &testing_poly,
+        &ldt_parameter,
         mt_hash_parameters,
-        Radix2CosetDomain::new(evaluation_domain.clone(), Fr::one()),
-        2,
     )
     .expect("fail to verify proof");
 

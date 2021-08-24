@@ -188,6 +188,7 @@ where
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
             // generate merkle tree
             // extract short messages
+            println!("submit prover current round: localization: {:?}", round_msg.localization_parameter);
             let (mt, recording_oracle) =
                 round_msg.into_merkle_tree_and_recording_oracle(&self.hash_params)?;
             // if this round prover message contains oracle messages, absorb merkle tree root

@@ -145,7 +145,7 @@ impl<F: PrimeField> PendingProverMessage<F> {
             return Vec::new();
         }
         let coset_size = 1 << self.localization_parameter;
-        debug_assert_eq!(self.oracle_length & coset_size, 0);
+        debug_assert_eq!(self.oracle_length % coset_size, 0);
         let num_cosets = self.oracle_length / coset_size;
         let stride = num_cosets;
         // axes: [coset index, oracle index, element index in coset]
@@ -232,10 +232,12 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
     fn query_coset(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
         // record the coset query
         self.queried_coset_index.extend_from_slice(coset_index);
-        coset_index
+        let result = coset_index
             .iter()
             .map(|coset_index| self.all_coset_elements[*coset_index % self.all_coset_elements.len()].clone())
-            .collect()
+            .collect::<Vec<_>>();
+        println!("query coset: coset len {:?}", result[0][0].len()); // for debug
+        result
     }
 
     fn num_reed_solomon_codes_oracles(&self) -> usize {
