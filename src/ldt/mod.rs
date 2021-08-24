@@ -66,7 +66,6 @@ impl<F: PrimeField + Absorb> NoLDT<F> {
 }
 
 impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
-
     /// If LDTParameters is None, `ldt_info` will panic, so transcript would not allow low degree oracles to be sent.
     type LDTParameters = Option<(Radix2CosetDomain<F>, usize)>;
 

@@ -206,6 +206,10 @@ impl ProverRoundMessageInfo {
     pub fn num_reed_solomon_codes_oracles(&self) -> usize {
         self.reed_solomon_code_degree_bound.len()
     }
+
+    pub fn num_oracles(&self) -> usize {
+        self.num_reed_solomon_codes_oracles() + self.num_message_oracles
+    }
 }
 
 impl<F: PrimeField> RecordingRoundOracle<F> {
@@ -234,9 +238,10 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
         self.queried_coset_index.extend_from_slice(coset_index);
         let result = coset_index
             .iter()
-            .map(|coset_index| self.all_coset_elements[*coset_index % self.all_coset_elements.len()].clone())
+            .map(|coset_index| {
+                self.all_coset_elements[*coset_index % self.all_coset_elements.len()].clone()
+            })
             .collect::<Vec<_>>();
-        println!("query coset: coset len {:?}", result[0][0].len()); // for debug
         result
     }
 
@@ -328,14 +333,26 @@ pub enum VerifierMessage<F: PrimeField> {
 
 impl<F: PrimeField> VerifierMessage<F> {
     pub fn try_into_field_elements(self) -> Option<Vec<F>> {
-        if let Self::FieldElements(x) = self {Some(x)} else {None}
+        if let Self::FieldElements(x) = self {
+            Some(x)
+        } else {
+            None
+        }
     }
 
     pub fn try_into_bits(self) -> Option<Vec<bool>> {
-        if let Self::Bits(x) = self {Some(x)} else {None}
+        if let Self::Bits(x) = self {
+            Some(x)
+        } else {
+            None
+        }
     }
 
     pub fn try_into_bytes(self) -> Option<Vec<u8>> {
-        if let Self::Bytes(x) = self {Some(x)} else {None}
+        if let Self::Bytes(x) = self {
+            Some(x)
+        } else {
+            None
+        }
     }
 }

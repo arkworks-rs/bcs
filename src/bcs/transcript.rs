@@ -4,7 +4,7 @@ use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 
 use crate::bcs::message::{
     PendingProverMessage, ProverRoundMessageInfo, RecordingRoundOracle, RoundOracle,
-    VerifierMessage,
+    SuccinctRoundOracle, VerifierMessage,
 };
 use crate::bcs::prover::BCSProof;
 use crate::bcs::MTHashParameters;
@@ -188,7 +188,6 @@ where
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
             // generate merkle tree
             // extract short messages
-            println!("submit prover current round: localization: {:?}", round_msg.localization_parameter);
             let (mt, recording_oracle) =
                 round_msg.into_merkle_tree_and_recording_oracle(&self.hash_params)?;
             // if this round prover message contains oracle messages, absorb merkle tree root
@@ -507,6 +506,34 @@ where
             prover_short_messages,
             prover_messages_info,
             prover_mt_roots: &bcs_proof.prover_messages_mt_root[round_offset..],
+            sponge,
+            current_prover_round: 0,
+            bookkeeper: MessageBookkeeper::default(),
+            reconstructed_verifer_messages: Vec::new(),
+            pending_verifier_messages: Vec::new(),
+            ldt_info: Box::new(ldt_info),
+        }
+    }
+
+    /// Returns a wrapper for BCS proof and first `round_offset` messages are ignored.
+    pub(crate) fn from_prover_messages(
+        prover_iop_messages_by_round: &'a [SuccinctRoundOracle<F>],
+        prover_iop_messages_mt_roots_by_round: &'a [Option<P::InnerDigest>],
+        sponge: &'a mut S,
+        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
+    ) -> Self {
+        let prover_short_messages: Vec<_> = prover_iop_messages_by_round
+            .iter()
+            .map(|msg| &msg.short_messages)
+            .collect();
+        let prover_messages_info = prover_iop_messages_by_round
+            .iter()
+            .map(|msg| msg.get_view().get_info())
+            .collect();
+        Self {
+            prover_short_messages,
+            prover_messages_info,
+            prover_mt_roots: &prover_iop_messages_mt_roots_by_round,
             sponge,
             current_prover_round: 0,
             bookkeeper: MessageBookkeeper::default(),
