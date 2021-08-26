@@ -50,7 +50,9 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
         transcript
             .send_message_oracle_with_localization(msg3, 2)
             .unwrap();
-        transcript.submit_prover_current_round(namespace).unwrap();
+        transcript
+            .submit_prover_current_round(namespace, msg_trace!("mock send"))
+            .unwrap();
 
         // verifier send
         let vm1 = transcript.squeeze_verifier_field_elements(&[
@@ -59,11 +61,11 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
             FieldElementSize::Full,
         ]);
         let vm2 = transcript.squeeze_verifier_bytes(16);
-        transcript.submit_verifier_current_round(namespace);
+        transcript.submit_verifier_current_round(namespace, msg_trace!("mock send"));
 
         // verifier send2
         transcript.squeeze_verifier_bits(19);
-        transcript.submit_verifier_current_round(namespace);
+        transcript.submit_verifier_current_round(namespace, msg_trace!("mock send2"));
 
         // prover send
         let msg1 = vm1.into_iter().map(|x| x.square());
@@ -73,12 +75,16 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
             F::from(x) + rhs
         });
         transcript.send_message_oracle(msg2).unwrap();
-        transcript.submit_prover_current_round(namespace).unwrap();
+        transcript
+            .submit_prover_current_round(namespace, msg_trace!("mock send2"))
+            .unwrap();
 
         // prover send 2
         let msg1 = (0..6).map(|_| F::rand(&mut rng));
         transcript.send_message(msg1);
-        transcript.submit_prover_current_round(namespace).unwrap();
+        transcript
+            .submit_prover_current_round(namespace, msg_trace!("mock send3"))
+            .unwrap();
 
         Ok(())
     }

@@ -1,5 +1,8 @@
 mod test_utils;
 
+#[macro_use]
+extern crate ark_bcs;
+
 use crate::test_utils::{poseidon_parameters, FieldMTConfig};
 use ark_bcs::bcs::message::{ProverRoundMessageInfo, RoundOracle, VerifierMessage};
 use ark_bcs::bcs::prover::BCSProof;
@@ -96,7 +99,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheckProver<F> {
         transcript.send_univariate_polynomial(hx_degree_bound, &hx)?;
         transcript.send_univariate_polynomial(px_degree_bound, &px)?;
 
-        transcript.submit_prover_current_round(namespace)?;
+        transcript.submit_prover_current_round(namespace, msg_trace!("sumcheck hx, px"))?;
         Ok(())
     }
 }

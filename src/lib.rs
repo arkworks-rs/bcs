@@ -12,6 +12,10 @@
 #[macro_use]
 extern crate derivative;
 
+/// Defines some helper to debug user's IOP protocol.
+#[macro_use]
+pub mod tracer;
+
 /// A public coin, leaf handling, interactive oracle proof protocol.
 /// Prover sends out messages that can be encoded to field elements. Verifier sample field element as message.
 pub mod iop;

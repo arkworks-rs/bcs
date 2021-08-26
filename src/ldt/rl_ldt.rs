@@ -60,7 +60,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 .map(|_| FieldElementSize::Full)
                 .collect::<Vec<_>>(),
         );
-        ldt_transcript.submit_verifier_current_round(&ROOT_NAMESPACE);
+        ldt_transcript
+            .submit_verifier_current_round(&ROOT_NAMESPACE, msg_trace!("ldt random coefficeints"));
 
         let mut result_codewords = (0..param.domain.size())
             .map(|_| F::zero())
@@ -97,7 +98,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 |(&localization_current, &localization_next)| -> Result<(), Error> {
                     let alpha = ldt_transcript
                         .squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
-                    ldt_transcript.submit_verifier_current_round(namespace);
+                    ldt_transcript
+                        .submit_verifier_current_round(namespace, msg_trace!("ldt alpha"));
                     let (next_domain, next_evaluations) = FRIProver::interactive_phase_single_round(
                         current_domain,
                         current_evaluations.clone(), // TODO: change argument type to reference so we do not need to clone this
@@ -110,7 +112,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                         next_evaluations.clone(),
                         localization_next as usize,
                     )?;
-                    ldt_transcript.submit_prover_current_round(namespace)?;
+                    ldt_transcript
+                        .submit_prover_current_round(namespace, msg_trace!("ldt fri oracle"))?;
 
                     current_domain = next_domain;
                     current_evaluations = next_evaluations;
@@ -120,7 +123,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
 
         // generate final polynomial
         let alpha = ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
-        ldt_transcript.submit_verifier_current_round(namespace);
+        ldt_transcript.submit_verifier_current_round(namespace, msg_trace!("ldt final alpha"));
         let (_, final_polynomial_evaluations) = FRIProver::interactive_phase_single_round(
             current_domain,
             current_evaluations,
@@ -129,7 +132,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         );
         // send final polynomial, which is not an oracle
         ldt_transcript.send_message(final_polynomial_evaluations);
-        ldt_transcript.submit_prover_current_round(namespace)?;
+        ldt_transcript.submit_prover_current_round(namespace, msg_trace!("ldt final poly"))?;
 
         Ok(())
     }
@@ -368,7 +371,7 @@ mod tests {
                 )
                 .unwrap();
             transcript
-                .submit_prover_current_round(&ROOT_NAMESPACE)
+                .submit_prover_current_round(&ROOT_NAMESPACE, msg_trace!())
                 .unwrap();
 
             // check LDT

@@ -8,6 +8,7 @@ use crate::bcs::message::{
 };
 use crate::bcs::prover::BCSProof;
 use crate::bcs::MTHashParameters;
+use crate::tracer::TraceInfo;
 use crate::Error;
 use ark_crypto_primitives::MerkleTree;
 use ark_ldt::domain::Radix2CosetDomain;
@@ -183,7 +184,20 @@ where
     /// Submit all prover oracles in this round, and set pending round message to `None`
     /// # Panic
     /// Panic if current prover round messages is `None` or `VerifierMessage`
-    pub fn submit_prover_current_round(&mut self, namespace: &NameSpace) -> Result<(), Error> {
+    pub fn submit_prover_current_round(
+        &mut self,
+        namespace: &NameSpace,
+        tracer: Option<TraceInfo>,
+    ) -> Result<(), Error> {
+        #[cfg(feature = "print-trace")]
+        {
+            if let Some(trace_info) = tracer {
+                // TODO: include the tracer in message bookkeeper
+                println!("[Prover Transcript] Prover submitted round {}", trace_info)
+            } else {
+                println!("[Prover Transcript] Prover submitted round with no trace info")
+            }
+        }
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
             // generate merkle tree
@@ -209,7 +223,23 @@ where
     /// Submit all verifier messages in this round, and set pending round message to `None`.
     /// # Panic
     /// Panic if current verifier round messages is `None` or `ProverMessage`
-    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace) {
+    pub fn submit_verifier_current_round(
+        &mut self,
+        namespace: &NameSpace,
+        tracer: Option<TraceInfo>,
+    ) {
+        #[cfg(feature = "print-trace")]
+        {
+            if let Some(trace_info) = tracer {
+                println!(
+                    "[Prover Transcript] Verifier submitted round {}",
+                    trace_info
+                )
+            } else {
+                println!("[Prover Transcript] Verifier submitted round with no trace info")
+            }
+        }
+
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::VerifierMessage(round_msg) = pending_message {
             self.verifier_messages.push(round_msg);
