@@ -190,13 +190,13 @@ fn main() {
     let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
     let evaluation_domain = Radix2EvaluationDomain::new(256).unwrap();
     let fri_parameters = FRIParameters::new(
-        128,
+        64,
         vec![1, 2, 1],
         Radix2CosetDomain::new(evaluation_domain, Fr::one()),
     );
     let ldt_parameter = LinearCombinationFRIParameters {
         fri_parameters,
-        num_queries: 1,
+        num_queries: 3,
     };
     let claimed_sum: Fr = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
         .evaluate(&poly)
