@@ -49,19 +49,14 @@ macro_rules! iop_trace {
     }};
     ($description: expr) => {{
         use $crate::tracer::*;
-        TraceInfo::new(
-            Some($description),
-            file!(),
-            line!(),
-            column!(),
-        )
+        TraceInfo::new(Some($description), file!(), line!(), column!())
     }};
 }
 
 #[cfg(test)]
 mod compile_tests {
     #[test]
-    fn test_it_works() {
+    fn test_it_compiles() {
         let tracer1 = iop_trace!();
 
         let tracer2 = iop_trace!("some message title");
