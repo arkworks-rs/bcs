@@ -143,7 +143,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         Ok(())
     }
 
-    // in progress
     fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         params: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>,
@@ -248,24 +247,34 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 let mut codewords_oracle_responses = (0..query_cosets[0].size())
                     .map(|_| F::zero())
                     .collect::<Vec<_>>();
+                // let degree_raise_poly_at_coset = degree_raise_poly_query(query_cosets[0], )
                 codewords_oracles
                     .iter_mut()
                     .map(|oracle| {
-                        oracle
+                        let query_responses = oracle
                             .query_coset(&[query_indices[0]], iop_trace!("rl_ldt query codewords"))
                             .pop()
                             .unwrap()
                             .into_iter()
-                            .map(|round| round.into_iter())
+                            .map(|round| round.into_iter());
+                        let degrees = oracle.get_degree_bound();
+                        query_responses.zip(degrees.into_iter())
                     })
                     .flatten()
                     .zip(random_coefficients.iter())
-                    .for_each(|(msg, coeff)| {
+                    .for_each(|((msg, degree_bound), coeff)| {
                         assert_eq!(codewords_oracle_responses.len(), msg.len());
+                        assert!(param.fri_parameters.tested_degree > degree_bound as u64);
+                        let degree_raise_poly_at_coset = degree_raise_poly_query(query_cosets[0],
+                                                                                 param.fri_parameters.tested_degree - degree_bound as u64,
+                                                                                 param.fri_parameters.localization_parameters[0],
+                                                                                 query_indices[0] as u64);
+                        debug_assert_eq!(codewords_oracle_responses.len(), degree_raise_poly_at_coset.len());
                         codewords_oracle_responses
                             .iter_mut()
-                            .zip(msg.into_iter())
-                            .for_each(|(dst, src)| *dst += *coeff * src)
+                            .zip(msg.into_iter()
+                            .zip(degree_raise_poly_at_coset.into_iter()))
+                            .for_each(|(dst, (src_oracle, src_raise))| *dst += *coeff * src_oracle * src_raise)
                     });
 
                 // get query responses in ldt prover messages oracles
