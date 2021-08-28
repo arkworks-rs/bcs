@@ -246,7 +246,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     .iter_mut()
                     .map(|oracle| {
                         oracle
-                            .query_coset(&[query_indices[0]], iop_trace!("ldt tracer"))
+                            .query_coset(&[query_indices[0]], iop_trace!("rl_ldt query codewords"))
                             .pop()
                             .unwrap()
                             .into_iter()
@@ -268,7 +268,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     .iter()
                     .zip(ldt_prover_message_oracles.iter_mut())
                     .map(|(query_index, msg)| {
-                        let mut response = msg.query_coset_without_tracer(&[*query_index]).pop().unwrap(); // get the first coset position (only one position)
+                        let mut response = msg.query_coset(&[*query_index], iop_trace!("rl_ldt query fri message")).pop().unwrap(); // get the first coset position (only one position)
                         assert_eq!(response.len(), 1); // get the first oracle message in this round (only one message)
                         response.pop().unwrap()
                     })
