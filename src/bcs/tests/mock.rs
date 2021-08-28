@@ -51,7 +51,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
             .send_message_oracle_with_localization(msg3, 2)
             .unwrap();
         transcript
-            .submit_prover_current_round(namespace, msg_trace!("mock send"))
+            .submit_prover_current_round(namespace, iop_trace!("mock send"))
             .unwrap();
 
         // verifier send
@@ -61,11 +61,11 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
             FieldElementSize::Full,
         ]);
         let vm2 = transcript.squeeze_verifier_bytes(16);
-        transcript.submit_verifier_current_round(namespace, msg_trace!("mock send"));
+        transcript.submit_verifier_current_round(namespace, iop_trace!("mock send"));
 
         // verifier send2
         transcript.squeeze_verifier_bits(19);
-        transcript.submit_verifier_current_round(namespace, msg_trace!("mock send2"));
+        transcript.submit_verifier_current_round(namespace, iop_trace!("mock send2"));
 
         // prover send
         let msg1 = vm1.into_iter().map(|x| x.square());
@@ -76,14 +76,14 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
         });
         transcript.send_message_oracle(msg2).unwrap();
         transcript
-            .submit_prover_current_round(namespace, msg_trace!("mock send2"))
+            .submit_prover_current_round(namespace, iop_trace!("mock send2"))
             .unwrap();
 
         // prover send 2
         let msg1 = (0..6).map(|_| F::rand(&mut rng));
         transcript.send_message(msg1);
         transcript
-            .submit_prover_current_round(namespace, msg_trace!("mock send3"))
+            .submit_prover_current_round(namespace, iop_trace!("mock send3"))
             .unwrap();
 
         Ok(())
@@ -176,7 +176,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
 
         assert_eq!(prover_message_oracle[0].get_short_message(0), &pm1_1);
         assert_eq!(
-            prover_message_oracle[0].query(&[123, 223]),
+            prover_message_oracle[0].query(&[123, 223], iop_trace!("mock query 0")),
             vec![vec![pm1_2[123], pm1_3[123]], vec![pm1_2[223], pm1_3[223]]]
         );
 
@@ -211,7 +211,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             .collect();
 
         assert_eq!(
-            prover_message_oracle[1].query(&[19, 29, 39]),
+            prover_message_oracle[1].query(&[19, 29, 39], iop_trace!()),
             vec![vec![pm2_2[19]], vec![pm2_2[29]], vec![pm2_2[39]]]
         );
 

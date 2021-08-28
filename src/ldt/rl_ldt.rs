@@ -61,7 +61,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 .collect::<Vec<_>>(),
         );
         ldt_transcript
-            .submit_verifier_current_round(&ROOT_NAMESPACE, msg_trace!("ldt random coefficeints"));
+            .submit_verifier_current_round(&ROOT_NAMESPACE, iop_trace!("ldt random coefficeints"));
 
         let mut result_codewords = (0..param.domain.size())
             .map(|_| F::zero())
@@ -99,7 +99,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     let alpha = ldt_transcript
                         .squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
                     ldt_transcript
-                        .submit_verifier_current_round(namespace, msg_trace!("ldt alpha"));
+                        .submit_verifier_current_round(namespace, iop_trace!("ldt alpha"));
                     let (next_domain, next_evaluations) = FRIProver::interactive_phase_single_round(
                         current_domain,
                         current_evaluations.clone(), // TODO: change argument type to reference so we do not need to clone this
@@ -113,7 +113,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                         localization_next as usize,
                     )?;
                     ldt_transcript
-                        .submit_prover_current_round(namespace, msg_trace!("ldt fri oracle"))?;
+                        .submit_prover_current_round(namespace, iop_trace!("ldt fri oracle"))?;
 
                     current_domain = next_domain;
                     current_evaluations = next_evaluations;
@@ -123,7 +123,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
 
         // generate final polynomial
         let alpha = ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
-        ldt_transcript.submit_verifier_current_round(namespace, msg_trace!("ldt final alpha"));
+        ldt_transcript.submit_verifier_current_round(namespace, iop_trace!("ldt final alpha"));
         let (_, final_polynomial_evaluations) = FRIProver::interactive_phase_single_round(
             current_domain,
             current_evaluations,
@@ -132,7 +132,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         );
         // send final polynomial, which is not an oracle
         ldt_transcript.send_message(final_polynomial_evaluations);
-        ldt_transcript.submit_prover_current_round(namespace, msg_trace!("ldt final poly"))?;
+        ldt_transcript.submit_prover_current_round(namespace, iop_trace!("ldt final poly"))?;
 
         Ok(())
     }
@@ -246,7 +246,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     .iter_mut()
                     .map(|oracle| {
                         oracle
-                            .query_coset(&[query_indices[0]])
+                            .query_coset(&[query_indices[0]], iop_trace!("ldt tracer"))
                             .pop()
                             .unwrap()
                             .into_iter()
@@ -268,7 +268,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     .iter()
                     .zip(ldt_prover_message_oracles.iter_mut())
                     .map(|(query_index, msg)| {
-                        let mut response = msg.query_coset(&[*query_index]).pop().unwrap(); // get the first coset position (only one position)
+                        let mut response = msg.query_coset_without_tracer(&[*query_index]).pop().unwrap(); // get the first coset position (only one position)
                         assert_eq!(response.len(), 1); // get the first oracle message in this round (only one message)
                         response.pop().unwrap()
                     })
@@ -371,7 +371,7 @@ mod tests {
                 )
                 .unwrap();
             transcript
-                .submit_prover_current_round(&ROOT_NAMESPACE, msg_trace!())
+                .submit_prover_current_round(&ROOT_NAMESPACE, iop_trace!())
                 .unwrap();
 
             // check LDT

@@ -99,7 +99,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheckProver<F> {
         transcript.send_univariate_polynomial(hx_degree_bound, &hx)?;
         transcript.send_univariate_polynomial(px_degree_bound, &px)?;
 
-        transcript.submit_prover_current_round(namespace, msg_trace!("sumcheck hx, px"))?;
+        transcript.submit_prover_current_round(namespace, iop_trace!("sumcheck hx, px"))?;
         Ok(())
     }
 }
@@ -166,7 +166,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
         let prover_current_oracles_indices =
             bookkeeper.get_prover_message_oracle_indices_in_namespace(namespace);
         let queried_points = prover_message_oracle[prover_current_oracles_indices[0]]
-            .query(&[query])
+            .query(&[query], iop_trace!("sumcheck query"))
             .pop()
             .unwrap();
         let h_point = queried_points[0];

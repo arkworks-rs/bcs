@@ -4,6 +4,8 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::MerkleTree;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
+use crate::tracer::TraceInfo;
+
 /// A trait for all oracle messages (including RS-code oracles, Non RS-code oracles, and IP short messages) sent in one round.
 /// Those oracles (except IP short messages) need to have same length.
 ///
@@ -12,11 +14,18 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, Serializatio
 /// is itself a vector where `result[i]` is oracle `i`'s leaf on this query position. All `reed_solomon_codes` oracle
 /// will come first, and then message oracles.
 pub trait RoundOracle<F: PrimeField>: Sized {
+    /// shows the name of implementation of oracle
+    const TYPE: &'static str;
+
     /// Get short message in the oracle by index.
     fn get_short_message(&self, index: usize) -> &Vec<F>;
 
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
-    fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
+    fn query(&mut self, position: &[usize], tracer: TraceInfo) -> Vec<Vec<F>> {
+        #[cfg(feature = "print-trace")]
+            {
+                println!("[{}] Query {} leaves: {}", Self::TYPE, position.len(), tracer)
+            }
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
         let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
@@ -31,7 +40,7 @@ pub trait RoundOracle<F: PrimeField>: Sized {
             .map(|&pos| pos >> log_num_cosets)
             .collect::<Vec<_>>();
 
-        let queried_coset = self.query_coset(&coset_index);
+        let queried_coset = self.query_coset_without_tracer(&coset_index);
 
         queried_coset
             .into_iter()
@@ -45,9 +54,17 @@ pub trait RoundOracle<F: PrimeField>: Sized {
             .collect()
     }
 
+    fn query_coset(&mut self, coset_index: &[usize], tracer: TraceInfo) -> Vec<Vec<Vec<F>>> {
+        #[cfg(feature = "print-trace")]
+            {
+                println!("[{}] Query {} cosets: {}", Self::TYPE, coset_index.len(), tracer)
+            }
+        self.query_coset_without_tracer(coset_index)
+    }
+
     /// Return the queried coset at `coset_index` of all oracles.
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
-    fn query_coset(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>>;
+    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>>;
 
     /// Number of reed_solomon_codes oracles in this round.
     fn num_reed_solomon_codes_oracles(&self) -> usize;
@@ -229,11 +246,13 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
 }
 
 impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
+    const TYPE: &'static str = "Recording Round Oracle";
+
     fn get_short_message(&self, index: usize) -> &Vec<F> {
         &self.short_messages[index]
     }
 
-    fn query_coset(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
+    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
         // record the coset query
         self.queried_coset_index.extend_from_slice(coset_index);
         let result = coset_index
@@ -290,11 +309,13 @@ pub struct SuccinctRoundOracleView<'a, F: PrimeField> {
 }
 
 impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
+    const TYPE: &'static str = "Succinct Round Oracle View";
+
     fn get_short_message(&self, index: usize) -> &Vec<F> {
         &self.oracle.short_messages[index]
     }
 
-    fn query_coset(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
+    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
         self.coset_queries.extend_from_slice(coset_index);
         assert!(
             self.current_query_pos + coset_index.len() <= self.oracle.queried_cosets.len(),

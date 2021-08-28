@@ -42,19 +42,19 @@ impl TraceInfo {
 }
 
 #[macro_export]
-macro_rules! msg_trace {
+macro_rules! iop_trace {
     () => {{
         use $crate::tracer::*;
-        Some(TraceInfo::new(None, file!(), line!(), column!()))
+        TraceInfo::new(None, file!(), line!(), column!())
     }};
     ($description: expr) => {{
         use $crate::tracer::*;
-        Some(TraceInfo::new(
+        TraceInfo::new(
             Some($description),
             file!(),
             line!(),
             column!(),
-        ))
+        )
     }};
 }
 
@@ -62,9 +62,9 @@ macro_rules! msg_trace {
 mod compile_tests {
     #[test]
     fn test_it_works() {
-        let tracer1 = msg_trace!().unwrap();
+        let tracer1 = iop_trace!();
 
-        let tracer2 = msg_trace!("some message title").unwrap();
+        let tracer2 = iop_trace!("some message title");
         eprintln!("tracer1: {}", tracer1);
         eprintln!("tracer2: {}", tracer2);
     }

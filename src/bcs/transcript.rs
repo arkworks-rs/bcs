@@ -187,16 +187,11 @@ where
     pub fn submit_prover_current_round(
         &mut self,
         namespace: &NameSpace,
-        tracer: Option<TraceInfo>,
+        tracer: TraceInfo
     ) -> Result<(), Error> {
         #[cfg(feature = "print-trace")]
         {
-            if let Some(trace_info) = tracer {
-                // TODO: include the tracer in message bookkeeper
-                println!("[Prover Transcript] Prover submitted round {}", trace_info)
-            } else {
-                println!("[Prover Transcript] Prover submitted round with no trace info")
-            }
+                println!("[Prover Transcript] Prover submitted round {}", tracer)
         }
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
@@ -226,18 +221,14 @@ where
     pub fn submit_verifier_current_round(
         &mut self,
         namespace: &NameSpace,
-        tracer: Option<TraceInfo>,
+        tracer: TraceInfo,
     ) {
         #[cfg(feature = "print-trace")]
         {
-            if let Some(trace_info) = tracer {
-                println!(
+            println!(
                     "[Prover Transcript] Verifier submitted round {}",
-                    trace_info
+                    tracer
                 )
-            } else {
-                println!("[Prover Transcript] Verifier submitted round with no trace info")
-            }
         }
 
         let pending_message = take(&mut self.pending_message_for_current_round);
