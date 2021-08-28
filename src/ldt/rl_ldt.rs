@@ -85,12 +85,13 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 // multiply the polynomial by x^{degree_to_raise}
                 let degree_to_raise = param.tested_degree - *degree as u64;
                 let degree_raise_poly = degree_raise_poly_eval(param.domain, degree_to_raise);
-
                 result_codewords
                     .iter_mut()
                     .zip(oracle.iter())
                     .zip(degree_raise_poly.iter())
-                    .for_each(|((r /*result*/, a/*oracle*/), d /*degree raise poly*/)| *r += *coeff * *a * *d)
+                    .for_each(|((r /*result*/, a /*oracle*/), d /*degree raise poly*/)| {
+                        *r += *coeff * *a * *d
+                    })
             });
 
         let mut current_domain = param.domain;
@@ -265,16 +266,22 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     .for_each(|((msg, degree_bound), coeff)| {
                         assert_eq!(codewords_oracle_responses.len(), msg.len());
                         assert!(param.fri_parameters.tested_degree > degree_bound as u64);
-                        let degree_raise_poly_at_coset = degree_raise_poly_query(query_cosets[0],
-                                                                                 param.fri_parameters.tested_degree - degree_bound as u64,
-                                                                                 param.fri_parameters.localization_parameters[0],
-                                                                                 query_indices[0] as u64);
-                        debug_assert_eq!(codewords_oracle_responses.len(), degree_raise_poly_at_coset.len());
+                        let degree_raise_poly_at_coset = degree_raise_poly_query(
+                            param.fri_parameters.domain,
+                            param.fri_parameters.tested_degree - degree_bound as u64,
+                            param.fri_parameters.localization_parameters[0],
+                            query_indices[0] as u64,
+                        );
+                        debug_assert_eq!(
+                            codewords_oracle_responses.len(),
+                            degree_raise_poly_at_coset.len()
+                        );
                         codewords_oracle_responses
                             .iter_mut()
-                            .zip(msg.into_iter()
-                            .zip(degree_raise_poly_at_coset.into_iter()))
-                            .for_each(|(dst, (src_oracle, src_raise))| *dst += *coeff * src_oracle * src_raise)
+                            .zip(msg.into_iter().zip(degree_raise_poly_at_coset.into_iter()))
+                            .for_each(|(dst, (src_oracle, src_raise))| {
+                                *dst += *coeff * src_oracle * src_raise
+                            })
                     });
 
                 // get query responses in ldt prover messages oracles
@@ -283,7 +290,10 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     .iter()
                     .zip(ldt_prover_message_oracles.iter_mut())
                     .map(|(query_index, msg)| {
-                        let mut response = msg.query_coset(&[*query_index], iop_trace!("rl_ldt query fri message")).pop().unwrap(); // get the first coset position (only one position)
+                        let mut response = msg
+                            .query_coset(&[*query_index], iop_trace!("rl_ldt query fri message"))
+                            .pop()
+                            .unwrap(); // get the first coset position (only one position)
                         assert_eq!(response.len(), 1); // get the first oracle message in this round (only one message)
                         response.pop().unwrap()
                     })
@@ -336,7 +346,10 @@ fn le_bits_to_usize(bits: &[bool]) -> usize {
 
 // return evaluation of x^{degree_to_raise} at domain
 // TODO: we need one test for this function
-fn degree_raise_poly_eval<F: PrimeField>(domain: Radix2CosetDomain<F>, degree_to_raise: u64) -> Vec<F> {
+fn degree_raise_poly_eval<F: PrimeField>(
+    domain: Radix2CosetDomain<F>,
+    degree_to_raise: u64,
+) -> Vec<F> {
     let mut result = Vec::with_capacity(domain.size());
     let mut curr = domain.offset.pow(&[degree_to_raise]);
     for _ in 0..domain.size() {
@@ -347,26 +360,37 @@ fn degree_raise_poly_eval<F: PrimeField>(domain: Radix2CosetDomain<F>, degree_to
 }
 
 // return evaluation of x^{degree_to_raise} at specific location
-fn degree_raise_poly_query<F: PrimeField>(domain: Radix2CosetDomain<F>, degree_to_raise: u64, log_coset_size: u64, coset_index: u64) -> Vec<F> {
+fn degree_raise_poly_query<F: PrimeField>(
+    domain: Radix2CosetDomain<F>,
+    degree_to_raise: u64,
+    log_coset_size: u64,
+    coset_index: u64,
+) -> Vec<F> {
     // let (queries, _) = domain.query_position_to_coset(coset_index as usize, log_coset_size as usize);
     let mut result = Vec::with_capacity(1 << log_coset_size);
     let dist_between_coset_elems = 1 << (domain.dim() - log_coset_size as usize);
     // element h^{raise}(g^{index}^{raise}), h^{raise}(g^{index + dist * 1}^{raise}), h^{raise}(g^{index + dist * 2}^{raise}), ...
-    let mut curr = domain.offset.pow(&[degree_to_raise]) * domain.gen().pow(&[coset_index]).pow(&[degree_to_raise]);
+    let mut curr = domain.offset.pow(&[degree_to_raise])
+        * domain.gen().pow(&[coset_index]).pow(&[degree_to_raise]);
     for _ in 0..(1 << log_coset_size) {
         result.push(curr);
-        curr *= domain.gen().pow(&[dist_between_coset_elems]).pow(&[degree_to_raise]);
+        curr *= domain
+            .gen()
+            .pow(&[dist_between_coset_elems])
+            .pow(&[degree_to_raise]);
     }
     result
 }
-
 
 #[cfg(test)]
 mod tests {
     use crate::bcs::tests::FieldMTConfig;
     use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
     use crate::bcs::MTHashParameters;
-    use crate::ldt::rl_ldt::{LinearCombinationFRI, LinearCombinationFRIParameters, degree_raise_poly_eval, degree_raise_poly_query};
+    use crate::ldt::rl_ldt::{
+        degree_raise_poly_eval, degree_raise_poly_query, LinearCombinationFRI,
+        LinearCombinationFRIParameters,
+    };
     use crate::ldt::LDT;
     use crate::test_utils::poseidon_parameters;
     use ark_bls12_381::Fr;
@@ -383,13 +407,18 @@ mod tests {
     fn test_degree_raise_poly() {
         let domain = Radix2CosetDomain::new_radix2_coset(64, Fr::from(123456u128));
         // x^17
-        let poly = DensePolynomial::from_coefficients_vec((0..17).map(|_|Fr::zero()).chain(ark_std::iter::once(Fr::one())).collect());
+        let poly = DensePolynomial::from_coefficients_vec(
+            (0..17)
+                .map(|_| Fr::zero())
+                .chain(ark_std::iter::once(Fr::one()))
+                .collect(),
+        );
         let expected_eval = domain.evaluate(&poly);
         let actual_eval = degree_raise_poly_eval(domain, 17);
         assert_eq!(expected_eval, actual_eval);
 
         let (queries, _) = domain.query_position_to_coset(3, 2);
-        let expected_ans = queries.iter().map(|&i|actual_eval[i]).collect::<Vec<_>>();
+        let expected_ans = queries.iter().map(|&i| actual_eval[i]).collect::<Vec<_>>();
         let actual_ans = degree_raise_poly_query(domain, 17, 2, 3);
 
         assert_eq!(expected_ans, actual_ans)

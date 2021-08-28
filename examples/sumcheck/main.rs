@@ -193,8 +193,8 @@ fn main() {
     let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
     let evaluation_domain = Radix2EvaluationDomain::new(256).unwrap();
     let fri_parameters = FRIParameters::new(
-        64,
-        vec![1, 2, 1],
+        128,
+        vec![1, 3, 1],
         Radix2CosetDomain::new(evaluation_domain, Fr::one()),
     );
     let ldt_parameter = LinearCombinationFRIParameters {

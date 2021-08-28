@@ -187,11 +187,11 @@ where
     pub fn submit_prover_current_round(
         &mut self,
         namespace: &NameSpace,
-        tracer: TraceInfo
+        _tracer: TraceInfo,
     ) -> Result<(), Error> {
         #[cfg(feature = "print-trace")]
         {
-                println!("[Prover Transcript] Prover submitted round {}", tracer)
+            println!("[Prover Transcript] Prover submitted round {}", _tracer)
         }
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
@@ -218,17 +218,10 @@ where
     /// Submit all verifier messages in this round, and set pending round message to `None`.
     /// # Panic
     /// Panic if current verifier round messages is `None` or `ProverMessage`
-    pub fn submit_verifier_current_round(
-        &mut self,
-        namespace: &NameSpace,
-        tracer: TraceInfo,
-    ) {
+    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace, _tracer: TraceInfo) {
         #[cfg(feature = "print-trace")]
         {
-            println!(
-                    "[Prover Transcript] Verifier submitted round {}",
-                    tracer
-                )
+            println!("[Prover Transcript] Verifier submitted round {}", _tracer)
         }
 
         let pending_message = take(&mut self.pending_message_for_current_round);
