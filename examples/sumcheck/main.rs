@@ -88,8 +88,6 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheckProver<F> {
             .unwrap();
         // remainder should be zero
         assert!(r.is_zero());
-        let evaluation_domain_coset =
-            Radix2CosetDomain::new(state.vp.evaluation_domain.clone(), F::one());
 
         let hx_degree_bound = state.vp.degree - state.vp.summation_domain.size as usize;
         println!("hx: degree {}, bound {}", hx.degree(), hx_degree_bound);

@@ -530,7 +530,7 @@ where
     }
 
     /// Returns a wrapper for BCS proof and first `round_offset` messages are ignored.
-    pub(crate) fn from_prover_messages(
+    pub fn from_prover_messages(
         prover_iop_messages_by_round: &'a [SuccinctRoundOracle<F>],
         prover_iop_messages_mt_roots_by_round: &'a [Option<P::InnerDigest>],
         sponge: &'a mut S,
