@@ -74,17 +74,23 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                         *degree_bound <= param.tested_degree as usize,
                         "degree bound larger than testing degree"
                     );
-                    evaluation
+                    (evaluation, degree_bound)
                 })
             })
             .flatten()
             .zip(random_coefficients.iter())
-            .for_each(|(oracle, coeff)| {
+            .for_each(|((oracle, degree), coeff)| {
                 assert_eq!(oracle.len(), result_codewords.len());
+                // if the degree bound of polynomial is less than tested degree, we
+                // multiply the polynomial by x^{degree_to_raise}
+                let degree_to_raise = param.tested_degree - *degree as u64;
+                let degree_raise_poly = degree_raise_poly_eval(param.domain, degree_to_raise);
+
                 result_codewords
                     .iter_mut()
                     .zip(oracle.iter())
-                    .for_each(|(r, a)| *r += *coeff * *a)
+                    .zip(degree_raise_poly.iter())
+                    .for_each(|((r /*result*/, a/*oracle*/), d /*degree raise poly*/)| *r += *coeff * *a * *d)
             });
 
         let mut current_domain = param.domain;
@@ -319,12 +325,39 @@ fn le_bits_to_usize(bits: &[bool]) -> usize {
         .sum()
 }
 
+// return evaluation of x^{degree_to_raise} at domain
+// TODO: we need one test for this function
+fn degree_raise_poly_eval<F: PrimeField>(domain: Radix2CosetDomain<F>, degree_to_raise: u64) -> Vec<F> {
+    let mut result = Vec::with_capacity(domain.size());
+    let mut curr = domain.offset.pow(&[degree_to_raise]);
+    for _ in 0..domain.size() {
+        result.push(curr);
+        curr *= domain.gen().pow(&[degree_to_raise]);
+    }
+    result
+}
+
+// return evaluation of x^{degree_to_raise} at specific location
+fn degree_raise_poly_query<F: PrimeField>(domain: Radix2CosetDomain<F>, degree_to_raise: u64, log_coset_size: u64, coset_index: u64) -> Vec<F> {
+    // let (queries, _) = domain.query_position_to_coset(coset_index as usize, log_coset_size as usize);
+    let mut result = Vec::with_capacity(1 << log_coset_size);
+    let dist_between_coset_elems = 1 << (domain.dim() - log_coset_size as usize);
+    // element h^{raise}(g^{index}^{raise}), h^{raise}(g^{index + dist * 1}^{raise}), h^{raise}(g^{index + dist * 2}^{raise}), ...
+    let mut curr = domain.offset.pow(&[degree_to_raise]) * domain.gen().pow(&[coset_index]).pow(&[degree_to_raise]);
+    for _ in 0..(1 << log_coset_size) {
+        result.push(curr);
+        curr *= domain.gen().pow(&[dist_between_coset_elems]).pow(&[degree_to_raise]);
+    }
+    result
+}
+
+
 #[cfg(test)]
 mod tests {
     use crate::bcs::tests::FieldMTConfig;
     use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
     use crate::bcs::MTHashParameters;
-    use crate::ldt::rl_ldt::{LinearCombinationFRI, LinearCombinationFRIParameters};
+    use crate::ldt::rl_ldt::{LinearCombinationFRI, LinearCombinationFRIParameters, degree_raise_poly_eval, degree_raise_poly_query};
     use crate::ldt::LDT;
     use crate::test_utils::poseidon_parameters;
     use ark_bls12_381::Fr;
@@ -335,7 +368,23 @@ mod tests {
     use ark_poly::{EvaluationDomain, UVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
     use ark_sponge::CryptographicSponge;
-    use ark_std::{test_rng, One};
+    use ark_std::{test_rng, One, Zero};
+
+    #[test]
+    fn test_degree_raise_poly() {
+        let domain = Radix2CosetDomain::new_radix2_coset(64, Fr::from(123456u128));
+        // x^17
+        let poly = DensePolynomial::from_coefficients_vec((0..17).map(|_|Fr::zero()).chain(ark_std::iter::once(Fr::one())).collect());
+        let expected_eval = domain.evaluate(&poly);
+        let actual_eval = degree_raise_poly_eval(domain, 17);
+        assert_eq!(expected_eval, actual_eval);
+
+        let (queries, _) = domain.query_position_to_coset(3, 2);
+        let expected_ans = queries.iter().map(|&i|actual_eval[i]).collect::<Vec<_>>();
+        let actual_ans = degree_raise_poly_query(domain, 17, 2, 3);
+
+        assert_eq!(expected_ans, actual_ans)
+    }
 
     #[test]
     fn ldt_test() {
