@@ -1,15 +1,17 @@
-#[cfg(feature = "r1cs")]
-pub mod constraints;
-pub mod rl_ldt;
+use std::marker::PhantomData;
 
-use crate::bcs::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};
-use crate::bcs::transcript::{SimulationTranscript, Transcript};
-use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
-use std::marker::PhantomData;
+
+use crate::bcs::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};
+use crate::bcs::transcript::{SimulationTranscript, Transcript};
+use crate::Error;
+
+#[cfg(feature = "r1cs")]
+pub mod constraints;
+pub mod rl_ldt;
 
 /// Trait for LDT, which is an public coin IOP.
 pub trait LDT<F: PrimeField + Absorb> {

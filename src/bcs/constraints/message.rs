@@ -1,4 +1,5 @@
 use crate::bcs::message::{ProverRoundMessageInfo, SuccinctRoundOracle, VerifierMessage};
+use crate::tracer::TraceInfo;
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
@@ -81,7 +82,16 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
     pub fn query(
         &mut self,
         position: &[Vec<Boolean<F>>],
+        tracer: TraceInfo,
     ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
+        #[cfg(feature = "print-trace")]
+        {
+            println!(
+                "[SimulationTranscript] Query {} leaves: {}",
+                position.len(),
+                tracer
+            );
+        }
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
         let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
@@ -97,7 +107,7 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
             .iter()
             .map(|pos| pos[log_num_cosets..log_oracle_length].to_vec())
             .collect::<Vec<_>>();
-        let queried_coset = self.query_coset(&coset_index);
+        let queried_coset = self.query_coset_without_tracer(&coset_index);
         queried_coset.into_iter()
             .zip(element_index_in_coset.into_iter())
             .map(|(coset_for_all_oracles, element_index)|{
@@ -113,7 +123,26 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
 
     /// Return the queried coset at `coset_index` of all oracles.
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
-    pub fn query_coset(&mut self, coset_index: &[Vec<Boolean<F>>]) -> Vec<Vec<Vec<FpVar<F>>>> {
+    pub fn query_coset(
+        &mut self,
+        coset_index: &[Vec<Boolean<F>>],
+        tracer: TraceInfo,
+    ) -> Vec<Vec<Vec<FpVar<F>>>> {
+        #[cfg(feature = "print-trace")]
+        {
+            println!(
+                "[SuccinctRoundOracle] Query {} cosets: {}",
+                coset_index.len(),
+                tracer
+            );
+        };
+        self.query_coset_without_tracer(coset_index)
+    }
+
+    fn query_coset_without_tracer(
+        &mut self,
+        coset_index: &[Vec<Boolean<F>>],
+    ) -> Vec<Vec<Vec<FpVar<F>>>> {
         self.coset_queries.extend_from_slice(coset_index);
         assert!(
             self.current_query_pos + coset_index.len() <= self.oracle.queried_cosets.len(),

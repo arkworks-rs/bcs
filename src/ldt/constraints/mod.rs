@@ -1,6 +1,3 @@
-use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
-use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::ldt::{NoLDT, LDT};
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
@@ -8,6 +5,10 @@ use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::SynthesisError;
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
+
+use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
+use crate::bcs::constraints::transcript::SimulationTranscriptVar;
+use crate::ldt::{NoLDT, LDT};
 
 pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
     fn restore_from_commit_phase_var<MT, MTG, S>(

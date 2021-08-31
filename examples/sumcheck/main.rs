@@ -183,7 +183,6 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
 }
 
 /// A simple univariate sumcheck (currently without ldt, which is completely insecure).
-/// TODO: add ldt after ldt trait (using FRI) is implemented
 /// We assume that size of summation domain < degree of testing poly < size of evaluation domain
 fn main() {
     let mut rng = test_rng();

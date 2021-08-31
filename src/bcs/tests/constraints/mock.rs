@@ -44,16 +44,16 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             oracle_length: 256,
             localization_parameter: 2,
         };
-        transcript.receive_prover_current_round(namespace, expected_info)?;
+        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         // verifier send
         transcript.squeeze_verifier_field_elements(3)?;
         transcript.squeeze_verifier_field_bytes(16)?;
-        transcript.submit_verifier_current_round(namespace);
+        transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         // verifier send2
         transcript.squeeze_verifier_field_bits(19)?;
-        transcript.submit_verifier_current_round(namespace);
+        transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         // prover send
         let expected_info = ProverRoundMessageInfo {
@@ -63,7 +63,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             oracle_length: 256,
             localization_parameter: 0,
         };
-        transcript.receive_prover_current_round(namespace, expected_info)?;
+        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         // prover send2
         let expected_info = ProverRoundMessageInfo {
@@ -73,7 +73,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             oracle_length: 0,
             localization_parameter: 0,
         };
-        transcript.receive_prover_current_round(namespace, expected_info)?;
+        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         Ok(())
     }
@@ -108,10 +108,13 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             .enforce_equal(pm1_1.as_slice())?;
 
         prover_message_oracle[0]
-            .query(&[
-                UInt8::new_witness(cs.cs(), || Ok(123))?.to_bits_le()?,
-                UInt8::new_witness(cs.cs(), || Ok(223))?.to_bits_le()?,
-            ])?
+            .query(
+                &[
+                    UInt8::new_witness(cs.cs(), || Ok(123))?.to_bits_le()?,
+                    UInt8::new_witness(cs.cs(), || Ok(223))?.to_bits_le()?,
+                ],
+                iop_trace!(),
+            )?
             .into_iter()
             .zip(
                 vec![
@@ -143,11 +146,14 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             .collect();
 
         prover_message_oracle[1]
-            .query(&[
-                UInt8::constant(19).to_bits_le()?,
-                UInt8::constant(29).to_bits_le()?,
-                UInt8::constant(39).to_bits_le()?,
-            ])
+            .query(
+                &[
+                    UInt8::constant(19).to_bits_le()?,
+                    UInt8::constant(29).to_bits_le()?,
+                    UInt8::constant(39).to_bits_le()?,
+                ],
+                iop_trace!(),
+            )
             .unwrap()
             .into_iter()
             .zip(

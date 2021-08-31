@@ -2,6 +2,7 @@ use crate::bcs::constraints::message::VerifierMessageVar;
 use crate::bcs::constraints::proof::BCSProofVar;
 use crate::bcs::message::ProverRoundMessageInfo;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
+use crate::tracer::TraceInfo;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
@@ -87,7 +88,12 @@ where
         &mut self,
         ns: &NameSpace,
         mut expected_message_info: ProverRoundMessageInfo,
+        tracer: TraceInfo,
     ) -> Result<(), SynthesisError> {
+        #[cfg(feature = "print-trace")]
+        {
+            println!("[SimulationTranscript] Prover Send: {}", tracer)
+        }
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
             // LDT is used, so replace its localization parameter with the one given by LDT
             let localization_parameters_from_ldt = expected_message_info
@@ -126,7 +132,11 @@ where
     }
 
     /// Submit all verification messages in this round
-    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace) {
+    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace, tracer: TraceInfo) {
+        #[cfg(feature = "print-trace")]
+        {
+            println!("[SimulationTranscript] Verifier Send: {}", tracer)
+        }
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifer_messages.push(pending_message);
         self.attach_latest_verifier_round_to_namespace(namespace);
