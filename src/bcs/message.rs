@@ -18,7 +18,7 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     const TYPE: &'static str;
 
     /// Get short message in the oracle by index.
-    fn get_short_message(&self, index: usize) -> &Vec<F>;
+    fn get_short_message(&self, index: usize, tracer: TraceInfo) -> &Vec<F>;
 
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
     fn query(&mut self, position: &[usize], _tracer: TraceInfo) -> Vec<Vec<F>> {
@@ -258,7 +258,14 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
 impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
     const TYPE: &'static str = "Recording Round Oracle";
 
-    fn get_short_message(&self, index: usize) -> &Vec<F> {
+    fn get_short_message(&self, index: usize, tracer: TraceInfo) -> &Vec<F> {
+        #[cfg(feature = "print-trace")]
+        {
+            println!(
+                "[Recording oracle] Get short message at index {}: {}",
+                index, tracer
+            )
+        }
         &self.short_messages[index]
     }
 
@@ -321,7 +328,14 @@ pub struct SuccinctRoundOracleView<'a, F: PrimeField> {
 impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
     const TYPE: &'static str = "Succinct Round Oracle View";
 
-    fn get_short_message(&self, index: usize) -> &Vec<F> {
+    fn get_short_message(&self, index: usize, tracer: TraceInfo) -> &Vec<F> {
+        #[cfg(feature = "print-trace")]
+        {
+            println!(
+                "[Succinct Round oracle] Get short message at index {}: {}",
+                index, tracer
+            )
+        }
         &self.oracle.short_messages[index]
     }
 

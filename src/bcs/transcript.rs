@@ -609,6 +609,7 @@ where
     }
 
     /// Submit all verifier messages in this round.
+    /// TODO: add tracer here
     pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace) {
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifer_messages.push(pending_message);

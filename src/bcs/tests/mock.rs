@@ -174,7 +174,10 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         let pm1_2: Vec<_> = (0..256).map(|_| F::rand(&mut rng)).collect();
         let pm1_3: Vec<_> = (0..256).map(|_| F::rand(&mut rng)).collect();
 
-        assert_eq!(prover_message_oracle[0].get_short_message(0), &pm1_1);
+        assert_eq!(
+            prover_message_oracle[0].get_short_message(0, iop_trace!()),
+            &pm1_1
+        );
         assert_eq!(
             prover_message_oracle[0].query(&[123, 223], iop_trace!("mock query 0")),
             vec![vec![pm1_2[123], pm1_3[123]], vec![pm1_2[223], pm1_3[223]]]
@@ -201,7 +204,10 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
 
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square()).collect();
 
-        assert_eq!(prover_message_oracle[1].get_short_message(0), &pm2_1);
+        assert_eq!(
+            prover_message_oracle[1].get_short_message(0, iop_trace!()),
+            &pm2_1
+        );
 
         let pm2_2: Vec<_> = (0..256u128)
             .map(|x| {
@@ -217,7 +223,10 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
 
         let pm3_1: Vec<_> = (0..6).map(|_| F::rand(&mut rng)).collect();
 
-        assert_eq!(prover_message_oracle[2].get_short_message(0), &pm3_1);
+        assert_eq!(
+            prover_message_oracle[2].get_short_message(0, iop_trace!()),
+            &pm3_1
+        );
 
         Ok(true)
     }

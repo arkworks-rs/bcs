@@ -11,11 +11,17 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_ldt::fri::prover::FRIProver;
 use ark_ldt::fri::verifier::FRIVerifier;
 use ark_ldt::fri::FRIParameters;
+use ark_poly::univariate::DensePolynomial;
+use ark_poly::UVPolynomial;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 
 /// Implementation of LDT using FRI protocol. When taking multiple oracles, this protocol takes a random linear combination.
-/// This protocol has only one enforced bound.
+///
+/// Each oracle message can have different degree bound, as long as its degree bound <= tested_degree in FRI parameter.
+/// To enforce individual bound, this protocol follows [SCRSVP19](https://eprint.iacr.org/2018/) section 8, such that we
+/// multiply each oracle by monimial x^{degree_to_raise} and take random linear combination.
+///
 pub struct LinearCombinationFRI<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
@@ -131,15 +137,26 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         // generate final polynomial
         let alpha = ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
         ldt_transcript.submit_verifier_current_round(namespace, iop_trace!("ldt final alpha"));
-        let (_, final_polynomial_evaluations) = FRIProver::interactive_phase_single_round(
-            current_domain,
-            current_evaluations,
-            *(param.localization_parameters.last().unwrap()),
-            alpha,
+        let (domain_final, final_polynomial_evaluations) =
+            FRIProver::interactive_phase_single_round(
+                current_domain,
+                current_evaluations,
+                *(param.localization_parameters.last().unwrap()),
+                alpha,
+            );
+        // send final polynomial, which is not an oracle.
+        // We send interpolated final polynomial coefficients instead of evaluations.
+        let total_shrink_factor = param.localization_parameters.iter().sum::<u64>();
+        let final_poly_degree_bound = param.tested_degree >> total_shrink_factor;
+        let final_polynomial = DirectLDT::generate_low_degree_coefficients(
+            domain_final,
+            final_polynomial_evaluations,
+            final_poly_degree_bound as usize,
         );
-        // send final polynomial, which is not an oracle
-        ldt_transcript.send_message(final_polynomial_evaluations);
-        ldt_transcript.submit_prover_current_round(namespace, iop_trace!("ldt final poly"))?;
+        assert!(final_polynomial.coeffs.len() <= (final_poly_degree_bound + 1) as usize);
+        ldt_transcript.send_message(final_polynomial.coeffs);
+        ldt_transcript
+            .submit_prover_current_round(namespace, iop_trace!("ldt final poly coefficients"))?;
 
         Ok(())
     }
@@ -223,7 +240,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
             .clone()
             .try_into_field_elements()
             .unwrap();
-        // let random_coefficients = (0..codewords_oracles.iter().map(|r|r.num_reed_solomon_codes_oracles()).sum()).map(|_|F::from(1234u128)).collect::<Vec<_>>();
+
         let alphas = ldt_verifier_messages[1..]
             .iter()
             .map(|vm| {
@@ -248,7 +265,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 let mut codewords_oracle_responses = (0..query_cosets[0].size())
                     .map(|_| F::zero())
                     .collect::<Vec<_>>();
-                // let degree_raise_poly_at_coset = degree_raise_poly_query(query_cosets[0], )
+
                 codewords_oracles
                     .iter_mut()
                     .map(|oracle| {
@@ -299,11 +316,11 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     })
                     .collect::<Vec<_>>();
 
-                // get final polynomial
-                let evaluations_final = ldt_prover_message_oracles
+                // get final polynomial coefficients
+                let final_polynomial_coeffs = ldt_prover_message_oracles
                     .last()
                     .unwrap()
-                    .get_short_message(0)
+                    .get_short_message(0, iop_trace!("final poly coefficient"))
                     .to_vec();
                 let total_shrink_factor = param
                     .fri_parameters
@@ -312,11 +329,11 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     .sum::<u64>();
                 let final_poly_degree_bound =
                     param.fri_parameters.tested_degree >> total_shrink_factor;
-                let final_polynomial = DirectLDT::generate_low_degree_coefficients(
-                    domain_final,
-                    evaluations_final,
-                    final_poly_degree_bound as usize,
-                );
+                // make sure final polynomial degree is valid
+                assert!(final_polynomial_coeffs.len() <= (final_poly_degree_bound + 1) as usize);
+                // todo!(): generate_low_degree_coefficients should be done by prover instead!
+                let final_polynomial =
+                    DensePolynomial::from_coefficients_vec(final_polynomial_coeffs);
                 let result = FRIVerifier::consistency_check(
                     &param.fri_parameters,
                     &query_indices,
@@ -366,18 +383,18 @@ fn degree_raise_poly_query<F: PrimeField>(
     log_coset_size: u64,
     coset_index: u64,
 ) -> Vec<F> {
-    // let (queries, _) = domain.query_position_to_coset(coset_index as usize, log_coset_size as usize);
     let mut result = Vec::with_capacity(1 << log_coset_size);
     let dist_between_coset_elems = 1 << (domain.dim() - log_coset_size as usize);
     // element h^{raise}(g^{index}^{raise}), h^{raise}(g^{index + dist * 1}^{raise}), h^{raise}(g^{index + dist * 2}^{raise}), ...
     let mut curr = domain.offset.pow(&[degree_to_raise])
         * domain.gen().pow(&[coset_index]).pow(&[degree_to_raise]);
+    let step = domain
+        .gen()
+        .pow(&[dist_between_coset_elems])
+        .pow(&[degree_to_raise]);
     for _ in 0..(1 << log_coset_size) {
         result.push(curr);
-        curr *= domain
-            .gen()
-            .pow(&[dist_between_coset_elems])
-            .pow(&[degree_to_raise]);
+        curr *= step;
     }
     result
 }
