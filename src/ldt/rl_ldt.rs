@@ -12,7 +12,7 @@ use ark_ldt::fri::prover::FRIProver;
 use ark_ldt::fri::verifier::FRIVerifier;
 use ark_ldt::fri::FRIParameters;
 use ark_poly::univariate::DensePolynomial;
-use ark_poly::UVPolynomial;
+use ark_poly::{UVPolynomial, Polynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 
@@ -55,12 +55,14 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
     where
         MT::InnerDigest: Absorb,
     {
+
         let param = &param.fri_parameters;
         let namespace = &ROOT_NAMESPACE; // TODO: fix this
                                          // first, get random linear combination of the codewords
         let codewords = codewords.into_iter().collect::<Vec<_>>();
         // get number of coefficients needed
         let num_oracles: usize = codewords.iter().map(|round| round.len()).sum();
+        println!("num_oracles: {}", num_oracles);
         let random_coefficients = ldt_transcript.squeeze_verifier_field_elements(
             &(0..num_oracles)
                 .map(|_| FieldElementSize::Full)
@@ -103,6 +105,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         let mut current_domain = param.domain;
         let mut current_evaluations = result_codewords;
 
+
         // generate FRI round oracles (first parameter is codeword)
         param.localization_parameters[0..param.localization_parameters.len() - 1]
             .iter()
@@ -133,7 +136,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                     Ok(())
                 },
             )?;
-
         // generate final polynomial
         let alpha = ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
         ldt_transcript.submit_verifier_current_round(namespace, iop_trace!("ldt final alpha"));
@@ -148,11 +150,14 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         // We send interpolated final polynomial coefficients instead of evaluations.
         let total_shrink_factor = param.localization_parameters.iter().sum::<u64>();
         let final_poly_degree_bound = param.tested_degree >> total_shrink_factor;
+        let sanity_check_point = final_polynomial_evaluations[1];
         let final_polynomial = DirectLDT::generate_low_degree_coefficients(
             domain_final,
             final_polynomial_evaluations,
             final_poly_degree_bound as usize,
         );
+        // sanity check
+        debug_assert_eq!(final_polynomial.evaluate(&domain_final.element(1)), sanity_check_point);
         assert!(final_polynomial.coeffs.len() <= (final_poly_degree_bound + 1) as usize);
         ldt_transcript.send_message(final_polynomial.coeffs);
         ldt_transcript
@@ -171,8 +176,9 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         let namespace = &ROOT_NAMESPACE;
         let num_oracles = codewords_oracles
             .iter()
-            .map(|round| round.oracle.info.num_oracles())
+            .map(|round| round.oracle.info.num_reed_solomon_codes_oracles())
             .sum::<usize>();
+        println!("num_oracles: {}", num_oracles);
         ldt_transcript.squeeze_verifier_field_elements(
             &(0..num_oracles)
                 .map(|_| FieldElementSize::Full)
@@ -181,6 +187,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         ldt_transcript.submit_verifier_current_round(&ROOT_NAMESPACE);
         // prover generate result codewords
         let mut current_domain = params.fri_parameters.domain;
+
 
         // receive ldt message oracles
         params.fri_parameters.localization_parameters
@@ -206,6 +213,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 current_domain = next_domain;
             });
 
+
         // receive final polynomials
         ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full]);
         ldt_transcript.submit_verifier_current_round(namespace);
@@ -218,7 +226,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 localization_parameter: 0, // ignored
                 oracle_length: 0,          // ignored
             },
-        )
+        );
     }
 
     fn query_and_decide<S: CryptographicSponge, O: RoundOracle<F>>(
@@ -232,9 +240,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         let codeword_log_num_cosets = param.fri_parameters.domain.dim()
             - param.fri_parameters.localization_parameters[0] as usize;
         let query_indices = (0..param.num_queries)
-            .map(|_| le_bits_to_usize(&random_oracle.squeeze_bits(codeword_log_num_cosets)))
-            .collect::<Vec<_>>();
-
+            .map(|_| le_bits_to_usize(&random_oracle.squeeze_bits(codeword_log_num_cosets)));
         // restore random coefficients and alphas
         let random_coefficients = ldt_verifier_messages[0][0]
             .clone()
@@ -257,6 +263,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
         query_indices
             .into_iter()
             .try_for_each(|coset_index| -> Result<(), Error> {
+
                 // prepare query
                 let (query_cosets, query_indices, domain_final) =
                     FRIVerifier::prepare_query(coset_index, &param.fri_parameters);
@@ -320,7 +327,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
                 let final_polynomial_coeffs = ldt_prover_message_oracles
                     .last()
                     .unwrap()
-                    .get_short_message(0, iop_trace!("final poly coefficient"))
+                    .get_short_message(0, iop_trace!("final poly coefficients"))
                     .to_vec();
                 let total_shrink_factor = param
                     .fri_parameters
@@ -445,7 +452,7 @@ mod tests {
     fn ldt_test() {
         let mut rng = test_rng();
 
-        for i in 0..256 {
+        for i in 0..8 {
             let poly = DensePolynomial::<Fr>::rand(69, &mut rng);
             let evaluation_domain = Radix2EvaluationDomain::new(256).unwrap();
             let fri_parameters = FRIParameters::new(

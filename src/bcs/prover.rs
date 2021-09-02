@@ -80,6 +80,7 @@ where
         );
 
         // perform LDT to enforce degree bound on low-degree oracles
+
         let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params, move |_| {
             panic!("LDT transcript cannot send LDT oracle.")
         });

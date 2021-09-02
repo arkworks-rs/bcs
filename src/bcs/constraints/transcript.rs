@@ -1,4 +1,4 @@
-use crate::bcs::constraints::message::VerifierMessageVar;
+use crate::bcs::constraints::message::{VerifierMessageVar, SuccinctRoundOracleVar};
 use crate::bcs::constraints::proof::BCSProofVar;
 use crate::bcs::message::ProverRoundMessageInfo;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
@@ -77,6 +77,33 @@ where
             reconstructed_verifer_messages: Vec::new(),
             pending_verifier_messages: Vec::new(),
             ldt_info: Box::new(ldt_info),
+        }
+    }
+
+    pub fn from_prover_messages(
+        prover_iop_messages_by_round: &'a [SuccinctRoundOracleVar<F>],
+        prover_iop_messages_mt_roots_by_round: &'a [Option<MTG::InnerDigest>],
+        sponge_var: &'a mut S::Var,
+        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
+    ) -> Self {
+        let prover_short_messages = prover_iop_messages_by_round
+            .iter()
+            .map(|msg|&msg.short_messages)
+            .collect::<Vec<_>>();
+        let prover_messages_info = prover_iop_messages_by_round
+            .iter()
+            .map(|msg|msg.get_view().get_info())
+            .collect();
+        Self {
+            prover_short_messages,
+            prover_messages_info,
+            prover_mt_roots: prover_iop_messages_mt_roots_by_round,
+            sponge: sponge_var,
+            current_prover_round: 0,
+            bookkeeper: MessageBookkeeper::default(),
+            reconstructed_verifer_messages: Vec::new(),
+            pending_verifier_messages: Vec::new(),
+            ldt_info: Box::new(ldt_info)
         }
     }
 

@@ -258,7 +258,7 @@ mod tests {
     use ark_bls12_381::Fr;
     use ark_ldt::domain::Radix2CosetDomain;
     use ark_poly::polynomial::univariate::DensePolynomial;
-    use ark_poly::UVPolynomial;
+    use ark_poly::{UVPolynomial, Radix2EvaluationDomain, EvaluationDomain};
     use ark_r1cs_std::alloc::AllocVar;
     use ark_r1cs_std::boolean::Boolean;
     use ark_r1cs_std::fields::fp::FpVar;
@@ -267,7 +267,19 @@ mod tests {
     use ark_r1cs_std::poly::polynomial::univariate::dense::DensePolynomialVar;
     use ark_r1cs_std::R1CSVar;
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_std::{One, Zero};
+    use ark_std::{One, Zero, test_rng};
+    use ark_ldt::fri::FRIParameters;
+    use crate::ldt::rl_ldt::{LinearCombinationFRIParameters, LinearCombinationFRI};
+    use crate::test_utils::poseidon_parameters;
+    use crate::bcs::MTHashParameters;
+    use crate::bcs::tests::FieldMTConfig;
+    use ark_sponge::poseidon::PoseidonSponge;
+    use ark_sponge::CryptographicSponge;
+    use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
+    use crate::ldt::LDT;
+    use crate::bcs::constraints::message::SuccinctRoundOracleVar;
+    use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
+    use crate::bcs::constraints::transcript::SimulationTranscriptVar;
 
     #[test]
     fn test_degree_raise_poly() {
@@ -313,4 +325,6 @@ mod tests {
             .zip(actual_ans.into_iter())
             .for_each(|(expected, actual)| assert_eq!(expected, actual.value().unwrap()))
     }
+
+    // ldt correctness is tested in mock protocol
 }

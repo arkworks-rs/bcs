@@ -8,13 +8,14 @@ use ark_ff::{PrimeField, ToConstraintField};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 use ark_std::test_rng;
+use ark_poly::univariate::DensePolynomial;
+use ark_poly::UVPolynomial;
 
-/// Mock IOP prover that only sends message oracles and short messages.
-pub(crate) struct MockTest1Prover<F: PrimeField + Absorb> {
+pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
 
-impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
+impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
     type ProverParameter = ();
     type ProverState = ();
     type PublicInput = ();
@@ -81,7 +82,9 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTest1Prover<F> {
 
         // prover send 2
         let msg1 = (0..6).map(|_| F::rand(&mut rng));
+        let msg2 = DensePolynomial::from_coefficients_vec(vec![F::from(0x12345u128), F::from(0x23456u128), F::from(0x34567u128), F::from(0x45678u128), F::from(0x56789u128)]);
         transcript.send_message(msg1);
+        transcript.send_univariate_polynomial(8, &msg2)?;
         transcript
             .submit_prover_current_round(namespace, iop_trace!("mock send3"))
             .unwrap();
@@ -143,11 +146,11 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
 
         // prover send2
         let expected_info = ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: vec![],
+            reed_solomon_code_degree_bound: vec![8],
             num_message_oracles: 0,
             num_short_messages: 1,
-            oracle_length: 0,
-            localization_parameter: 0,
+            oracle_length: 128,
+            localization_parameter: 0, // managed by LDT
         };
         transcript.receive_prover_current_round(namespace, expected_info);
     }
@@ -222,11 +225,12 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         );
 
         let pm3_1: Vec<_> = (0..6).map(|_| F::rand(&mut rng)).collect();
-
         assert_eq!(
             prover_message_oracle[2].get_short_message(0, iop_trace!()),
             &pm3_1
         );
+        // just query some points
+        prover_message_oracle[2].query(&vec![1, 2], iop_trace!());
 
         Ok(true)
     }

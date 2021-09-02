@@ -446,9 +446,9 @@ where
             .push(index);
     }
 
-    /// returns evaluation domain and localization_parameter of codewords, maganed by LDT
+    /// returns evaluation domain and localization_parameter of codewords, managed by LDT
     #[inline]
-    fn ldt_info(&self, degree_bound: usize) -> (Radix2CosetDomain<F>, usize) {
+    pub fn ldt_info(&self, degree_bound: usize) -> (Radix2CosetDomain<F>, usize) {
         (self.ldt_info)(degree_bound)
     }
 }
@@ -472,7 +472,7 @@ pub struct SimulationTranscript<
     prover_short_messages: Vec<&'a Vec<Vec<F>>>,
 
     /// sponge is used to sample verifier message
-    sponge: &'a mut S,
+    pub(crate) sponge: &'a mut S,
     /// the next prover round message to absorb
     pub(crate) current_prover_round: usize,
 
