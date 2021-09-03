@@ -67,10 +67,10 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
         // prover send2
         let expected_info = ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: vec![],
+            reed_solomon_code_degree_bound: vec![8],
             num_message_oracles: 0,
             num_short_messages: 1,
-            oracle_length: 0,
+            oracle_length: 128,
             localization_parameter: 0,
         };
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
@@ -170,7 +170,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
         pm3_1.enforce_equal(prover_message_oracle[2].get_short_message(0).as_slice())?;
 
-        prover_message_oracle[2].query(&[vec![Boolean::TRUE], vec![Boolean::TRUE, Boolean::FALSE]], iop_trace!()); // query 1, 2
+        prover_message_oracle[2].query(&[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]], iop_trace!())?; // query 1, 2
         Ok(Boolean::TRUE)
     }
 }

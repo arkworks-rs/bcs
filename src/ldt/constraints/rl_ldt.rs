@@ -3,7 +3,7 @@ use crate::bcs::constraints::transcript::SimulationTranscriptVar;
 use crate::bcs::message::ProverRoundMessageInfo;
 use crate::bcs::transcript::ROOT_NAMESPACE;
 use crate::ldt::constraints::LDTWithGadget;
-use crate::ldt::rl_ldt::LinearCombinationFRI;
+use crate::ldt::rl_ldt::LinearCombinationLDT;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
@@ -18,7 +18,7 @@ use ark_relations::r1cs::SynthesisError;
 use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
 use ark_sponge::Absorb;
 
-impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationFRI<F> {
+impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
     fn restore_from_commit_phase_var<MT, MTG, S>(
         param: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<F>>,
@@ -34,7 +34,7 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationFRI<F> {
         let namespace = &ROOT_NAMESPACE;
         let num_oracles = codewords_oracles
             .iter()
-            .map(|round| round.oracle.info.num_oracles())
+            .map(|round| round.oracle.info.num_reed_solomon_codes_oracles())
             .sum::<usize>();
         ldt_transcript.squeeze_verifier_field_elements(num_oracles)?;
         ldt_transcript.submit_verifier_current_round(&ROOT_NAMESPACE, iop_trace!());
@@ -135,7 +135,7 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationFRI<F> {
                     .iter_mut()
                     .map(|oracle| {
                         let query_responses = oracle
-                            .query_coset(&query_indices[0..1], iop_trace!("rl_ldt query codewords"))
+                            .query_coset(&[query_indices[0].clone()], iop_trace!("rl_ldt query codewords"))
                             .pop()
                             .unwrap()
                             .into_iter()
@@ -258,7 +258,7 @@ mod tests {
     use ark_bls12_381::Fr;
     use ark_ldt::domain::Radix2CosetDomain;
     use ark_poly::polynomial::univariate::DensePolynomial;
-    use ark_poly::{UVPolynomial, Radix2EvaluationDomain, EvaluationDomain};
+    use ark_poly::UVPolynomial;
     use ark_r1cs_std::alloc::AllocVar;
     use ark_r1cs_std::boolean::Boolean;
     use ark_r1cs_std::fields::fp::FpVar;
@@ -267,19 +267,7 @@ mod tests {
     use ark_r1cs_std::poly::polynomial::univariate::dense::DensePolynomialVar;
     use ark_r1cs_std::R1CSVar;
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_std::{One, Zero, test_rng};
-    use ark_ldt::fri::FRIParameters;
-    use crate::ldt::rl_ldt::{LinearCombinationFRIParameters, LinearCombinationFRI};
-    use crate::test_utils::poseidon_parameters;
-    use crate::bcs::MTHashParameters;
-    use crate::bcs::tests::FieldMTConfig;
-    use ark_sponge::poseidon::PoseidonSponge;
-    use ark_sponge::CryptographicSponge;
-    use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
-    use crate::ldt::LDT;
-    use crate::bcs::constraints::message::SuccinctRoundOracleVar;
-    use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-    use crate::bcs::constraints::transcript::SimulationTranscriptVar;
+    use ark_std::{One, Zero};
 
     #[test]
     fn test_degree_raise_poly() {

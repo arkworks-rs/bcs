@@ -16,6 +16,7 @@ use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use std::marker::PhantomData;
+use ark_r1cs_std::R1CSVar;
 
 pub struct BCSVerifierGadget<MT, MTG, CF>
 where
@@ -64,11 +65,6 @@ where
             assert!(
                 !transcript.is_pending_message_available(),
                 "Sanity check failed: pending verifier message not submitted"
-            );
-            assert_eq!(
-                transcript.current_prover_round,
-                proof.prover_iop_messages_by_round.len(),
-                "Sanity check failed: transcript's all prover messages are not absorbed"
             );
             let num_rounds_submitted = transcript.num_prover_rounds_submitted();
             (
@@ -122,6 +118,7 @@ where
             ldt_prover_messages_view.iter_mut().collect(),
             &ldt_verifier_messages,
         )?;
+
 
         // verify the protocol
         let verifier_result_var = V::query_and_decide_var(
@@ -178,7 +175,10 @@ where
                     .zip(paths.iter())
                     .try_for_each(|((index, coset), path)| {
                         let mut path = path.clone();
+                        let old_path = path.get_leaf_position().value().unwrap();
                         path.set_leaf_position(index.clone());
+                        let new_path = path.get_leaf_position().value().unwrap();
+                        assert_eq!(old_path, new_path);
                         path.verify_membership(
                             &hash_params.leaf_params,
                             &hash_params.inner_params,

@@ -19,6 +19,11 @@ use ark_relations::r1cs::ConstraintSystem;
 use ark_sponge::constraints::CryptographicSpongeVar;
 use ark_sponge::poseidon::constraints::PoseidonSpongeVar;
 use ark_sponge::poseidon::PoseidonSponge;
+use ark_ldt::fri::FRIParameters;
+use ark_ldt::domain::Radix2CosetDomain;
+use crate::ldt::rl_ldt::{LinearCombinationLDTParameters, LinearCombinationLDT};
+use ark_std::One;
+use crate::ldt::LDT;
 
 mod mock;
 
@@ -35,8 +40,14 @@ impl ConfigGadget<Self, Fr> for FieldMTConfig {
 }
 
 #[test]
-fn test_bcs_var_no_ldt() {
-    let (bcs_proof, expected_prove_transcript) = mock_test1_prove_with_transcript();
+fn test_bcs() {
+    let fri_parameters = FRIParameters::new(64, vec![1,2,1], Radix2CosetDomain::new_radix2_coset(128, Fr::one()));
+    let ldt_pamameters = LinearCombinationLDTParameters {
+        fri_parameters,
+        num_queries: 1
+    };
+
+    let (bcs_proof, expected_prove_transcript) = mock_test1_prove_with_transcript(&ldt_pamameters);
     let cs = ConstraintSystem::<Fr>::new_ref();
     let mt_hash_param = MTHashParametersVar::<Fr, FieldMTConfig, FieldMTConfig> {
         leaf_params: CRHParametersVar::new_constant(cs.clone(), poseidon_parameters()).unwrap(),
@@ -52,7 +63,7 @@ fn test_bcs_var_no_ldt() {
         SimulationTranscriptVar::<_, _, _, PoseidonSponge<_>>::new_transcript(
             &bcs_proof_var,
             &mut sponge,
-            |_| panic!("ldt not used"),
+            |degree| LinearCombinationLDT::ldt_info(&ldt_pamameters, degree),
         );
     MockTest1Verifier::restore_from_commit_phase_var(
         &ROOT_NAMESPACE,
@@ -65,10 +76,11 @@ fn test_bcs_var_no_ldt() {
 
     // verify should have all enforced constraints satisfied
     let sponge = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());
-    let result = BCSVerifierGadget::verify_with_ldt_disabled::<
+    let result = BCSVerifierGadget::verify::<
         MockTest1Verifier<Fr>,
+        LinearCombinationLDT<Fr>,
         PoseidonSponge<Fr>,
-    >(cs.clone(), sponge, &bcs_proof_var, &(), &(), &mt_hash_param)
+    >(cs.clone(), sponge, &bcs_proof_var, &(), &(), &ldt_pamameters,&mt_hash_param)
     .expect("error during verify");
     assert!(result.value().unwrap());
 

@@ -92,7 +92,7 @@ where
             .collect::<Vec<_>>();
         let prover_messages_info = prover_iop_messages_by_round
             .iter()
-            .map(|msg|msg.get_view().get_info())
+            .map(|msg|msg.get_view().get_info().clone())
             .collect();
         Self {
             prover_short_messages,

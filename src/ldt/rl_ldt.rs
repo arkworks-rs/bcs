@@ -22,20 +22,20 @@ use ark_std::marker::PhantomData;
 /// To enforce individual bound, this protocol follows [SCRSVP19](https://eprint.iacr.org/2018/) section 8, such that we
 /// multiply each oracle by monimial x^{degree_to_raise} and take random linear combination.
 ///
-pub struct LinearCombinationFRI<F: PrimeField + Absorb> {
+pub struct LinearCombinationLDT<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
 
 #[derive(Clone)]
-pub struct LinearCombinationFRIParameters<F: PrimeField + Absorb> {
+pub struct LinearCombinationLDTParameters<F: PrimeField + Absorb> {
     /// FRI parameter for the linearly combined polynomial
     pub fri_parameters: FRIParameters<F>,
     /// Number of FRI queries
     pub num_queries: usize,
 }
 
-impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationFRI<F> {
-    type LDTParameters = LinearCombinationFRIParameters<F>;
+impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
+    type LDTParameters = LinearCombinationLDTParameters<F>;
 
     fn ldt_info(
         param: &Self::LDTParameters,
@@ -412,8 +412,8 @@ mod tests {
     use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
     use crate::bcs::MTHashParameters;
     use crate::ldt::rl_ldt::{
-        degree_raise_poly_eval, degree_raise_poly_query, LinearCombinationFRI,
-        LinearCombinationFRIParameters,
+        degree_raise_poly_eval, degree_raise_poly_query, LinearCombinationLDT,
+        LinearCombinationLDTParameters,
     };
     use crate::ldt::LDT;
     use crate::test_utils::poseidon_parameters;
@@ -460,7 +460,7 @@ mod tests {
                 vec![1, 2, 1],
                 Radix2CosetDomain::new(evaluation_domain, Fr::one()),
             );
-            let ldt_params = LinearCombinationFRIParameters {
+            let ldt_params = LinearCombinationLDTParameters {
                 fri_parameters,
                 num_queries: 1,
             };
@@ -472,7 +472,7 @@ mod tests {
                 leaf_hash_param: poseidon_parameters(),
             };
             let mut transcript = Transcript::new(sponge, hash_params.clone(), |usize| {
-                LinearCombinationFRI::ldt_info(&ldt_params, usize)
+                LinearCombinationLDT::ldt_info(&ldt_params, usize)
             });
             transcript
                 .send_oracle_evaluations(
@@ -491,7 +491,7 @@ mod tests {
                 Transcript::new(sponge_before_ldt.clone(), hash_params.clone(), |_| {
                     panic!("ldt not allowed")
                 });
-            LinearCombinationFRI::prove(
+            LinearCombinationLDT::prove(
                 &ldt_params,
                 transcript
                     .prover_message_oracles
@@ -501,7 +501,7 @@ mod tests {
             )
             .unwrap();
 
-            LinearCombinationFRI::query_and_decide(
+            LinearCombinationLDT::query_and_decide(
                 &ldt_params,
                 &mut ldt_transcript.sponge,
                 transcript.prover_message_oracles.iter_mut().collect(),
@@ -537,7 +537,7 @@ mod tests {
                 .iter()
                 .map(|r| r.get_view())
                 .collect::<Vec<_>>();
-            LinearCombinationFRI::restore_from_commit_phase(
+            LinearCombinationLDT::restore_from_commit_phase(
                 &ldt_params,
                 codewords_oracle_view.iter_mut().collect(),
                 &mut simulation_transcript,

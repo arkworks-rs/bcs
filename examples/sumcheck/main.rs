@@ -11,7 +11,7 @@ use ark_bcs::bcs::verifier::BCSVerifier;
 use ark_bcs::bcs::MTHashParameters;
 use ark_bcs::iop::prover::IOPProver;
 use ark_bcs::iop::verifier::IOPVerifier;
-use ark_bcs::ldt::rl_ldt::{LinearCombinationFRI, LinearCombinationFRIParameters};
+use ark_bcs::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
 use ark_bcs::Error;
 use ark_bls12_381::fr::Fr;
 use ark_crypto_primitives::merkle_tree::Config;
@@ -194,7 +194,7 @@ fn main() {
         vec![1, 3, 1],
         Radix2CosetDomain::new(evaluation_domain, Fr::one()),
     );
-    let ldt_parameter = LinearCombinationFRIParameters {
+    let ldt_parameter = LinearCombinationLDTParameters {
         fri_parameters,
         num_queries: 3,
     };
@@ -220,7 +220,7 @@ fn main() {
     let proof = BCSProof::generate::<
         SimpleSumcheckVerifier<Fr>,
         SimpleSumcheckProver<Fr>,
-        LinearCombinationFRI<Fr>,
+        LinearCombinationLDT<Fr>,
         _,
     >(
         sponge,
@@ -235,7 +235,7 @@ fn main() {
 
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     let verifier_output =
-        BCSVerifier::verify::<SimpleSumcheckVerifier<Fr>, LinearCombinationFRI<Fr>, _>(
+        BCSVerifier::verify::<SimpleSumcheckVerifier<Fr>, LinearCombinationLDT<Fr>, _>(
             sponge,
             &proof,
             &vp,

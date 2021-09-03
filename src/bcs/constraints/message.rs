@@ -97,6 +97,8 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
         let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
         let log_oracle_length = ark_std::log2(self.oracle.info.oracle_length) as usize;
         assert_eq!(log_oracle_length, log_coset_size + log_num_cosets);
+        // pad position to appropriate length
+        let position = position.iter().map(|bits|fit_bits_to_length(bits, log_oracle_length)).collect::<Vec<_>>();
         // coset index = position % num_cosets = the least significant `log_num_cosets` bits of pos
         // element index in coset = position / num_cosets = all other bits
         let coset_index = position
@@ -250,5 +252,15 @@ impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {
                 Ok(VerifierMessageVar::Bytes(var?))
             }
         }
+    }
+}
+
+/// fix a bit array to a certain length by remove extra element on the end or pad with zero
+fn fit_bits_to_length<F: PrimeField>(bits: &[Boolean<F>], length: usize) -> Vec<Boolean<F>> {
+    if bits.len() < length {
+        bits.to_vec().into_iter()
+            .chain((0..(length - bits.len())).map(|_|Boolean::FALSE)).collect()
+    }else{
+        (&bits[0..length]).to_vec()
     }
 }
