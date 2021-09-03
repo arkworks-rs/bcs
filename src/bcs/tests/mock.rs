@@ -5,11 +5,11 @@ use crate::iop::verifier::IOPVerifier;
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::{PrimeField, ToConstraintField};
+use ark_poly::univariate::DensePolynomial;
+use ark_poly::UVPolynomial;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 use ark_std::test_rng;
-use ark_poly::univariate::DensePolynomial;
-use ark_poly::UVPolynomial;
 
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
@@ -82,7 +82,13 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
 
         // prover send 2
         let msg1 = (0..6).map(|_| F::rand(&mut rng));
-        let msg2 = DensePolynomial::from_coefficients_vec(vec![F::from(0x12345u128), F::from(0x23456u128), F::from(0x34567u128), F::from(0x45678u128), F::from(0x56789u128)]);
+        let msg2 = DensePolynomial::from_coefficients_vec(vec![
+            F::from(0x12345u128),
+            F::from(0x23456u128),
+            F::from(0x34567u128),
+            F::from(0x45678u128),
+            F::from(0x56789u128),
+        ]);
         transcript.send_message(msg1);
         transcript.send_univariate_polynomial(8, &msg2)?;
         transcript

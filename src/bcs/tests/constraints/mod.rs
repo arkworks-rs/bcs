@@ -11,19 +11,19 @@ use crate::bcs::tests::mock::MockTest1Verifier;
 use crate::bcs::tests::{mock_test1_prove_with_transcript, FieldMTConfig, Fr};
 use crate::bcs::transcript::ROOT_NAMESPACE;
 use crate::iop::constraints::IOPVerifierWithGadget;
+use crate::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
+use crate::ldt::LDT;
 use crate::test_utils::poseidon_parameters;
 use ark_crypto_primitives::crh::poseidon::constraints::CRHParametersVar;
+use ark_ldt::domain::Radix2CosetDomain;
+use ark_ldt::fri::FRIParameters;
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_sponge::constraints::CryptographicSpongeVar;
 use ark_sponge::poseidon::constraints::PoseidonSpongeVar;
 use ark_sponge::poseidon::PoseidonSponge;
-use ark_ldt::fri::FRIParameters;
-use ark_ldt::domain::Radix2CosetDomain;
-use crate::ldt::rl_ldt::{LinearCombinationLDTParameters, LinearCombinationLDT};
 use ark_std::One;
-use crate::ldt::LDT;
 
 mod mock;
 
@@ -41,10 +41,14 @@ impl ConfigGadget<Self, Fr> for FieldMTConfig {
 
 #[test]
 fn test_bcs() {
-    let fri_parameters = FRIParameters::new(64, vec![1,2,1], Radix2CosetDomain::new_radix2_coset(128, Fr::one()));
+    let fri_parameters = FRIParameters::new(
+        64,
+        vec![1, 2, 1],
+        Radix2CosetDomain::new_radix2_coset(128, Fr::one()),
+    );
     let ldt_pamameters = LinearCombinationLDTParameters {
         fri_parameters,
-        num_queries: 1
+        num_queries: 1,
     };
 
     let (bcs_proof, expected_prove_transcript) = mock_test1_prove_with_transcript(&ldt_pamameters);
@@ -80,7 +84,15 @@ fn test_bcs() {
         MockTest1Verifier<Fr>,
         LinearCombinationLDT<Fr>,
         PoseidonSponge<Fr>,
-    >(cs.clone(), sponge, &bcs_proof_var, &(), &(), &ldt_pamameters,&mt_hash_param)
+    >(
+        cs.clone(),
+        sponge,
+        &bcs_proof_var,
+        &(),
+        &(),
+        &ldt_pamameters,
+        &mt_hash_param,
+    )
     .expect("error during verify");
     assert!(result.value().unwrap());
 

@@ -170,7 +170,10 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
         pm3_1.enforce_equal(prover_message_oracle[2].get_short_message(0).as_slice())?;
 
-        prover_message_oracle[2].query(&[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]], iop_trace!())?; // query 1, 2
+        prover_message_oracle[2].query(
+            &[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]],
+            iop_trace!(),
+        )?; // query 1, 2
         Ok(Boolean::TRUE)
     }
 }

@@ -12,7 +12,7 @@ use ark_ldt::fri::prover::FRIProver;
 use ark_ldt::fri::verifier::FRIVerifier;
 use ark_ldt::fri::FRIParameters;
 use ark_poly::univariate::DensePolynomial;
-use ark_poly::{UVPolynomial, Polynomial};
+use ark_poly::{Polynomial, UVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 
@@ -55,7 +55,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
     where
         MT::InnerDigest: Absorb,
     {
-
         let param = &param.fri_parameters;
         let namespace = &ROOT_NAMESPACE; // TODO: fix this
                                          // first, get random linear combination of the codewords
@@ -104,7 +103,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
 
         let mut current_domain = param.domain;
         let mut current_evaluations = result_codewords;
-
 
         // generate FRI round oracles (first parameter is codeword)
         param.localization_parameters[0..param.localization_parameters.len() - 1]
@@ -157,7 +155,10 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
             final_poly_degree_bound as usize,
         );
         // sanity check
-        debug_assert_eq!(final_polynomial.evaluate(&domain_final.element(1)), sanity_check_point);
+        debug_assert_eq!(
+            final_polynomial.evaluate(&domain_final.element(1)),
+            sanity_check_point
+        );
         assert!(final_polynomial.coeffs.len() <= (final_poly_degree_bound + 1) as usize);
         ldt_transcript.send_message(final_polynomial.coeffs);
         ldt_transcript
@@ -188,7 +189,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         // prover generate result codewords
         let mut current_domain = params.fri_parameters.domain;
 
-
         // receive ldt message oracles
         params.fri_parameters.localization_parameters
             [0..params.fri_parameters.localization_parameters.len() - 1]
@@ -212,7 +212,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
 
                 current_domain = next_domain;
             });
-
 
         // receive final polynomials
         ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full]);
@@ -263,7 +262,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         query_indices
             .into_iter()
             .try_for_each(|coset_index| -> Result<(), Error> {
-
                 // prepare query
                 let (query_cosets, query_indices, domain_final) =
                     FRIVerifier::prepare_query(coset_index, &param.fri_parameters);

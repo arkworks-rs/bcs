@@ -1,4 +1,4 @@
-use crate::bcs::constraints::message::{VerifierMessageVar, SuccinctRoundOracleVar};
+use crate::bcs::constraints::message::{SuccinctRoundOracleVar, VerifierMessageVar};
 use crate::bcs::constraints::proof::BCSProofVar;
 use crate::bcs::message::ProverRoundMessageInfo;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
@@ -88,11 +88,11 @@ where
     ) -> Self {
         let prover_short_messages = prover_iop_messages_by_round
             .iter()
-            .map(|msg|&msg.short_messages)
+            .map(|msg| &msg.short_messages)
             .collect::<Vec<_>>();
         let prover_messages_info = prover_iop_messages_by_round
             .iter()
-            .map(|msg|msg.get_view().get_info().clone())
+            .map(|msg| msg.get_view().get_info().clone())
             .collect();
         Self {
             prover_short_messages,
@@ -103,7 +103,7 @@ where
             bookkeeper: MessageBookkeeper::default(),
             reconstructed_verifer_messages: Vec::new(),
             pending_verifier_messages: Vec::new(),
-            ldt_info: Box::new(ldt_info)
+            ldt_info: Box::new(ldt_info),
         }
     }
 

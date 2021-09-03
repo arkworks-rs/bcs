@@ -135,7 +135,10 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
                     .iter_mut()
                     .map(|oracle| {
                         let query_responses = oracle
-                            .query_coset(&[query_indices[0].clone()], iop_trace!("rl_ldt query codewords"))
+                            .query_coset(
+                                &[query_indices[0].clone()],
+                                iop_trace!("rl_ldt query codewords"),
+                            )
                             .pop()
                             .unwrap()
                             .into_iter()

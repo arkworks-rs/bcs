@@ -12,11 +12,11 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_r1cs_std::boolean::Boolean;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::fields::fp::FpVar;
+use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use std::marker::PhantomData;
-use ark_r1cs_std::R1CSVar;
 
 pub struct BCSVerifierGadget<MT, MTG, CF>
 where
@@ -118,7 +118,6 @@ where
             ldt_prover_messages_view.iter_mut().collect(),
             &ldt_verifier_messages,
         )?;
-
 
         // verify the protocol
         let verifier_result_var = V::query_and_decide_var(

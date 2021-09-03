@@ -4,22 +4,22 @@ mod constraints;
 pub(crate) mod mock;
 
 use crate::bcs::prover::BCSProof;
-use crate::bcs::tests::mock::{MockTestProver, MockTest1Verifier};
+use crate::bcs::tests::mock::{MockTest1Verifier, MockTestProver};
 use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
 use crate::bcs::verifier::BCSVerifier;
 use crate::bcs::MTHashParameters;
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
+use crate::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
 use crate::ldt::LDT;
 use crate::test_utils::poseidon_parameters;
 use ark_crypto_primitives::crh::poseidon;
 use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};
+use ark_ldt::domain::Radix2CosetDomain;
+use ark_ldt::fri::FRIParameters;
 use ark_sponge::poseidon::PoseidonSponge;
 use ark_sponge::CryptographicSponge;
-use ark_ldt::fri::FRIParameters;
-use ark_ldt::domain::Radix2CosetDomain;
 use ark_std::One;
-use crate::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
 
 pub(crate) type Fr = ark_bls12_381::Fr;
 pub(crate) type H = poseidon::CRH<Fr>;
@@ -35,7 +35,9 @@ impl Config for FieldMTConfig {
     type TwoToOneHash = TwoToOneH;
 }
 
-pub(crate) fn mock_test1_prove_with_transcript(ldt_parameters: &LinearCombinationLDTParameters<Fr>) -> (
+pub(crate) fn mock_test1_prove_with_transcript(
+    ldt_parameters: &LinearCombinationLDTParameters<Fr>,
+) -> (
     BCSProof<FieldMTConfig, Fr>,
     Transcript<FieldMTConfig, PoseidonSponge<Fr>, Fr>,
 ) {
@@ -45,9 +47,10 @@ pub(crate) fn mock_test1_prove_with_transcript(ldt_parameters: &LinearCombinatio
         inner_hash_param: poseidon_parameters(),
     };
     // create a BCS transcript
-    let mut expected_prove_transcript = Transcript::new(sponge, mt_hash_param.clone(), move |degree| {
-        LinearCombinationLDT::ldt_info(ldt_parameters, degree)
-    });
+    let mut expected_prove_transcript =
+        Transcript::new(sponge, mt_hash_param.clone(), move |degree| {
+            LinearCombinationLDT::ldt_info(ldt_parameters, degree)
+        });
 
     // run prover code, using transcript to sample verifier message
     // This is not a subprotocol, so we use root namespace (/).
@@ -66,9 +69,16 @@ pub(crate) fn mock_test1_prove_with_transcript(ldt_parameters: &LinearCombinatio
         MockTestProver<Fr>,
         LinearCombinationLDT<Fr>,
         _,
-    >(sponge, &(), &(), &(), &(), &ldt_parameters,mt_hash_param.clone())
+    >(
+        sponge,
+        &(),
+        &(),
+        &(),
+        &(),
+        &ldt_parameters,
+        mt_hash_param.clone(),
+    )
     .expect("fail to prove");
-
 
     (bcs_proof, expected_prove_transcript)
 }
@@ -76,10 +86,14 @@ pub(crate) fn mock_test1_prove_with_transcript(ldt_parameters: &LinearCombinatio
 #[test]
 /// Test if restore_state_from_commit_phase message works
 fn test_bcs() {
-    let fri_parameters = FRIParameters::new(64, vec![1,2,1], Radix2CosetDomain::new_radix2_coset(128, Fr::one()));
+    let fri_parameters = FRIParameters::new(
+        64,
+        vec![1, 2, 1],
+        Radix2CosetDomain::new_radix2_coset(128, Fr::one()),
+    );
     let ldt_pamameters = LinearCombinationLDTParameters {
         fri_parameters,
-        num_queries: 1
+        num_queries: 1,
     };
     let (bcs_proof, expected_prove_transcript) = mock_test1_prove_with_transcript(&ldt_pamameters);
 
@@ -91,7 +105,9 @@ fn test_bcs() {
     // verify if simulation transcript reconstructs correctly
     let mut sponge = PoseidonSponge::new(&poseidon_parameters());
     let mut simulation_transcript =
-        SimulationTranscript::new_transcript(&bcs_proof, &mut sponge, |degree| LinearCombinationLDT::ldt_info(&ldt_pamameters, degree));
+        SimulationTranscript::new_transcript(&bcs_proof, &mut sponge, |degree| {
+            LinearCombinationLDT::ldt_info(&ldt_pamameters, degree)
+        });
     MockTest1Verifier::restore_from_commit_phase(
         &ROOT_NAMESPACE,
         &(),
@@ -100,7 +116,10 @@ fn test_bcs() {
     );
     simulation_transcript.check_correctness(&expected_prove_transcript);
     // check same sponge state
-    assert_eq!(simulation_transcript.sponge.state, expected_prove_transcript.sponge.state);
+    assert_eq!(
+        simulation_transcript.sponge.state,
+        expected_prove_transcript.sponge.state
+    );
     // verify should return no error
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     assert!(
