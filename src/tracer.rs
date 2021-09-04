@@ -1,7 +1,8 @@
-use ark_std::fmt::Display;
-use std::fmt::Formatter;
+#[cfg(feature = "std")]
+use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Copy)]
+#[allow(unused)]
 pub struct TraceInfo {
     pub(crate) description: Option<&'static str>,
     pub(crate) file_name: &'static str,
@@ -9,6 +10,7 @@ pub struct TraceInfo {
     pub(crate) column: u32,
 }
 
+#[cfg(feature = "std")]
 impl Display for TraceInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(description) = self.description {

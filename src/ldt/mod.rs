@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use ark_std::marker::PhantomData;
 
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
@@ -8,6 +8,7 @@ use ark_sponge::{Absorb, CryptographicSponge};
 use crate::bcs::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};
 use crate::bcs::transcript::{SimulationTranscript, Transcript};
 use crate::Error;
+use ark_std::vec::Vec;
 
 #[cfg(feature = "r1cs")]
 pub mod constraints;

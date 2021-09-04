@@ -15,7 +15,7 @@ use ark_poly::univariate::DensePolynomial;
 use ark_poly::{Polynomial, UVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
-
+use ark_std::vec::Vec;
 /// Implementation of LDT using FRI protocol. When taking multiple oracles, this protocol takes a random linear combination.
 ///
 /// Each oracle message can have different degree bound, as long as its degree bound <= tested_degree in FRI parameter.
@@ -61,7 +61,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         let codewords = codewords.into_iter().collect::<Vec<_>>();
         // get number of coefficients needed
         let num_oracles: usize = codewords.iter().map(|round| round.len()).sum();
-        println!("num_oracles: {}", num_oracles);
         let random_coefficients = ldt_transcript.squeeze_verifier_field_elements(
             &(0..num_oracles)
                 .map(|_| FieldElementSize::Full)
@@ -179,7 +178,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
             .iter()
             .map(|round| round.oracle.info.num_reed_solomon_codes_oracles())
             .sum::<usize>();
-        println!("num_oracles: {}", num_oracles);
         ldt_transcript.squeeze_verifier_field_elements(
             &(0..num_oracles)
                 .map(|_| FieldElementSize::Full)

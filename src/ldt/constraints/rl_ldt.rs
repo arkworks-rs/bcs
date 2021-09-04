@@ -17,6 +17,7 @@ use ark_r1cs_std::poly::polynomial::univariate::dense::DensePolynomialVar;
 use ark_relations::r1cs::SynthesisError;
 use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
 use ark_sponge::Absorb;
+use ark_std::vec::Vec;
 
 impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
     fn restore_from_commit_phase_var<MT, MTG, S>(

@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 //! A crate for interactive oracle proofs and BCS transform.
 #![deny(unused_import_braces, unused_qualifications, trivial_casts)]
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
@@ -29,6 +31,8 @@ pub mod ldt;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
+
+use ark_std::boxed::Box;
 
 /// Universal Error Type
 pub type Error = Box<dyn ark_std::error::Error>;

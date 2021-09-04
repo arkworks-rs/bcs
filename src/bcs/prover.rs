@@ -11,6 +11,7 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_sponge::{Absorb, CryptographicSponge};
+use ark_std::vec::Vec;
 
 /// BCSProof contains all prover messages that use succinct oracle, and thus is itself succinct.
 #[derive(CanonicalSerialize, CanonicalDeserialize, Derivative)]

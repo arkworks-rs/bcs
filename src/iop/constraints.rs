@@ -9,6 +9,7 @@ use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
+use ark_std::vec::Vec;
 
 pub trait IOPVerifierWithGadget<S, CF>: IOPVerifier<S, CF>
 where

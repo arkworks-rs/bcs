@@ -11,7 +11,9 @@ use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::SynthesisError;
 use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
 use ark_sponge::Absorb;
+use ark_std::boxed::Box;
 use ark_std::mem::take;
+use ark_std::vec::Vec;
 
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
 where

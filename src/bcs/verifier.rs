@@ -9,6 +9,7 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
+use ark_std::vec::Vec;
 
 pub struct BCSVerifier<MT, F>
 where

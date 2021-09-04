@@ -9,7 +9,8 @@ use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use ark_sponge::constraints::AbsorbGadget;
 use ark_sponge::Absorb;
-use std::borrow::Borrow;
+use ark_std::borrow::Borrow;
+use ark_std::vec::Vec;
 
 pub struct BCSProofVar<MT, MTG, CF>
 where

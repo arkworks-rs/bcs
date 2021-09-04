@@ -5,6 +5,7 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_crypto_primitives::MerkleTree;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
+use ark_std::vec::Vec;
 
 /// A trait for all oracle messages (including RS-code oracles, Non RS-code oracles, and IP short messages) sent in one round.
 /// Those oracles (except IP short messages) need to have same length.

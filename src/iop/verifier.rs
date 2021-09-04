@@ -5,6 +5,7 @@ use crate::bcs::message::{RoundOracle, VerifierMessage};
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
+use ark_std::vec::Vec;
 
 /// The verifier for public coin IOP has two phases.
 /// * **Commit Phase**: Verifier send message that is uniformly sampled from a random oracle. Verifier

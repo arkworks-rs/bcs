@@ -5,6 +5,7 @@ use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use ark_std::borrow::Borrow;
+use ark_std::vec::Vec;
 
 /// Constraint Gadget for `RoundOracleVar`
 pub trait RoundOracleVar<F: PrimeField> {}
