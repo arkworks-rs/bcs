@@ -264,10 +264,6 @@ mod tests {
     use ark_poly::UVPolynomial;
     use ark_r1cs_std::alloc::AllocVar;
     use ark_r1cs_std::boolean::Boolean;
-    use ark_r1cs_std::fields::fp::FpVar;
-    use ark_r1cs_std::fields::FieldVar;
-    use ark_r1cs_std::poly::domain::Radix2DomainVar;
-    use ark_r1cs_std::poly::polynomial::univariate::dense::DensePolynomialVar;
     use ark_r1cs_std::R1CSVar;
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{One, Zero};
@@ -275,11 +271,6 @@ mod tests {
     #[test]
     fn test_degree_raise_poly() {
         let domain = Radix2CosetDomain::new_radix2_coset(64, Fr::from(123456u128));
-        let domain_var = Radix2DomainVar {
-            gen: domain.gen(),
-            offset: FpVar::constant(domain.offset),
-            dim: domain.dim() as u64,
-        };
         let cs = ConstraintSystem::new_ref();
         // x^17
         let poly = DensePolynomial::from_coefficients_vec(
@@ -288,19 +279,13 @@ mod tests {
                 .chain(ark_std::iter::once(Fr::one()))
                 .collect(),
         );
-        let poly_var = DensePolynomialVar::from_coefficients_vec(
-            (0..17)
-                .map(|_| FpVar::new_witness(cs.clone(), || Ok(Fr::zero())))
-                .chain(ark_std::iter::once(FpVar::new_witness(cs.clone(), || {
-                    Ok(Fr::one())
-                })))
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap(),
-        );
 
         let expected_eval = domain.evaluate(&poly);
 
-        let query_position = vec![Boolean::TRUE, Boolean::TRUE]; // 3
+        let query_position = vec![
+            Boolean::new_witness(cs.clone(), || Ok(true)).unwrap(),
+            Boolean::new_witness(cs.clone(), || Ok(true)).unwrap(),
+        ]; // 3
 
         let (queries, _) = domain.query_position_to_coset(3, 2);
         let expected_ans = queries
