@@ -62,13 +62,13 @@ conditions.
 ## Reference papers
 
 [Aurora: Transparent Succinct Arguments for R1CS][scrsvw19]<br>
-ELi Ben-Sasson, Alessandro Chiesa, Michael Riabzev, Nicholas Spooner, Madars Virza, Nicholas P. Ward
+Eli Ben-Sasson, Alessandro Chiesa, Michael Riabzev, Nicholas Spooner, Madars Virza, Nicholas P. Ward
 
 [Fast Reed-Solomon Interactive Oracle Proofs of Proximity][bbhr17]<br>
 Eli Ben-Sasson, Iddo Bentov, Ynon Horesh, Michael Riabzev
 
 [Interactive Oracle Proofs][bcs16]<br>
-ELi Ben-Sasson, Alessandro Chiesa, Nicolas Spooner
+Eli Ben-Sasson, Alessandro Chiesa, Nicolas Spooner
 
 
 
