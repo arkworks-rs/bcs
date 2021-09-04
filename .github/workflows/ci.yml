@@ -115,14 +115,7 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: check
-        uses: actions-rs/cargo@v1
-        with:
-            command: check
-            args: --no-default-features --examples --workspace --exclude ark-poly-benches --target thumbv6m-none-eabi
-
-      - name: build
-        uses: actions-rs/cargo@v1
-        with:
-            command: build
-            args: --no-default-features --workspace --exclude ark-poly-benches --target thumbv6m-none-eabi
+      - name: ldt
+        run: |
+          cargo build --no-default-features --target aarch64-unknown-none
+          cargo check --examples --no-default-features --target aarch64-unknown-none
