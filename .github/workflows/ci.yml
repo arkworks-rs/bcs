@@ -115,7 +115,7 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: ldt
+      - name: bcs
         run: |
           cargo build --no-default-features --target aarch64-unknown-none
-          cargo check --examples --no-default-features --target aarch64-unknown-none
+          cargo check --no-default-features --target aarch64-unknown-none
