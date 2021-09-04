@@ -119,10 +119,10 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
             command: check
-            args: --examples --workspace --exclude ark-poly-benches --target thumbv6m-none-eabi
+            args: --no-default-features --examples --workspace --exclude ark-poly-benches --target thumbv6m-none-eabi
 
       - name: build
         uses: actions-rs/cargo@v1
         with:
             command: build
-            args: --workspace --exclude ark-poly-benches --target thumbv6m-none-eabi
+            args: --no-default-features --workspace --exclude ark-poly-benches --target thumbv6m-none-eabi
