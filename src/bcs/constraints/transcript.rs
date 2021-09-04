@@ -115,11 +115,11 @@ where
         &mut self,
         ns: &NameSpace,
         mut expected_message_info: ProverRoundMessageInfo,
-        tracer: TraceInfo,
+        _tracer: TraceInfo,
     ) -> Result<(), SynthesisError> {
         #[cfg(feature = "print-trace")]
         {
-            println!("[SimulationTranscript] Prover Send: {}", tracer)
+            println!("[SimulationTranscript] Prover Send: {}", _tracer)
         }
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
             // LDT is used, so replace its localization parameter with the one given by LDT
@@ -159,10 +159,10 @@ where
     }
 
     /// Submit all verification messages in this round
-    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace, tracer: TraceInfo) {
+    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace, _tracer: TraceInfo) {
         #[cfg(feature = "print-trace")]
         {
-            println!("[SimulationTranscript] Verifier Send: {}", tracer)
+            println!("[SimulationTranscript] Verifier Send: {}", _tracer)
         }
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifer_messages.push(pending_message);

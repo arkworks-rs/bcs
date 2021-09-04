@@ -258,12 +258,12 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
 impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
     const TYPE: &'static str = "Recording Round Oracle";
 
-    fn get_short_message(&self, index: usize, tracer: TraceInfo) -> &Vec<F> {
+    fn get_short_message(&self, index: usize, _tracer: TraceInfo) -> &Vec<F> {
         #[cfg(feature = "print-trace")]
         {
             println!(
                 "[Recording oracle] Get short message at index {}: {}",
-                index, tracer
+                index, _tracer
             )
         }
         &self.short_messages[index]
@@ -328,12 +328,12 @@ pub struct SuccinctRoundOracleView<'a, F: PrimeField> {
 impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracleView<'a, F> {
     const TYPE: &'static str = "Succinct Round Oracle View";
 
-    fn get_short_message(&self, index: usize, tracer: TraceInfo) -> &Vec<F> {
+    fn get_short_message(&self, index: usize, _tracer: TraceInfo) -> &Vec<F> {
         #[cfg(feature = "print-trace")]
         {
             println!(
                 "[Succinct Round oracle] Get short message at index {}: {}",
-                index, tracer
+                index, _tracer
             )
         }
         &self.oracle.short_messages[index]

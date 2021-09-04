@@ -82,14 +82,14 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
     pub fn query(
         &mut self,
         position: &[Vec<Boolean<F>>],
-        tracer: TraceInfo,
+        _tracer: TraceInfo,
     ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
         #[cfg(feature = "print-trace")]
         {
             println!(
                 "[SimulationTranscript] Query {} leaves: {}",
                 position.len(),
-                tracer
+                _tracer
             );
         }
         // convert the position to coset_index
@@ -131,14 +131,14 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
     pub fn query_coset(
         &mut self,
         coset_index: &[Vec<Boolean<F>>],
-        tracer: TraceInfo,
+        _tracer: TraceInfo,
     ) -> Vec<Vec<Vec<FpVar<F>>>> {
         #[cfg(feature = "print-trace")]
         {
             println!(
                 "[SuccinctRoundOracle] Query {} cosets: {}",
                 coset_index.len(),
-                tracer
+                _tracer
             );
         };
         self.query_coset_without_tracer(coset_index)
