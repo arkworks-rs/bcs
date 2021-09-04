@@ -60,6 +60,8 @@ pub trait RoundOracle<F: PrimeField>: Sized {
             .collect()
     }
 
+    /// Return the queried coset at `coset_index` of all oracles.
+    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
     fn query_coset(&mut self, coset_index: &[usize], _tracer: TraceInfo) -> Vec<Vec<Vec<F>>> {
         #[cfg(feature = "print-trace")]
         {
@@ -73,7 +75,7 @@ pub trait RoundOracle<F: PrimeField>: Sized {
         self.query_coset_without_tracer(coset_index)
     }
 
-    /// Return the queried coset at `coset_index` of all oracles.
+    /// Return the queried coset at `coset_index` of all oracles, but without tracing information. 
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
     fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>>;
 
@@ -221,9 +223,13 @@ pub struct RecordingRoundOracle<F: PrimeField> {
 /// Contains structure and degree bound information about prover round messages, but does not contain real messages.
 #[derive(Eq, PartialEq, Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct ProverRoundMessageInfo {
+    /// Degree bounds of oracle evaluations, in order.
     pub reed_solomon_code_degree_bound: Vec<usize>,
+    /// Number of message oracles without degree bound. Those oracles will not be processed by LDT.
     pub num_message_oracles: usize,
+    /// Number of short messages. Those messages will be included in proof in entirety.
     pub num_short_messages: usize,
+    /// Length of each message oracles in current round.
     pub oracle_length: usize,
     /// log2(coset size)
     /// Set it to zero to disable leaf as coset.
@@ -231,16 +237,19 @@ pub struct ProverRoundMessageInfo {
 }
 
 impl ProverRoundMessageInfo {
+    /// Number of message oracles with degree bound.
     pub fn num_reed_solomon_codes_oracles(&self) -> usize {
         self.reed_solomon_code_degree_bound.len()
     }
 
+    /// Number of oracles, including those with or without degree bound.
     pub fn num_oracles(&self) -> usize {
         self.num_reed_solomon_codes_oracles() + self.num_message_oracles
     }
 }
 
 impl<F: PrimeField> RecordingRoundOracle<F> {
+    /// Return a succinct oracle, which only contains queried responses.
     pub fn get_succinct_oracle(&self) -> SuccinctRoundOracle<F> {
         let info = self.get_info();
         let queried_cosets = self
@@ -308,6 +317,7 @@ pub struct SuccinctRoundOracle<F: PrimeField> {
 }
 
 impl<F: PrimeField> SuccinctRoundOracle<F> {
+    /// Return a view of `self` such that the view records queries to the oracle.
     pub fn get_view(&self) -> SuccinctRoundOracleView<F> {
         SuccinctRoundOracleView {
             oracle: &self,
@@ -378,6 +388,7 @@ pub enum VerifierMessage<F: PrimeField> {
 }
 
 impl<F: PrimeField> VerifierMessage<F> {
+    /// If `self` contains field elements, return those elements. Otherwise return `None`.
     pub fn try_into_field_elements(self) -> Option<Vec<F>> {
         if let Self::FieldElements(x) = self {
             Some(x)
@@ -386,6 +397,7 @@ impl<F: PrimeField> VerifierMessage<F> {
         }
     }
 
+    /// If `self` contains bits, return those bits. Otherwise return `None`.
     pub fn try_into_bits(self) -> Option<Vec<bool>> {
         if let Self::Bits(x) = self {
             Some(x)
@@ -394,6 +406,7 @@ impl<F: PrimeField> VerifierMessage<F> {
         }
     }
 
+    /// If `self` contains bytes, return those bytes. Otherwise return `None`.
     pub fn try_into_bytes(self) -> Option<Vec<u8>> {
         if let Self::Bytes(x) = self {
             Some(x)

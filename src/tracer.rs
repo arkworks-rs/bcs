@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Copy)]
 #[allow(unused)]
+/// Tracing information for IOP protocol code. 
 pub struct TraceInfo {
     pub(crate) description: Option<&'static str>,
     pub(crate) file_name: &'static str,
@@ -28,6 +29,7 @@ impl Display for TraceInfo {
 }
 
 impl TraceInfo {
+    /// Returns a new `TraceInfo`. Note that this function should not be directly called. Instead, use `iop_trace!` instead. 
     pub fn new(
         description: Option<&'static str>,
         file_name: &'static str,
@@ -44,6 +46,7 @@ impl TraceInfo {
 }
 
 #[macro_export]
+/// Returns the tracing information at this point. 
 macro_rules! iop_trace {
     () => {{
         use $crate::tracer::*;

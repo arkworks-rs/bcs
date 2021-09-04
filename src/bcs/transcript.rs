@@ -40,7 +40,7 @@ pub fn create_subprotocol_namespace(
 #[derive(Clone, Eq, PartialEq, Debug)]
 /// Stores the ownership relation of each message to its protocol.
 pub struct MessageBookkeeper {
-    pub map: BTreeMap<NameSpace, MessageIndices>,
+    pub(crate) map: BTreeMap<NameSpace, MessageIndices>,
 }
 
 impl Default for MessageBookkeeper {
@@ -57,7 +57,7 @@ impl Default for MessageBookkeeper {
 pub const ROOT_NAMESPACE: NameSpace = NameSpace::new();
 
 impl MessageBookkeeper {
-    pub fn new_namespace(&mut self, namespace: NameSpace) {
+    pub(crate) fn new_namespace(&mut self, namespace: NameSpace) {
         if self.map.contains_key(&namespace) {
             panic!("namespace already exists")
         };
@@ -71,7 +71,7 @@ impl MessageBookkeeper {
     }
 
     /// Return the mutable message indices for current namespace.
-    pub fn fetch_node_mut(&mut self, namespace: &NameSpace) -> Option<&mut MessageIndices> {
+    pub(crate) fn fetch_node_mut(&mut self, namespace: &NameSpace) -> Option<&mut MessageIndices> {
         self.map.get_mut(namespace)
     }
 
@@ -107,7 +107,9 @@ impl MessageBookkeeper {
 /// contains indices of current protocol messages.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct MessageIndices {
+    /// Indices of prover message round oracles in this namespace.
     pub prover_message_locations: Vec<usize>,
+    /// Indices of verifier round oracles in this namespace.
     pub verifier_message_locations: Vec<usize>,
 }
 
@@ -177,7 +179,8 @@ where
             ldt_info: Box::new(ldt_info),
         }
     }
-
+    
+    /// Create a new namespace in bookkeeper. 
     pub fn new_namespace(&mut self, id: NameSpace) {
         self.bookkeeper.new_namespace(id)
     }

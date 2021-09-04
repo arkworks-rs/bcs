@@ -11,6 +11,7 @@ use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
 use ark_std::vec::Vec;
 
+/// Verifier for BCS proof.
 pub struct BCSVerifier<MT, F>
 where
     MT: MTConfig<Leaf = [F]>,
@@ -27,6 +28,9 @@ where
     F: PrimeField + Absorb,
     MT::InnerDigest: Absorb,
 {
+
+    /// Given a BCS transformed (RS-)IOP proof, verify the correctness of this proof.
+    /// `sponge` should be the same state as in beginning of `BCSProver::prove` function.
     pub fn verify<V, L, S>(
         mut sponge: S,
         proof: &BCSProof<MT, F>,
@@ -212,6 +216,9 @@ where
         )
     }
 
+    /// Verify without LDT.
+    ///
+    /// ** Warning **: If verifier tries to get an low-degree oracle, no LDT will be automatically performed.
     pub fn verify_with_dummy_ldt<V, S>(
         sponge: S,
         proof: &BCSProof<MT, F>,
