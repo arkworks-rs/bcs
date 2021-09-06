@@ -15,7 +15,6 @@ use ark_std::boxed::Box;
 use ark_std::mem::take;
 use ark_std::vec::Vec;
 
-
 /// R1CS Variable for simulation transcript used by verifier.
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
 where

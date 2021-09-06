@@ -16,7 +16,6 @@ use crate::ldt::{NoLDT, LDT};
 
 /// An extension trait of `LDT`. Any implementation of this trait have R1CS gadget for LDT.
 pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
-
     /// Simulate interaction with prover in commit phase, reconstruct verifier messages and verifier state
     /// using the sponge provided in the simulation transcript. Returns the verifier state for query and decision phase.
     fn restore_from_commit_phase_var<MT, MTG, S>(

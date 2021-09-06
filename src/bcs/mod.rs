@@ -3,15 +3,15 @@ use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOne
 /// Defines a prover message oracle.
 pub mod message;
 
-/// BCS prover. 
+/// BCS prover.
 pub mod prover;
-/// BCS transcript used by IOP interface. 
+/// BCS transcript used by IOP interface.
 pub mod transcript;
-/// BCS verifier. 
+/// BCS verifier.
 pub mod verifier;
 
 #[cfg(feature = "r1cs")]
-/// R1CS Constraints for BCS. 
+/// R1CS Constraints for BCS.
 pub mod constraints;
 #[cfg(test)]
 pub(crate) mod tests;

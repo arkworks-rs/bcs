@@ -179,8 +179,8 @@ where
             ldt_info: Box::new(ldt_info),
         }
     }
-    
-    /// Create a new namespace in bookkeeper. 
+
+    /// Create a new namespace in bookkeeper.
     pub fn new_namespace(&mut self, id: NameSpace) {
         self.bookkeeper.new_namespace(id)
     }

@@ -75,7 +75,7 @@ pub trait RoundOracle<F: PrimeField>: Sized {
         self.query_coset_without_tracer(coset_index)
     }
 
-    /// Return the queried coset at `coset_index` of all oracles, but without tracing information. 
+    /// Return the queried coset at `coset_index` of all oracles, but without tracing information.
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
     fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>>;
 

@@ -226,7 +226,6 @@ where
         )
     }
 
-
     /// Verify without LDT.
     ///
     /// ** Warning **: If verifier tries to get an low-degree oracle, no LDT will be automatically performed.

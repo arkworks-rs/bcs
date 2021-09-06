@@ -28,7 +28,6 @@ where
     F: PrimeField + Absorb,
     MT::InnerDigest: Absorb,
 {
-
     /// Given a BCS transformed (RS-)IOP proof, verify the correctness of this proof.
     /// `sponge` should be the same state as in beginning of `BCSProver::prove` function.
     pub fn verify<V, L, S>(
