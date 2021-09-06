@@ -1,4 +1,4 @@
-use crate::bcs::message::{ProverRoundMessageInfo, SuccinctRoundOracle, VerifierMessage};
+use crate::iop::message::{ProverRoundMessageInfo, SuccinctRoundOracle, VerifierMessage};
 use crate::tracer::TraceInfo;
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;

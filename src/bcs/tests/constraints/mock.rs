@@ -1,6 +1,6 @@
-use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
+use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::message::ProverRoundMessageInfo;
+use crate::iop::message::ProverRoundMessageInfo;
 use crate::bcs::tests::mock::MockTest1Verifier;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 use crate::iop::constraints::IOPVerifierWithGadget;

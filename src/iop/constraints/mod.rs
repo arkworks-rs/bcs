@@ -1,15 +1,19 @@
-use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
-use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
-use crate::iop::verifier::IOPVerifier;
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
+use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
+use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_std::vec::Vec;
+
+use crate::bcs::constraints::transcript::SimulationTranscriptVar;
+use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
+use crate::iop::verifier::IOPVerifier;
+use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
+
+/// Defines prover and verifier message variable.
+pub mod message;
 
 /// Constraints for IOP Verifier.
 ///
@@ -20,9 +24,9 @@ use ark_std::vec::Vec;
 /// main state and postpones any query to after the commit phase.
 /// * **Query And Decision Phase**: Verifier sends query and receive answer from message oracle.
 pub trait IOPVerifierWithGadget<S, CF>: IOPVerifier<S, CF>
-where
-    S: SpongeWithGadget<CF>,
-    CF: PrimeField + Absorb,
+    where
+        S: SpongeWithGadget<CF>,
+        CF: PrimeField + Absorb,
 {
     /// Verifier Output
     type VerifierOutputVar;
@@ -42,9 +46,9 @@ where
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
     ) -> Result<(), SynthesisError>
-    where
-        MT::InnerDigest: Absorb,
-        MTG::InnerDigest: AbsorbGadget<CF>;
+        where
+            MT::InnerDigest: Absorb,
+            MTG::InnerDigest: AbsorbGadget<CF>;
 
     /// Returns the initial state for query and decision phase.
     fn initial_state_for_query_and_decision_phase_var(

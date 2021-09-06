@@ -1,4 +1,4 @@
-use crate::bcs::message::{
+use crate::iop::message::{
     ProverRoundMessageInfo, RoundOracle, SuccinctRoundOracleView, VerifierMessage,
 };
 use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};

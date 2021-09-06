@@ -10,7 +10,7 @@ use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use ark_std::vec::Vec;
 
-use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
+use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
 use crate::ldt::{NoLDT, LDT};
 

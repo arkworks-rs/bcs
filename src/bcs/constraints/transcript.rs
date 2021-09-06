@@ -1,6 +1,6 @@
-use crate::bcs::constraints::message::{SuccinctRoundOracleVar, VerifierMessageVar};
+use crate::iop::constraints::message::{SuccinctRoundOracleVar, VerifierMessageVar};
 use crate::bcs::constraints::proof::BCSProofVar;
-use crate::bcs::message::ProverRoundMessageInfo;
+use crate::iop::message::ProverRoundMessageInfo;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 use crate::tracer::TraceInfo;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
@@ -260,9 +260,9 @@ where
 
 #[cfg(test)]
 pub(crate) mod sanity_check {
-    use crate::bcs::constraints::message::VerifierMessageVar;
+    use crate::iop::constraints::message::VerifierMessageVar;
     use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-    use crate::bcs::message::VerifierMessage;
+    use crate::iop::message::VerifierMessage;
     use crate::bcs::transcript::Transcript;
     use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
     use ark_crypto_primitives::merkle_tree::Config;

@@ -1,6 +1,6 @@
-use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
+use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::message::ProverRoundMessageInfo;
+use crate::iop::message::ProverRoundMessageInfo;
 use crate::bcs::transcript::ROOT_NAMESPACE;
 use crate::ldt::constraints::LDTWithGadget;
 use crate::ldt::rl_ldt::LinearCombinationLDT;

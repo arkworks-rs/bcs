@@ -3,7 +3,7 @@ use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::vec::Vec;
 
-use crate::bcs::message::{
+use crate::iop::message::{
     PendingProverMessage, ProverRoundMessageInfo, RecordingRoundOracle, RoundOracle,
     SuccinctRoundOracle, VerifierMessage,
 };

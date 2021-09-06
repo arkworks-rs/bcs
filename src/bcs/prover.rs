@@ -1,4 +1,4 @@
-use crate::bcs::message::SuccinctRoundOracle;
+use crate::iop::message::SuccinctRoundOracle;
 use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
 use crate::bcs::MTHashParameters;
 use crate::iop::prover::IOPProver;

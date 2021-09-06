@@ -1,4 +1,4 @@
-use crate::bcs::constraints::message::SuccinctRoundOracleVar;
+use crate::iop::constraints::message::SuccinctRoundOracleVar;
 use crate::bcs::prover::BCSProof;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;

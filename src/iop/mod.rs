@@ -6,3 +6,5 @@ pub mod verifier;
 /// Constraints for Public Coin IOP Verifier
 #[cfg(feature = "r1cs")]
 pub mod constraints;
+/// Defines a prover message oracle.
+pub mod message;
