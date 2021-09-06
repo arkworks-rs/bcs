@@ -1,6 +1,6 @@
-use crate::iop::message::SuccinctRoundOracle;
 use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
 use crate::bcs::MTHashParameters;
+use crate::iop::message::SuccinctRoundOracle;
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
 use crate::ldt::{NoLDT, LDT};

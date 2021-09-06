@@ -1,7 +1,7 @@
 use ark_crypto_primitives::crh::TwoToOneCRHSchemeGadget;
-use ark_crypto_primitives::CRHSchemeGadget;
-use ark_crypto_primitives::merkle_tree::Config;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
+use ark_crypto_primitives::merkle_tree::Config;
+use ark_crypto_primitives::CRHSchemeGadget;
 use ark_ff::PrimeField;
 
 /// Defines BCS prover constraints and proof variable.

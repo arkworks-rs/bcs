@@ -1,7 +1,7 @@
+use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
 use crate::iop::message::{
     ProverRoundMessageInfo, RoundOracle, SuccinctRoundOracleView, VerifierMessage,
 };
-use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
 use crate::ldt::LDT;
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;

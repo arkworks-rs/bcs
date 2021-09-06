@@ -1,5 +1,5 @@
-use crate::iop::message::{ProverRoundMessageInfo, RoundOracle, VerifierMessage};
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript, Transcript};
+use crate::iop::message::{ProverRoundMessageInfo, RoundOracle, VerifierMessage};
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
 use crate::Error;

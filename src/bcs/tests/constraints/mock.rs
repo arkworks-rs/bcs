@@ -1,9 +1,9 @@
-use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::iop::message::ProverRoundMessageInfo;
 use crate::bcs::tests::mock::MockTest1Verifier;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
+use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::iop::constraints::IOPVerifierWithGadget;
+use crate::iop::message::ProverRoundMessageInfo;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;

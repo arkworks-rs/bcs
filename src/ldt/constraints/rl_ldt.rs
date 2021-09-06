@@ -1,7 +1,7 @@
-use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::iop::message::ProverRoundMessageInfo;
 use crate::bcs::transcript::ROOT_NAMESPACE;
+use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
+use crate::iop::message::ProverRoundMessageInfo;
 use crate::ldt::constraints::LDTWithGadget;
 use crate::ldt::rl_ldt::LinearCombinationLDT;
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;

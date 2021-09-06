@@ -5,8 +5,8 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
 
-use crate::iop::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};
 use crate::bcs::transcript::{SimulationTranscript, Transcript};
+use crate::iop::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};
 use crate::Error;
 use ark_std::vec::Vec;
 

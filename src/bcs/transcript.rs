@@ -3,12 +3,12 @@ use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::vec::Vec;
 
+use crate::bcs::prover::BCSProof;
+use crate::bcs::MTHashParameters;
 use crate::iop::message::{
     PendingProverMessage, ProverRoundMessageInfo, RecordingRoundOracle, RoundOracle,
     SuccinctRoundOracle, VerifierMessage,
 };
-use crate::bcs::prover::BCSProof;
-use crate::bcs::MTHashParameters;
 use crate::tracer::TraceInfo;
 use crate::Error;
 use ark_crypto_primitives::MerkleTree;

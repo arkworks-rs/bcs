@@ -10,8 +10,8 @@ use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use ark_std::vec::Vec;
 
-use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
+use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::ldt::{NoLDT, LDT};
 
 /// An extension trait of `LDT`. Any implementation of this trait have R1CS gadget for LDT.
