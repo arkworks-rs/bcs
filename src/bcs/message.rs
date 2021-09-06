@@ -304,7 +304,7 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
     }
 }
 
-/// A round oracle that contains only leaves of queries.
+/// A round oracle that contains only queried leaves.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct SuccinctRoundOracle<F: PrimeField> {
     /// Oracle Info

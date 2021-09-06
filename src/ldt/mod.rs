@@ -11,11 +11,14 @@ use crate::Error;
 use ark_std::vec::Vec;
 
 #[cfg(feature = "r1cs")]
+/// R1CS constraints for LDT.
 pub mod constraints;
+/// LDT that runs FRI on a random linear combination.
 pub mod rl_ldt;
 
 /// Trait for LDT, which is an public coin IOP.
 pub trait LDT<F: PrimeField + Absorb> {
+    /// Parameters of `Self`
     type LDTParameters: Clone;
 
     /// Given the degree bound of codeword, return the expected evaluation domain and localization_parameter.
@@ -35,6 +38,8 @@ pub trait LDT<F: PrimeField + Absorb> {
     where
         MT::InnerDigest: Absorb;
 
+    /// Simulate interaction with prover in commit phase, reconstruct verifier messages and verifier state
+    /// using the sponge provided in the simulation transcript. Returns the verifier state for query and decision phase.
     fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>, // FRI only gets degree bound information from this phase

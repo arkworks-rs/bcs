@@ -27,6 +27,7 @@ pub struct LinearCombinationLDT<F: PrimeField + Absorb> {
 }
 
 #[derive(Clone)]
+/// Parameter for Linear combination LDT, which includes parameter for FRI and number of queries.
 pub struct LinearCombinationLDTParameters<F: PrimeField + Absorb> {
     /// FRI parameter for the linearly combined polynomial
     pub fri_parameters: FRIParameters<F>,

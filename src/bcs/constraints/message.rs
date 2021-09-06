@@ -11,6 +11,7 @@ use ark_std::vec::Vec;
 pub trait RoundOracleVar<F: PrimeField> {}
 
 #[derive(Clone)]
+/// Round oracle variable that contains only queried leaves.
 pub struct SuccinctRoundOracleVar<F: PrimeField> {
     /// Oracle Info
     pub info: ProverRoundMessageInfo,
@@ -71,6 +72,7 @@ impl<F: PrimeField> AllocVar<SuccinctRoundOracle<F>, F> for SuccinctRoundOracleV
 }
 
 #[derive(Clone)]
+/// A reference to the succinct oracle variable plus a state recording current query position.
 pub struct SuccinctRoundOracleVarView<'a, F: PrimeField> {
     pub(crate) oracle: &'a SuccinctRoundOracleVar<F>,
     /// queries calculated by the verifier
@@ -189,6 +191,7 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
 }
 
 #[derive(Clone)]
+/// Verifier message variable used in transcript gadget
 pub enum VerifierMessageVar<F: PrimeField> {
     /// Field elements
     FieldElements(Vec<FpVar<F>>),
@@ -199,6 +202,7 @@ pub enum VerifierMessageVar<F: PrimeField> {
 }
 
 impl<F: PrimeField> VerifierMessageVar<F> {
+    /// If `self` contains field elements, return those elements. Otherwise return `None`.
     pub fn try_into_field_elements(self) -> Option<Vec<FpVar<F>>> {
         if let VerifierMessageVar::FieldElements(fe) = self {
             Some(fe)
@@ -207,6 +211,7 @@ impl<F: PrimeField> VerifierMessageVar<F> {
         }
     }
 
+    /// If `self` contains bits, return those bits. Otherwise return `None`.
     pub fn try_into_bits(self) -> Option<Vec<Boolean<F>>> {
         if let VerifierMessageVar::Bits(bits) = self {
             Some(bits)
@@ -215,6 +220,7 @@ impl<F: PrimeField> VerifierMessageVar<F> {
         }
     }
 
+    /// If `self` contains bytes, return those bytes. Otherwise return `None`.
     pub fn try_into_bytes(self) -> Option<Vec<UInt8<F>>> {
         if let VerifierMessageVar::Bytes(bytes) = self {
             Some(bytes)

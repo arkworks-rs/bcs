@@ -1,3 +1,4 @@
+/// LDT that runs FRI gadget on a random linear combination.
 pub mod rl_ldt;
 
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
@@ -13,7 +14,11 @@ use crate::bcs::constraints::message::{SuccinctRoundOracleVarView, VerifierMessa
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
 use crate::ldt::{NoLDT, LDT};
 
+/// An extension trait of `LDT`. Any implementation of this trait have R1CS gadget for LDT.
 pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
+
+    /// Simulate interaction with prover in commit phase, reconstruct verifier messages and verifier state
+    /// using the sponge provided in the simulation transcript. Returns the verifier state for query and decision phase.
     fn restore_from_commit_phase_var<MT, MTG, S>(
         param: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
@@ -26,6 +31,8 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
         MT::InnerDigest: Absorb,
         MTG::InnerDigest: AbsorbGadget<CF>;
 
+    /// Verify `codewords` is low-degree, given the succinct codewords oracle and proof.
+    /// `codewords_oracles[i]` includes all oracles sent on round `i`.
     fn query_and_decide_var<S: SpongeWithGadget<CF>>(
         param: &Self::LDTParameters,
         random_oracle: &mut S::Var,

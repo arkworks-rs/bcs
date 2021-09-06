@@ -15,6 +15,8 @@ use ark_std::boxed::Box;
 use ark_std::mem::take;
 use ark_std::vec::Vec;
 
+
+/// R1CS Variable for simulation transcript used by verifier.
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
 where
     F: PrimeField + Absorb,
@@ -82,6 +84,9 @@ where
         }
     }
 
+    /// Create a simulation transcript from a list of prover messages, its corresponding merkle tree, sponge variable, and LDT information,
+    ///
+    /// `ldt_info` may panic if `NoLDT` is used.
     pub fn from_prover_messages(
         prover_iop_messages_by_round: &'a [SuccinctRoundOracleVar<F>],
         prover_iop_messages_mt_roots_by_round: &'a [Option<MTG::InnerDigest>],
@@ -113,6 +118,13 @@ where
         self.current_prover_round
     }
 
+    /// Receive prover's current round messages, which can possibly contain multiple oracles with same size.
+    /// This function will absorb the merkle tree root and short messages (if any).
+    ///
+    /// If the function contains low-degree oracle, localization parameter in `expected_message_info` will be ignored,
+    /// because localization parameter is managed by LDT.
+    /// # Panic
+    /// This function will panic is prover message structure contained in proof is not consistent with `expected_message_structure`.
     pub fn receive_prover_current_round(
         &mut self,
         ns: &NameSpace,
