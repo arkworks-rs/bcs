@@ -11,6 +11,7 @@ use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 use ark_std::test_rng;
 
+/// TODO: add a README here describing the dummy protocol
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
