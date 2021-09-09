@@ -652,7 +652,8 @@ where
         let trace_info = || {
             ark_std::format!(
                 "\n Message trace: {}\n Namespace trace: {}",
-                trace, self.bookkeeper.namespace_trace[ns]
+                trace,
+                self.bookkeeper.namespace_trace[ns]
             )
         };
 
