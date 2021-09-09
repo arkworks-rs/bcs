@@ -1,15 +1,24 @@
+use crate::bcs::tests::FieldMTConfig;
+use crate::bcs::transcript::test_utils::check_commit_phase_correctness;
 use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript, Transcript};
+use crate::bcs::MTHashParameters;
 use crate::iop::message::{ProverRoundMessageInfo, RoundOracle, VerifierMessage};
 use crate::iop::prover::IOPProver;
 use crate::iop::verifier::IOPVerifier;
+use crate::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
+use crate::test_utils::poseidon_parameters;
 use crate::Error;
+use ark_bls12_381::fr::Fr;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::{PrimeField, ToConstraintField};
+use ark_ldt::domain::Radix2CosetDomain;
+use ark_ldt::fri::FRIParameters;
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::UVPolynomial;
+use ark_sponge::poseidon::PoseidonSponge;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
-use ark_std::test_rng;
+use ark_std::{test_rng, One};
 
 /// TODO: add a README here describing the dummy protocol
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
@@ -126,7 +135,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             oracle_length: 256,
             localization_parameter: 2,
         };
-        transcript.receive_prover_current_round(namespace, expected_info);
+        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // verifier send
         transcript.squeeze_verifier_field_elements(&[
@@ -135,11 +144,11 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             FieldElementSize::Full,
         ]);
         transcript.squeeze_verifier_field_bytes(16);
-        transcript.submit_verifier_current_round(namespace);
+        transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         // verifier send2
         transcript.squeeze_verifier_field_bits(19);
-        transcript.submit_verifier_current_round(namespace);
+        transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         // prover send
         let expected_info = ProverRoundMessageInfo {
@@ -149,7 +158,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             oracle_length: 256,
             localization_parameter: 0,
         };
-        transcript.receive_prover_current_round(namespace, expected_info);
+        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // prover send2
         let expected_info = ProverRoundMessageInfo {
@@ -159,7 +168,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             oracle_length: 128,
             localization_parameter: 0, // managed by LDT
         };
-        transcript.receive_prover_current_round(namespace, expected_info);
+        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
     }
 
     fn initial_state_for_query_and_decision_phase(
@@ -241,4 +250,37 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
 
         Ok(true)
     }
+}
+
+#[test]
+fn check_mock1_commit_phase() {
+    let fri_parameters = FRIParameters::new(
+        64,
+        vec![1, 2, 1],
+        Radix2CosetDomain::new_radix2_coset(128, Fr::one()),
+    );
+    let ldt_pamameters = LinearCombinationLDTParameters {
+        fri_parameters,
+        num_queries: 1,
+    };
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
+    check_commit_phase_correctness::<
+        Fr,
+        _,
+        FieldMTConfig,
+        MockTestProver<Fr>,
+        MockTest1Verifier<Fr>,
+        LinearCombinationLDT<Fr>,
+    >(
+        sponge,
+        &(),
+        &(),
+        &(),
+        &(),
+        &ldt_pamameters,
+        MTHashParameters {
+            leaf_hash_param: poseidon_parameters(),
+            inner_hash_param: poseidon_parameters(),
+        },
+    );
 }

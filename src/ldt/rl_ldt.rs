@@ -184,7 +184,10 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 .map(|_| FieldElementSize::Full)
                 .collect::<Vec<_>>(),
         );
-        ldt_transcript.submit_verifier_current_round(&ROOT_NAMESPACE);
+        ldt_transcript.submit_verifier_current_round(
+            &ROOT_NAMESPACE,
+            iop_trace!("LDT random linear combination"),
+        );
         // prover generate result codewords
         let mut current_domain = params.fri_parameters.domain;
 
@@ -195,7 +198,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
             .zip(params.fri_parameters.localization_parameters[1..].iter())
             .for_each(|(&localization_curr, &localization_next)| {
                 ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full]);
-                ldt_transcript.submit_verifier_current_round(namespace);
+                ldt_transcript.submit_verifier_current_round(namespace, iop_trace!("LDT alpha"));
                 let next_domain = current_domain.fold(localization_curr);
                 // ldt will receive a one oracle message
                 ldt_transcript.receive_prover_current_round(
@@ -207,6 +210,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                         localization_parameter: localization_next as usize,
                         oracle_length: next_domain.size(),
                     },
+                    iop_trace!("LDT prover message"),
                 );
 
                 current_domain = next_domain;
@@ -214,7 +218,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
 
         // receive final polynomials
         ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full]);
-        ldt_transcript.submit_verifier_current_round(namespace);
+        ldt_transcript.submit_verifier_current_round(namespace, iop_trace!("LDT alpha for final"));
         ldt_transcript.receive_prover_current_round(
             namespace,
             ProverRoundMessageInfo {
@@ -224,6 +228,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 localization_parameter: 0, // ignored
                 oracle_length: 0,          // ignored
             },
+            iop_trace!("LDT final polynomial"),
         );
     }
 
@@ -406,6 +411,7 @@ fn degree_raise_poly_query<F: PrimeField>(
 #[cfg(test)]
 mod tests {
     use crate::bcs::tests::FieldMTConfig;
+    use crate::bcs::transcript::test_utils::check_transcript_consistency;
     use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
     use crate::bcs::MTHashParameters;
     use crate::ldt::rl_ldt::{
@@ -482,8 +488,8 @@ mod tests {
                 .submit_prover_current_round(&ROOT_NAMESPACE, iop_trace!())
                 .unwrap();
 
-            // check LDT
-            let mut sponge_before_ldt = transcript.sponge;
+            // check LDT Prove
+            let sponge_before_ldt = transcript.sponge;
             let mut ldt_transcript =
                 Transcript::new(sponge_before_ldt.clone(), hash_params.clone(), |_| {
                     panic!("ldt not allowed")
@@ -500,7 +506,7 @@ mod tests {
 
             LinearCombinationLDT::query_and_decide(
                 &ldt_params,
-                &mut ldt_transcript.sponge,
+                &mut ldt_transcript.sponge.clone(),
                 transcript.prover_message_oracles.iter_mut().collect(),
                 ldt_transcript.prover_message_oracles.iter_mut().collect(),
                 ldt_transcript.verifier_messages.as_slice(),
@@ -508,20 +514,13 @@ mod tests {
             .unwrap();
 
             // check restore
-            let ldt_message_oracle = ldt_transcript
-                .prover_message_oracles
-                .iter()
-                .map(|round| round.get_succinct_oracle())
-                .collect::<Vec<_>>();
-            let ldt_message_mt_roots = ldt_transcript
-                .merkle_tree_for_each_round
-                .iter()
-                .map(|tree| tree.as_ref().map(|t| t.root()))
-                .collect::<Vec<_>>();
+            let ldt_message_oracle = ldt_transcript.all_succinct_round_oracles();
+            let ldt_message_mt_roots = ldt_transcript.merkle_tree_roots();
+            let mut sponge_vt = sponge_before_ldt.clone();
             let mut simulation_transcript = SimulationTranscript::from_prover_messages(
                 &ldt_message_oracle,
                 &ldt_message_mt_roots,
-                &mut sponge_before_ldt,
+                &mut sponge_vt,
                 |_| panic!(),
             );
 
@@ -534,13 +533,29 @@ mod tests {
                 .iter()
                 .map(|r| r.get_view())
                 .collect::<Vec<_>>();
+
+            let ldt_succinct_oracles = ldt_transcript.all_succinct_round_oracles();
+            let mut ldt_succinct_oracles_view = ldt_succinct_oracles
+                .iter()
+                .map(|oracle| oracle.get_view())
+                .collect::<Vec<_>>();
+
             LinearCombinationLDT::restore_from_commit_phase(
                 &ldt_params,
                 codewords_oracle_view.iter_mut().collect(),
                 &mut simulation_transcript,
             );
 
-            simulation_transcript.check_correctness(&ldt_transcript);
+            check_transcript_consistency(&ldt_transcript, &simulation_transcript);
+
+            LinearCombinationLDT::query_and_decide(
+                &ldt_params,
+                &mut ldt_transcript.sponge.clone(),
+                codewords_oracle_view.iter_mut().collect(),
+                ldt_succinct_oracles_view.iter_mut().collect(),
+                ldt_transcript.verifier_messages.as_slice(),
+            )
+            .unwrap();
         }
     }
 }

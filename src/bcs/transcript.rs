@@ -18,6 +18,7 @@ use ark_poly::Polynomial;
 use ark_std::boxed::Box;
 use ark_std::collections::BTreeMap;
 use ark_std::mem::take;
+
 /// # Namespace
 /// The namespace is an Each protocol is a list of subprotocol_id that represents a path.
 /// Subprotocol ID should be unique in scope of current running protocol, but do not need to be unique
@@ -37,18 +38,20 @@ pub fn create_subprotocol_namespace(
     result
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone)]
 /// Stores the ownership relation of each message to its protocol.
 pub struct MessageBookkeeper {
     pub(crate) map: BTreeMap<NameSpace, MessageIndices>,
+    pub(crate) namespace_trace: BTreeMap<NameSpace, TraceInfo>,
 }
 
 impl Default for MessageBookkeeper {
     fn default() -> Self {
         let mut result = Self {
             map: BTreeMap::default(),
+            namespace_trace: BTreeMap::default(),
         };
-        result.new_namespace(ROOT_NAMESPACE);
+        result.new_namespace(ROOT_NAMESPACE, iop_trace!("ROOT_NAMESPACE"));
         result
     }
 }
@@ -57,7 +60,7 @@ impl Default for MessageBookkeeper {
 pub const ROOT_NAMESPACE: NameSpace = NameSpace::new();
 
 impl MessageBookkeeper {
-    pub(crate) fn new_namespace(&mut self, namespace: NameSpace) {
+    pub(crate) fn new_namespace(&mut self, namespace: NameSpace, trace: TraceInfo) {
         if self.map.contains_key(&namespace) {
             panic!("namespace already exists")
         };
@@ -66,13 +69,33 @@ impl MessageBookkeeper {
             MessageIndices {
                 prover_message_locations: Vec::new(),
                 verifier_message_locations: Vec::new(),
+                prover_message_trace: Vec::new(),
+                verifier_message_trace: Vec::new(),
             },
         );
+        self.namespace_trace.insert(namespace.clone(), trace);
     }
 
-    /// Return the mutable message indices for current namespace.
-    pub(crate) fn fetch_node_mut(&mut self, namespace: &NameSpace) -> Option<&mut MessageIndices> {
-        self.map.get_mut(namespace)
+    pub(crate) fn attach_prover_round_to_namespace(
+        &mut self,
+        namespace: &NameSpace,
+        round_index: usize,
+        trace: TraceInfo,
+    ) {
+        let namespace_node = self.map.get_mut(namespace).expect("namespace not found");
+        namespace_node.prover_message_locations.push(round_index);
+        namespace_node.prover_message_trace.push(trace);
+    }
+
+    pub(crate) fn attach_verifier_round_to_namespace(
+        &mut self,
+        namespace: &NameSpace,
+        round_index: usize,
+        trace: TraceInfo,
+    ) {
+        let namespace_node = self.map.get_mut(namespace).expect("namespace not found");
+        namespace_node.verifier_message_locations.push(round_index);
+        namespace_node.verifier_message_trace.push(trace);
     }
 
     /// Does namespace exist in bookkeeper?
@@ -105,12 +128,20 @@ impl MessageBookkeeper {
 }
 
 /// contains indices of current protocol messages.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Derivative)]
+#[derivative(Eq, PartialEq, Debug)]
 pub struct MessageIndices {
     /// Indices of prover message round oracles in this namespace.
     pub prover_message_locations: Vec<usize>,
     /// Indices of verifier round oracles in this namespace.
     pub verifier_message_locations: Vec<usize>,
+
+    /// Trace information of prover messages
+    #[derivative(PartialEq = "ignore")]
+    pub prover_message_trace: Vec<TraceInfo>,
+    #[derivative(PartialEq = "ignore")]
+    /// Trace information of verifier messages
+    pub verifier_message_trace: Vec<TraceInfo>,
 }
 
 #[allow(variant_size_differences)]
@@ -181,8 +212,8 @@ where
     }
 
     /// Create a new namespace in bookkeeper.
-    pub fn new_namespace(&mut self, id: NameSpace) {
-        self.bookkeeper.new_namespace(id)
+    pub fn new_namespace(&mut self, id: NameSpace, trace: TraceInfo) {
+        self.bookkeeper.new_namespace(id, trace)
     }
 
     /// Submit all prover oracles in this round, and set pending round message to `None`
@@ -191,11 +222,11 @@ where
     pub fn submit_prover_current_round(
         &mut self,
         namespace: &NameSpace,
-        _tracer: TraceInfo,
+        trace: TraceInfo,
     ) -> Result<(), Error> {
         #[cfg(feature = "print-trace")]
         {
-            println!("[Prover Transcript] Prover submitted round {}", _tracer)
+            println!("[Prover Transcript] Prover submitted round {}", trace)
         }
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
@@ -212,7 +243,7 @@ where
                 .for_each(|msg| self.sponge.absorb(msg));
             self.prover_message_oracles.push(recording_oracle);
             self.merkle_tree_for_each_round.push(mt);
-            self.attach_latest_prover_round_to_namespace(namespace);
+            self.attach_latest_prover_round_to_namespace(namespace, trace);
             Ok(())
         } else {
             panic!("Current pending message is not prover message!")
@@ -222,16 +253,16 @@ where
     /// Submit all verifier messages in this round, and set pending round message to `None`.
     /// # Panic
     /// Panic if current verifier round messages is `None` or `ProverMessage`
-    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace, _tracer: TraceInfo) {
+    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace, trace: TraceInfo) {
         #[cfg(feature = "print-trace")]
         {
-            println!("[Prover Transcript] Verifier submitted round {}", _tracer)
+            println!("[Prover Transcript] Verifier submitted round {}", trace)
         }
 
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::VerifierMessage(round_msg) = pending_message {
             self.verifier_messages.push(round_msg);
-            self.attach_latest_verifier_round_to_namespace(namespace);
+            self.attach_latest_verifier_round_to_namespace(namespace, trace);
         } else {
             panic!("Current pending message is not prover message!")
         }
@@ -401,6 +432,22 @@ where
         return true;
     }
 
+    #[cfg(any(test, feature = "test_utils"))]
+    pub(crate) fn all_succinct_round_oracles(&self) -> Vec<SuccinctRoundOracle<F>> {
+        self.prover_message_oracles
+            .iter()
+            .map(|round| round.get_succinct_oracle())
+            .collect::<Vec<_>>()
+    }
+
+    #[cfg(any(test, feature = "test_utils"))]
+    pub(crate) fn merkle_tree_roots(&self) -> Vec<Option<P::InnerDigest>> {
+        self.merkle_tree_for_each_round
+            .iter()
+            .map(|mt_| mt_.as_ref().map(|mt| mt.root()))
+            .collect::<Vec<_>>()
+    }
+
     /// Get reference to current prover pending message.
     /// If current round pending message to `None`, current round message will become prover message type.
     /// Panic if current pending message is not prover message.
@@ -430,24 +477,22 @@ where
         }
     }
 
-    fn attach_latest_prover_round_to_namespace(&mut self, namespace: &NameSpace) {
+    fn attach_latest_prover_round_to_namespace(&mut self, namespace: &NameSpace, trace: TraceInfo) {
         // add verifier message index to namespace
         let index = self.prover_message_oracles.len() - 1;
         self.bookkeeper
-            .fetch_node_mut(namespace)
-            .expect("namespace not found")
-            .prover_message_locations
-            .push(index);
+            .attach_prover_round_to_namespace(namespace, index, trace);
     }
 
-    fn attach_latest_verifier_round_to_namespace(&mut self, namespace: &NameSpace) {
+    fn attach_latest_verifier_round_to_namespace(
+        &mut self,
+        namespace: &NameSpace,
+        trace: TraceInfo,
+    ) {
         // add verifier message index to namespace
         let index = self.verifier_messages.len() - 1;
         self.bookkeeper
-            .fetch_node_mut(namespace)
-            .expect("namespace not found")
-            .verifier_message_locations
-            .push(index);
+            .attach_verifier_round_to_namespace(namespace, index, trace);
     }
 
     /// returns evaluation domain and localization_parameter of codewords, managed by LDT
@@ -503,6 +548,11 @@ where
         ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
     ) -> Self {
         Self::new_transcript_with_offset(bcs_proof, 0, sponge, ldt_info)
+    }
+
+    /// Create a new namespace in bookkeeper.
+    pub fn new_namespace(&mut self, id: NameSpace, trace: TraceInfo) {
+        self.bookkeeper.new_namespace(id, trace)
     }
 
     /// Returns a wrapper for BCS proof and first `round_offset` messages are ignored.
@@ -577,6 +627,7 @@ where
         &mut self,
         ns: &NameSpace,
         mut expected_message_info: ProverRoundMessageInfo,
+        trace: TraceInfo,
     ) {
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
             // LDT is used, so replace its localization parameter with the one given by LDT
@@ -598,9 +649,25 @@ where
         let index = self.current_prover_round;
         self.current_prover_round += 1;
 
+        let trace_info = || {
+            ark_std::format!(
+                "\n Message trace: {}\n Namespace trace: {}",
+                trace, self.bookkeeper.namespace_trace[ns]
+            )
+        };
+
+        if index >= self.prover_messages_info.len() {
+            panic!(
+                "Verifier tried to receive extra prove round message. {}",
+                trace_info()
+            );
+        }
+
         assert_eq!(
-            &expected_message_info, &self.prover_messages_info[index],
-            "prover message is not what verifier want at current round"
+            &expected_message_info,
+            &self.prover_messages_info[index],
+            "prover message is not what verifier want at current round. {}",
+            trace_info()
         );
 
         // absorb merkle tree root, if any
@@ -609,15 +676,14 @@ where
         self.prover_short_messages[index]
             .iter()
             .for_each(|msg| self.sponge.absorb(msg));
-        self.attach_latest_prover_round_to_namespace(ns);
+        self.attach_latest_prover_round_to_namespace(ns, trace);
     }
 
     /// Submit all verifier messages in this round.
-    /// TODO: add tracer here
-    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace) {
+    pub fn submit_verifier_current_round(&mut self, namespace: &NameSpace, trace: TraceInfo) {
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifer_messages.push(pending_message);
-        self.attach_latest_verifier_round_to_namespace(namespace);
+        self.attach_latest_verifier_round_to_namespace(namespace, trace);
     }
 
     /// Squeeze sampled verifier message as field elements. The squeezed elements is attached to
@@ -664,43 +730,182 @@ where
         !self.pending_verifier_messages.is_empty()
     }
 
-    fn attach_latest_prover_round_to_namespace(&mut self, namespace: &NameSpace) {
+    fn attach_latest_prover_round_to_namespace(&mut self, namespace: &NameSpace, trace: TraceInfo) {
         // add verifier message index to namespace
         let index = self.current_prover_round - 1;
         self.bookkeeper
-            .fetch_node_mut(namespace)
-            .expect("namespace not found")
-            .prover_message_locations
-            .push(index);
+            .attach_prover_round_to_namespace(namespace, index, trace);
     }
 
-    fn attach_latest_verifier_round_to_namespace(&mut self, namespace: &NameSpace) {
+    fn attach_latest_verifier_round_to_namespace(
+        &mut self,
+        namespace: &NameSpace,
+        trace: TraceInfo,
+    ) {
         // add verifier message index to namespace
         let index = self.reconstructed_verifer_messages.len() - 1;
         self.bookkeeper
-            .fetch_node_mut(namespace)
-            .expect("namespace not found")
-            .verifier_message_locations
-            .push(index);
+            .attach_verifier_round_to_namespace(namespace, index, trace);
     }
 
     /// returns the evaluation domain used by LDT and localization parameter, given the degree bound
     fn ldt_info(&self, degree: usize) -> (Radix2CosetDomain<F>, usize) {
         (self.ldt_info)(degree)
     }
+}
 
-    #[cfg(test)]
-    /// test whether `reconstructed_verifer_messages` simulate the prover-verifier interaction in
-    /// commit phase correctly.
-    pub fn check_correctness(&self, prover_transcript: &Transcript<P, S, F>) {
-        // TODO: give information about which namespace is incorrect
-        assert_eq!(prover_transcript.bookkeeper,
-                   self.bookkeeper,
-                   "your simulation code submits incorrect number of rounds, or call subprotocols in incorrect order.");
+#[cfg(any(feature = "test_utils", test))]
+/// Utilities for testing if `restore_from_commit_phase` is correct
+pub mod test_utils {
+    use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
+    use crate::bcs::MTHashParameters;
+    use crate::iop::prover::IOPProver;
+    use crate::iop::verifier::IOPVerifier;
+    use crate::ldt::LDT;
+    use ark_crypto_primitives::merkle_tree::Config as MTConfig;
+    use ark_ff::PrimeField;
+    use ark_sponge::{Absorb, CryptographicSponge};
+    use ark_std::collections::BTreeSet;
 
-        // TODO: give information about which message in which namespace is incorrect
-        assert_eq!(prover_transcript.verifier_messages,
-                   self.reconstructed_verifer_messages,
-                   "reconstructed verifer messages is inconsistent with verifier messages sampled in prover code");
+    /// Check if simulation transcript filled by the verifier is consistent with prover transcript
+    pub fn check_transcript_consistency<P, S, F>(
+        prover_transcript: &Transcript<P, S, F>,
+        verifier_transcript: &SimulationTranscript<P, S, F>,
+    ) where
+        P: MTConfig<Leaf = [F]>,
+        S: CryptographicSponge,
+        F: PrimeField + Absorb,
+        P::InnerDigest: Absorb,
+    {
+        // check namespace consistency
+        assert_eq!(
+            verifier_transcript
+                .bookkeeper
+                .map
+                .keys()
+                .collect::<BTreeSet<_>>(),
+            prover_transcript
+                .bookkeeper
+                .map
+                .keys()
+                .collect::<BTreeSet<_>>(),
+            "inconsistent namespace used"
+        );
+        // check for each namespace
+        verifier_transcript.bookkeeper.map.keys().for_each(|key| {
+            let namespace_diag = format!(
+                "Prover transcript defines this namespace as {}\n\
+             Verifier defines this namespace as {}\n",
+                prover_transcript.bookkeeper.namespace_trace[key],
+                verifier_transcript.bookkeeper.namespace_trace[key]
+            );
+            let indices_in_current_namespace_pt = &prover_transcript.bookkeeper.map[key];
+            let indices_in_current_namespace_vt = &verifier_transcript.bookkeeper.map[key];
+
+            assert_eq!(
+                indices_in_current_namespace_pt.prover_message_locations,
+                indices_in_current_namespace_vt.prover_message_locations,
+                "Inconsistent prover message order/number under same namespace ID. {}",
+                namespace_diag
+            );
+            assert_eq!(
+                indices_in_current_namespace_pt.verifier_message_locations,
+                indices_in_current_namespace_vt.verifier_message_locations,
+                "Inconsistent verifier message order/number under same namespace ID. {}",
+                namespace_diag
+            );
+            // prover message should already be verified during prover submit round
+            // check verifier message
+            (0..indices_in_current_namespace_pt
+                .verifier_message_locations
+                .len())
+                .for_each(|i| {
+                    let verifier_message_trace_pt =
+                        &indices_in_current_namespace_pt.verifier_message_trace[i];
+                    let verifier_message_trace_vt =
+                        &indices_in_current_namespace_vt.verifier_message_trace[i];
+                    // verifier message gained by prover transcript
+                    let verifier_message_pt = &prover_transcript.verifier_messages
+                        [indices_in_current_namespace_pt.verifier_message_locations[i]];
+                    // verifier message gained by verifier simulation transcript
+                    let verifier_message_vt = &verifier_transcript.reconstructed_verifer_messages
+                        [indices_in_current_namespace_vt.verifier_message_locations[i]];
+
+                    assert_eq!(
+                        verifier_message_pt, verifier_message_vt,
+                        "Inconsistent verifier round #{}.\n\
+             Prover transcript message trace: {}\n\
+             Verifier transcript message trace: {}\n\
+             {}
+             ",
+                        i, verifier_message_trace_pt, verifier_message_trace_vt, namespace_diag
+                    );
+                });
+        });
+
+        // check sponge final state
+        let mut sponge_pt = prover_transcript.sponge.clone();
+        let mut sponge_vt = verifier_transcript.sponge.clone();
+        // try squeeze something, and check if they are the same
+        {
+            let a = sponge_pt.squeeze_field_elements::<F>(4);
+            let b = sponge_vt.squeeze_field_elements::<F>(4);
+            if a != b {
+                panic!("Inconsistent sponge state at end of commit phase. ")
+            }
+        }
+    }
+
+    /// Check if verifier's `restore_from_commit_phase` is consistent with prover's code
+    pub fn check_commit_phase_correctness<
+        F: PrimeField + Absorb,
+        S: CryptographicSponge,
+        MT: MTConfig<Leaf = [F]>,
+        P: IOPProver<F>,
+        V: IOPVerifier<S, F, PublicInput = P::PublicInput>,
+        L: LDT<F>,
+    >(
+        sponge: S,
+        public_input: &P::PublicInput,
+        private_input: &P::PrivateInput,
+        prover_parameter: &P::ProverParameter,
+        verifier_parameter: &V::VerifierParameter,
+        ldt_params: &L::LDTParameters,
+        hash_params: MTHashParameters<MT>,
+    ) where
+        MT::InnerDigest: Absorb,
+    {
+        // generate transcript using prover perspective
+        let transcript_pt = {
+            let mut transcript = Transcript::new(sponge.clone(), hash_params, |degree| {
+                L::ldt_info(ldt_params, degree)
+            });
+            P::prove(
+                &ROOT_NAMESPACE,
+                &mut P::initial_state(prover_parameter, public_input, private_input),
+                &mut transcript,
+                prover_parameter,
+            )
+            .unwrap();
+            transcript
+        };
+
+        // generate transcript using verifier perspective
+        let succinct_prover_messages = transcript_pt.all_succinct_round_oracles();
+        let prover_mt_roots = transcript_pt.merkle_tree_roots();
+        let mut sponge_vt = sponge.clone();
+        let mut transcript_vt = SimulationTranscript::from_prover_messages(
+            &succinct_prover_messages,
+            &prover_mt_roots,
+            &mut sponge_vt,
+            |degree| L::ldt_info(ldt_params, degree),
+        );
+        V::restore_from_commit_phase(
+            &ROOT_NAMESPACE,
+            public_input,
+            &mut transcript_vt,
+            verifier_parameter,
+        );
+        check_transcript_consistency(&transcript_pt, &transcript_vt);
     }
 }

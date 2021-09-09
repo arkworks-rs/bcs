@@ -1,5 +1,5 @@
-#[cfg(feature = "std")]
-use std::fmt::{Display, Formatter};
+use ark_std::fmt::Debug;
+use ark_std::fmt::{Display, Formatter};
 
 #[derive(Clone, Copy)]
 #[allow(unused)]
@@ -11,9 +11,8 @@ pub struct TraceInfo {
     pub(crate) column: u32,
 }
 
-#[cfg(feature = "std")]
 impl Display for TraceInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> ark_std::fmt::Result {
         if let Some(description) = self.description {
             f.write_fmt(format_args!(
                 "[{}]\n     at {}:{}:{}",
@@ -25,6 +24,12 @@ impl Display for TraceInfo {
                 self.file_name, self.line, self.column
             ))
         }
+    }
+}
+
+impl Debug for TraceInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> ark_std::fmt::Result {
+        <Self as Display>::fmt(self, f)
     }
 }
 

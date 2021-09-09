@@ -25,7 +25,6 @@ use ark_sponge::poseidon::PoseidonSponge;
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
 use ark_std::{test_rng, One, Zero};
-
 pub struct SimpleSumcheckProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
@@ -129,7 +128,13 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
             num_short_messages: 0,
             localization_parameter: 0, // ignored
         };
-        transcript.receive_prover_current_round(namespace, expected_round_info);
+        transcript.receive_prover_current_round(
+            namespace,
+            expected_round_info,
+            iop_trace!("hx, px"),
+        );
+        transcript.squeeze_verifier_field_bits(15);
+        transcript.submit_verifier_current_round(namespace, iop_trace!("wrong message"));
     }
 
     fn initial_state_for_query_and_decision_phase(
@@ -180,6 +185,58 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
         debug_assert_eq!(expected, actual);
         return Ok(expected == actual);
     }
+}
+
+#[test]
+fn test_restore_commit_phase() {
+    let mut rng = test_rng();
+    let poly = DensePolynomial::<Fr>::rand(69, &mut rng);
+    let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
+    let evaluation_domain = Radix2EvaluationDomain::new(256).unwrap();
+    let fri_parameters = FRIParameters::new(
+        128,
+        vec![1, 3, 1],
+        Radix2CosetDomain::new(evaluation_domain, Fr::one()),
+    );
+    let ldt_parameter = LinearCombinationLDTParameters {
+        fri_parameters,
+        num_queries: 3,
+    };
+    let claimed_sum: Fr = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
+        .evaluate(&poly)
+        .into_iter()
+        .sum();
+
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
+    let mt_hash_parameters = MTHashParameters::<FieldMTConfig> {
+        leaf_hash_param: poseidon_parameters(),
+        inner_hash_param: poseidon_parameters(),
+    };
+
+    let testing_poly = poly.clone();
+    let vp = SumcheckPublicInput {
+        summation_domain,
+        degree: 69,
+        evaluation_domain: evaluation_domain.clone(),
+        claimed_sum,
+    };
+
+    check_commit_phase_correctness::<
+        Fr,
+        _,
+        FieldMTConfig,
+        SimpleSumcheckProver<Fr>,
+        SimpleSumcheckVerifier<Fr>,
+        LinearCombinationLDT<Fr>,
+    >(
+        sponge,
+        &vp,
+        &(),
+        &testing_poly,
+        &testing_poly,
+        &ldt_parameter,
+        mt_hash_parameters,
+    );
 }
 
 /// A simple univariate sumcheck (currently without ldt, which is completely insecure).

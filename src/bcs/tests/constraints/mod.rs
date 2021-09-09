@@ -7,9 +7,11 @@ use crate::bcs::constraints::proof::BCSProofVar;
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
 use crate::bcs::constraints::verifier::BCSVerifierGadget;
 use crate::bcs::constraints::MTHashParametersVar;
-use crate::bcs::tests::mock::MockTest1Verifier;
-use crate::bcs::tests::{mock_test1_prove_with_transcript, FieldMTConfig, Fr};
+use crate::bcs::prover::BCSProof;
+use crate::bcs::tests::mock::{MockTest1Verifier, MockTestProver};
+use crate::bcs::tests::{FieldMTConfig, Fr};
 use crate::bcs::transcript::ROOT_NAMESPACE;
+use crate::bcs::MTHashParameters;
 use crate::iop::constraints::IOPVerifierWithGadget;
 use crate::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
 use crate::ldt::LDT;
@@ -23,6 +25,7 @@ use ark_relations::r1cs::ConstraintSystem;
 use ark_sponge::constraints::CryptographicSpongeVar;
 use ark_sponge::poseidon::constraints::PoseidonSpongeVar;
 use ark_sponge::poseidon::PoseidonSponge;
+use ark_sponge::CryptographicSponge;
 use ark_std::One;
 
 mod mock;
@@ -51,7 +54,35 @@ fn test_bcs() {
         num_queries: 1,
     };
 
-    let (bcs_proof, expected_prove_transcript) = mock_test1_prove_with_transcript(&ldt_pamameters);
+    let fri_parameters = FRIParameters::new(
+        64,
+        vec![1, 2, 1],
+        Radix2CosetDomain::new_radix2_coset(128, Fr::one()),
+    );
+    let ldt_parameters = LinearCombinationLDTParameters {
+        fri_parameters,
+        num_queries: 1,
+    };
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
+    let mt_hash_param = MTHashParameters::<FieldMTConfig> {
+        leaf_hash_param: poseidon_parameters(),
+        inner_hash_param: poseidon_parameters(),
+    };
+    let bcs_proof = BCSProof::generate::<
+        MockTest1Verifier<Fr>,
+        MockTestProver<Fr>,
+        LinearCombinationLDT<Fr>,
+        _,
+    >(
+        sponge,
+        &(),
+        &(),
+        &(),
+        &(),
+        &ldt_parameters,
+        mt_hash_param.clone(),
+    )
+    .expect("fail to prove");
     let cs = ConstraintSystem::<Fr>::new_ref();
     let mt_hash_param = MTHashParametersVar::<Fr, FieldMTConfig, FieldMTConfig> {
         leaf_params: CRHParametersVar::new_constant(cs.clone(), poseidon_parameters()).unwrap(),
@@ -76,7 +107,6 @@ fn test_bcs() {
         &(),
     )
     .unwrap();
-    simulation_transcript.check_correctness(&expected_prove_transcript);
 
     // verify should have all enforced constraints satisfied
     let sponge = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());

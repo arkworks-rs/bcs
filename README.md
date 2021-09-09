@@ -61,7 +61,7 @@ conditions.
 
 ## Reference papers
 
-[Aurora: Transparent Succinct Arguments for R1CS][scrsvw19]<br>
+[Aurora: Transparent Succinct Arguments for R1CS][bcrsvw19]<br>
 Eli Ben-Sasson, Alessandro Chiesa, Michael Riabzev, Nicholas Spooner, Madars Virza, Nicholas P. Ward
 
 [Fast Reed-Solomon Interactive Oracle Proofs of Proximity][bbhr17]<br>
@@ -73,5 +73,5 @@ Eli Ben-Sasson, Alessandro Chiesa, Nicolas Spooner
 
 
 [bcs16]: https://eprint.iacr.org/2016/116
-[scrsvw19]: https://eprint.iacr.org/2018/828
+[bcrsvw19]: https://eprint.iacr.org/2018/828
 [bbhr17]: https://eccc.weizmann.ac.il/report/2017/134/
