@@ -56,7 +56,11 @@ print-trace =  ["std"]
 test_utils = ["std"]
 
 [patch.crates-io]
-ark-crypto-primitives = {git = "https://github.com/tsunrise/crypto-primitives", branch = "custom_index"}
+ark-crypto-primitives = {git = "https://github.com/tsunrise/crypto-primitives", branch = "main"}
 ark-sponge = {git = "https://github.com/arkworks-rs/sponge"}
+
+[[example]]
+name = "sumcheck"
+required-features = ["test_utils"]
 
 

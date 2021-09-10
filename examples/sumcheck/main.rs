@@ -258,7 +258,7 @@ fn main() {
     println!("proof size: {} bytes", proof_size);
 }
 
-#[cfg(all(test, feature = "test_utils"))]
+#[cfg(test)]
 mod tests {
     use crate::test_utils::{poseidon_parameters, FieldMTConfig};
     use crate::{SimpleSumcheckProver, SimpleSumcheckVerifier, SumcheckPublicInput};
