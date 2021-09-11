@@ -56,7 +56,7 @@ print-trace =  ["std"]
 test_utils = ["std"]
 
 [patch.crates-io]
-ark-crypto-primitives = {git = "https://github.com/tsunrise/crypto-primitives", branch = "main"}
+ark-crypto-primitives = {git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main"}
 ark-sponge = {git = "https://github.com/arkworks-rs/sponge"}
 
 [[example]]

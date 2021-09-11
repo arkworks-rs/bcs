@@ -1,19 +1,24 @@
-use crate::bcs::constraints::proof::BCSProofVar;
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
-use crate::iop::constraints::message::{SuccinctRoundOracleVar, VerifierMessageVar};
-use crate::iop::message::ProverRoundMessageInfo;
-use crate::tracer::TraceInfo;
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-use ark_crypto_primitives::merkle_tree::Config;
+use crate::{
+    bcs::{
+        constraints::proof::BCSProofVar,
+        transcript::{MessageBookkeeper, NameSpace},
+    },
+    iop::{
+        constraints::message::{SuccinctRoundOracleVar, VerifierMessageVar},
+        message::ProverRoundMessageInfo,
+    },
+    tracer::TraceInfo,
+};
+use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::SynthesisError;
-use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
-use ark_sponge::Absorb;
-use ark_std::boxed::Box;
-use ark_std::mem::take;
-use ark_std::vec::Vec;
+use ark_sponge::{
+    constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
+    Absorb,
+};
+use ark_std::{boxed::Box, mem::take, vec::Vec};
 
 /// R1CS Variable for simulation transcript used by verifier.
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
@@ -83,7 +88,8 @@ where
         }
     }
 
-    /// Create a simulation transcript from a list of prover messages, its corresponding merkle tree, sponge variable, and LDT information,
+    /// Create a simulation transcript from a list of prover messages, its
+    /// corresponding merkle tree, sponge variable, and LDT information,
     ///
     /// `ldt_info` may panic if `NoLDT` is used.
     pub fn from_prover_messages(
@@ -117,13 +123,15 @@ where
         self.current_prover_round
     }
 
-    /// Receive prover's current round messages, which can possibly contain multiple oracles with same size.
-    /// This function will absorb the merkle tree root and short messages (if any).
+    /// Receive prover's current round messages, which can possibly contain
+    /// multiple oracles with same size. This function will absorb the
+    /// merkle tree root and short messages (if any).
     ///
-    /// If the function contains low-degree oracle, localization parameter in `expected_message_info` will be ignored,
-    /// because localization parameter is managed by LDT.
-    /// # Panic
-    /// This function will panic is prover message structure contained in proof is not consistent with `expected_message_structure`.
+    /// If the function contains low-degree oracle, localization parameter in
+    /// `expected_message_info` will be ignored, because localization
+    /// parameter is managed by LDT. # Panic
+    /// This function will panic is prover message structure contained in proof
+    /// is not consistent with `expected_message_structure`.
     pub fn receive_prover_current_round(
         &mut self,
         ns: &NameSpace,
@@ -182,14 +190,16 @@ where
         self.attach_latest_verifier_round_to_namespace(namespace, tracer);
     }
 
-    /// Squeeze sampled verifier message as field elements. The squeezed elements is attached to
-    /// pending messages, and need to be submitted through `submit_verifier_current_round`.
-    /// Submitted messages will be stored in transcript and will be later
-    /// given to verifier in query and decision phase.
+    /// Squeeze sampled verifier message as field elements. The squeezed
+    /// elements is attached to pending messages, and need to be submitted
+    /// through `submit_verifier_current_round`. Submitted messages will be
+    /// stored in transcript and will be later given to verifier in query
+    /// and decision phase.
     ///
-    /// **Note**: Since we are not running the actual prover code, verifier message is not used
-    /// `reconstructed_verifer_messages`, so this function returns nothing.
-    /// TODO: current limitation: sponge constraints does not support squeeze native elements with size
+    /// **Note**: Since we are not running the actual prover code, verifier
+    /// message is not used `reconstructed_verifer_messages`, so this
+    /// function returns nothing. TODO: current limitation: sponge
+    /// constraints does not support squeeze native elements with size
     pub fn squeeze_verifier_field_elements(
         &mut self,
         num_elements: usize,
@@ -200,13 +210,15 @@ where
         Ok(())
     }
 
-    /// Squeeze sampled verifier message as bytes. The squeezed bytes is attached to
-    /// pending messages, and need to be submitted through `submit_verifier_current_round`.
-    /// Submitted messages will be stored in transcript and will be later
-    /// given to verifier in query and decision phase.
+    /// Squeeze sampled verifier message as bytes. The squeezed bytes is
+    /// attached to pending messages, and need to be submitted through
+    /// `submit_verifier_current_round`. Submitted messages will be stored
+    /// in transcript and will be later given to verifier in query and
+    /// decision phase.
     ///
-    /// **Note**: Since we are not running the actual prover code, verifier message is not used
-    /// `reconstructed_verifer_messages`, so this function returns nothing.
+    /// **Note**: Since we are not running the actual prover code, verifier
+    /// message is not used `reconstructed_verifer_messages`, so this
+    /// function returns nothing.
     pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) -> Result<(), SynthesisError> {
         let msg = self.sponge.squeeze_bytes(num_bytes)?;
         self.pending_verifier_messages
@@ -214,13 +226,15 @@ where
         Ok(())
     }
 
-    /// Squeeze sampled verifier message as bytes. The squeezed bytes is attached to
-    /// pending messages, and need to be submitted through `submit_verifier_current_round`.
-    /// Submitted messages will be stored in transcript and will be later
-    /// given to verifier in query and decision phase.
+    /// Squeeze sampled verifier message as bytes. The squeezed bytes is
+    /// attached to pending messages, and need to be submitted through
+    /// `submit_verifier_current_round`. Submitted messages will be stored
+    /// in transcript and will be later given to verifier in query and
+    /// decision phase.
     ///
-    /// **Note**: Since we are not running the actual prover code, verifier message is not used
-    /// `reconstructed_verifer_messages`, so this function returns nothing.
+    /// **Note**: Since we are not running the actual prover code, verifier
+    /// message is not used `reconstructed_verifer_messages`, so this
+    /// function returns nothing.
     pub fn squeeze_verifier_field_bits(&mut self, num_bits: usize) -> Result<(), SynthesisError> {
         let msg = self.sponge.squeeze_bits(num_bits)?;
         self.pending_verifier_messages
@@ -256,31 +270,169 @@ where
     }
 }
 
-#[cfg(test)]
-pub(crate) mod sanity_check {
+#[cfg(any(feature = "test_utils", test))]
+/// Utilities for testing if `restore_from_commit_phase_var` is correct
+pub mod test_utils {
     use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-    use crate::bcs::transcript::Transcript;
-    use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-    use ark_crypto_primitives::merkle_tree::Config;
+    use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
+    use crate::iop::constraints::message::SuccinctRoundOracleVar;
+    use crate::{
+        bcs::MTHashParameters,
+        iop::{constraints::IOPVerifierWithGadget, prover::IOPProver},
+        ldt::constraints::LDTWithGadget,
+    };
+    use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
     use ark_ff::PrimeField;
+    use ark_r1cs_std::alloc::AllocVar;
     use ark_r1cs_std::fields::fp::FpVar;
-    use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
-    use ark_sponge::Absorb;
+    use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar};
+    use ark_sponge::{constraints::SpongeWithGadget, Absorb};
+    use ark_std::collections::BTreeSet;
+    use ark_r1cs_std::R1CSVar;
 
-    impl<'a, F, P, PG, S> SimulationTranscriptVar<'a, F, P, PG, S>
-    where
+    /// Check if simulation transcript generated by `restore_from_commit_phase` is consistent with prover transcript
+    pub fn check_transcript_var_consistency<MT, MTG, S, F>(
+        prover_transcript: &Transcript<MT, S, F>,
+        verifier_transcript: &SimulationTranscriptVar<F, MT, MTG, S>
+    ) where
+        MT: Config<Leaf = [F]>,
+        MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
+            S: SpongeWithGadget<F>,
+            F: PrimeField + Absorb,
+            MT::InnerDigest: Absorb, MTG::InnerDigest: AbsorbGadget<F> {
+        // check namespace consistency
+        assert_eq!(
+            verifier_transcript
+                .bookkeeper
+                .map
+                .keys()
+                .collect::<BTreeSet<_>>(),
+            prover_transcript
+                .bookkeeper
+                .map
+                .keys()
+                .collect::<BTreeSet<_>>(),
+            "inconsistent namespace used"
+        );
+        // check for each namespace
+        verifier_transcript.bookkeeper.map.keys().for_each(|key|{
+            let namespace_diag = format!(
+                "Prover transcript defines this namespace as {}\n\
+             Verifier defines this namespace as {}\n",
+                prover_transcript.bookkeeper.namespace_trace[key],
+                verifier_transcript.bookkeeper.namespace_trace[key]
+            );
+            let indices_in_current_namespace_pt = &prover_transcript.bookkeeper.map[key];
+            let indices_in_current_namespace_vt = &verifier_transcript.bookkeeper.map[key];
+
+            assert_eq!(
+                indices_in_current_namespace_pt.prover_message_locations,
+                indices_in_current_namespace_vt.prover_message_locations,
+                "Inconsistent prover message order/number under same namespace ID. {}",
+                namespace_diag
+            );
+            assert_eq!(
+                indices_in_current_namespace_pt.verifier_message_locations,
+                indices_in_current_namespace_vt.verifier_message_locations,
+                "Inconsistent verifier message order/number under same namespace ID. {}",
+                namespace_diag);
+
+            // prover message should already be verified during prover submit round
+            // check verifier message
+
+            (0..indices_in_current_namespace_pt
+                .verifier_message_locations
+                .len())
+                .for_each(|i| {
+                    let verifier_message_trace_pt =
+                        &indices_in_current_namespace_pt.verifier_message_trace[i];
+                    let verifier_message_trace_vt =
+                        &indices_in_current_namespace_vt.verifier_message_trace[i];
+                    // verifier message gained by prover transcript
+                    let verifier_message_pt = &prover_transcript.verifier_messages
+                        [indices_in_current_namespace_pt.verifier_message_locations[i]];
+                    // verifier message gained by verifier simulation transcript
+                    let verifier_message_vt = &verifier_transcript.reconstructed_verifer_messages
+                        [indices_in_current_namespace_vt.verifier_message_locations[i]].value().unwrap();
+                    assert_eq!(
+                        verifier_message_pt, verifier_message_vt,
+                        "Inconsistent verifier round #{}.\n\
+             Prover transcript message trace: {}\n\
+             Verifier transcript message trace: {}\n\
+             {}
+             ",
+                        i, verifier_message_trace_pt, verifier_message_trace_vt, namespace_diag
+                    );
+                });
+
+        })
+    }
+
+    /// Check if simulation transcript variable filled by the verifier
+    /// constraints is consistent with prover transcript
+    pub fn check_commit_phase_correctness_var<
         F: PrimeField + Absorb,
-        P: Config<Leaf = [F]>,
-        PG: ConfigGadget<P, F, Leaf = [FpVar<F>]>,
         S: SpongeWithGadget<F>,
-        P::InnerDigest: Absorb,
-        F: Absorb,
-        PG::InnerDigest: AbsorbGadget<F>,
+        MT: Config<Leaf = [F]>,
+        MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
+        P: IOPProver<F>,
+        V: IOPVerifierWithGadget<S, F, PublicInput = P::PublicInput>,
+        L: LDTWithGadget<F>,
+    >(
+        sponge: S,
+        sponge_var: S::Var,
+        public_input: &P::PublicInput,
+        public_input_var: &V::PublicInputVar,
+        private_input: &P::PrivateInput,
+        prover_parameter: &P::ProverParameter,
+        verifier_parameter: &V::VerifierParameter,
+        ldt_params: &L::LDTParameters,
+        hash_params: MTHashParameters<MT>, // TODO: too many arguments!
+    ) where
+        MT::InnerDigest: Absorb,
+        MTG::InnerDigest: AbsorbGadget<F>,
     {
-        /// test whether `reconstructed_verifer_messages` simulate the prover-verifier interaction in
-        /// commit phase correctly.
-        pub fn check_correctness(&self, _prover_transcript: &Transcript<P, S, F>) {
-            return; // TODO
-        }
+        // generate transcript using prover perspective
+        let transcript_pt = {
+            let mut transcript = Transcript::new(sponge.clone(), hash_params, |degree| {
+                L::ldt_info(ldt_params, degree)
+            });
+            P::prove(
+                &ROOT_NAMESPACE,
+                &mut P::initial_state(prover_parameter, public_input, private_input),
+                &mut transcript,
+                prover_parameter,
+            )
+            .unwrap();
+            transcript
+        };
+        let cs = sponge_var.cs();
+        let succinct_prover_messages = transcript_pt
+            .all_succinct_round_oracles()
+            .into_iter()
+            .map(|round| SuccinctRoundOracleVar::new_witness(cs.clone(), || Ok(round)).unwrap())
+            .collect::<Vec<_>>();
+        let prover_mt_roots = transcript_pt
+            .merkle_tree_roots()
+            .into_iter()
+            .map(|root| {
+                root.map(|root| MTG::InnerDigest::new_witness(cs.clone(), || Ok(root)).unwrap())
+            })
+            .collect::<Vec<_>>();
+        let mut sponge_var_vt = sponge_var.clone();
+        let mut transcript_vt = SimulationTranscriptVar::<F, MT, MTG, S>::from_prover_messages(
+            &succinct_prover_messages,
+            &prover_mt_roots,
+            &mut sponge_var_vt,
+            |degree| L::ldt_info(ldt_params, degree),
+        );
+        V::restore_from_commit_phase_var(
+            &ROOT_NAMESPACE,
+            public_input_var,
+            &mut transcript_vt,
+            verifier_parameter,
+        )
+        .unwrap();
+        check_transcript_var_consistency(&transcript_pt, &transcript_vt);
     }
 }

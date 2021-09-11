@@ -27,6 +27,7 @@ use ark_sponge::poseidon::constraints::PoseidonSpongeVar;
 use ark_sponge::poseidon::PoseidonSponge;
 use ark_sponge::CryptographicSponge;
 use ark_std::One;
+use crate::bcs::constraints::transcript::test_utils::check_commit_phase_correctness_var;
 
 mod mock;
 
@@ -43,16 +44,31 @@ impl ConfigGadget<Self, Fr> for FieldMTConfig {
 }
 
 #[test]
-fn test_bcs() {
+/// Test restore_from_commit_phase_var
+fn test_restore() {
     let fri_parameters = FRIParameters::new(
         64,
         vec![1, 2, 1],
         Radix2CosetDomain::new_radix2_coset(128, Fr::one()),
     );
-    let ldt_pamameters = LinearCombinationLDTParameters {
+    let ldt_parameters = LinearCombinationLDTParameters {
         fri_parameters,
         num_queries: 1,
     };
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
+    let cs = ConstraintSystem::new_ref();
+    let sponge_var = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());
+    let mt_hash_param = MTHashParameters::<FieldMTConfig> {
+        leaf_hash_param: poseidon_parameters(),
+        inner_hash_param: poseidon_parameters(),
+    };
+    check_commit_phase_correctness_var::<Fr, _, FieldMTConfig, FieldMTConfig, MockTestProver<Fr>, MockTest1Verifier<Fr>, LinearCombinationLDT<Fr>>
+        (sponge, sponge_var, &(), &(), &(), &(), &(), &ldt_parameters, mt_hash_param);
+
+}
+
+#[test]
+fn test_bcs() {
 
     let fri_parameters = FRIParameters::new(
         64,
@@ -98,7 +114,7 @@ fn test_bcs() {
         SimulationTranscriptVar::<_, _, _, PoseidonSponge<_>>::new_transcript(
             &bcs_proof_var,
             &mut sponge,
-            |degree| LinearCombinationLDT::ldt_info(&ldt_pamameters, degree),
+            |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
         );
     MockTest1Verifier::restore_from_commit_phase_var(
         &ROOT_NAMESPACE,
@@ -120,7 +136,7 @@ fn test_bcs() {
         &bcs_proof_var,
         &(),
         &(),
-        &ldt_pamameters,
+        &ldt_parameters,
         &mt_hash_param,
     )
     .expect("error during verify");

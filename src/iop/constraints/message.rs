@@ -3,7 +3,7 @@ use crate::tracer::TraceInfo;
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
-use ark_relations::r1cs::{Namespace, SynthesisError};
+use ark_relations::r1cs::{Namespace, SynthesisError, ConstraintSystemRef};
 use ark_std::borrow::Borrow;
 use ark_std::vec::Vec;
 
@@ -261,6 +261,26 @@ impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {
                     .collect();
                 Ok(VerifierMessageVar::Bytes(var?))
             }
+        }
+    }
+}
+
+impl<F: PrimeField> R1CSVar<F> for VerifierMessageVar<F> {
+    type Value = VerifierMessage<F>;
+
+    fn cs(&self) -> ConstraintSystemRef<F> {
+        match self {
+            Self::Bits(v) => v[0].cs(),
+            Self::Bytes(v) => v[0].cs(),
+            Self::FieldElements(v) => v[0].cs()
+        }
+    }
+
+    fn value(&self) -> Result<Self::Value, SynthesisError> {
+        match self {
+            Self::Bits(v) => Ok(Self::Value::Bits(v.value()?)),
+            Self::Bytes(v) => Ok(Self::Value::Bytes(v.value()?)),
+            Self::FieldElements(v) => Ok(Self::Value::FieldElements(v.value()?))
         }
     }
 }

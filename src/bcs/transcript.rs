@@ -212,6 +212,7 @@ where
     }
 
     /// Create a new namespace in bookkeeper.
+    /// TODO: keep track the next available namespace, and improve namespace interface
     pub fn new_namespace(&mut self, id: NameSpace, trace: TraceInfo) {
         self.bookkeeper.new_namespace(id, trace)
     }
