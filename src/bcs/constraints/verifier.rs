@@ -18,6 +18,8 @@ use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use ark_std::marker::PhantomData;
 use ark_std::vec::Vec;
+use crate::iop::message::MessagesCollection;
+use crate::iop::verifier::IOPVerifierWithNoOracleRefs;
 
 /// Verifier Gadget for BCS proof variable.
 pub struct BCSVerifierGadget<MT, MTG, CF>
@@ -50,7 +52,7 @@ where
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF>,
+        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
         L: LDTWithGadget<CF>,
         S: SpongeWithGadget<CF>,
     {
@@ -72,7 +74,7 @@ where
             );
             let num_rounds_submitted = transcript.num_prover_rounds_submitted();
             (
-                transcript.reconstructed_verifer_messages,
+                transcript.reconstructed_verifier_messages,
                 transcript.bookkeeper,
                 num_rounds_submitted,
             )
@@ -111,7 +113,7 @@ where
             let expected_num_ldt_rounds =
                 proof.prover_iop_messages_by_round.len() - num_rounds_submitted;
             debug_assert_eq!(ldt_transcript.current_prover_round, expected_num_ldt_rounds);
-            ldt_transcript.reconstructed_verifer_messages
+            ldt_transcript.reconstructed_verifier_messages
         };
 
         // LDT verify
@@ -128,11 +130,11 @@ where
             cs.clone(),
             &ROOT_NAMESPACE,
             verifier_parameter,
-            &mut V::initial_state_for_query_and_decision_phase_var(public_input)?,
+            &(), // protocol used for BCS should not contain any oracle refs
             &mut sponge,
-            prover_messages_view.iter_mut().collect(),
+            MessagesCollection::new(prover_messages_view.iter_mut().collect(),
             &verifier_messages,
-            &bookkeeper,
+            &bookkeeper)
         )?;
 
         // verify all authentication paths
@@ -212,7 +214,7 @@ where
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF>,
+        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
         S: SpongeWithGadget<CF>,
     {
         Self::verify::<V, NoLDT<CF>, S>(
@@ -240,7 +242,7 @@ where
         ldt_codeword_localization_parameter: usize,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF>,
+        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
         S: SpongeWithGadget<CF>,
     {
         Self::verify::<V, NoLDT<CF>, S>(

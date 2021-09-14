@@ -1,7 +1,7 @@
 use crate::bcs::prover::BCSProof;
 use crate::bcs::transcript::{SimulationTranscript, ROOT_NAMESPACE};
 use crate::bcs::MTHashParameters;
-use crate::iop::verifier::IOPVerifier;
+use crate::iop::verifier::{IOPVerifier, IOPVerifierWithNoOracleRefs};
 use crate::ldt::{NoLDT, LDT};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
@@ -10,6 +10,7 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::marker::PhantomData;
 use ark_std::vec::Vec;
+use crate::iop::message::MessagesCollection;
 
 /// Verifier for BCS proof.
 pub struct BCSVerifier<MT, F>
@@ -39,17 +40,17 @@ where
         hash_params: MTHashParameters<MT>,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifier<S, F>,
+        V: IOPVerifierWithNoOracleRefs<S, F>,
         L: LDT<F>,
         S: CryptographicSponge,
     {
         // simulate main prove: reconstruct verifier messages to restore verifier state
-        let (verifier_messages, bookkeeper, num_rounds_submitted) = {
+        let (verifier_messages, bookkeeper, num_rounds_submitted, verifier_oracle_refs) = {
             let mut transcript =
                 SimulationTranscript::new_transcript(proof, &mut sponge, |degree| {
                     L::ldt_info(ldt_params, degree)
                 });
-            V::restore_from_commit_phase::<MT>(
+            let verifier_oracle_refs = V::restore_from_commit_phase::<MT>(
                 &ROOT_NAMESPACE,
                 public_input,
                 &mut transcript,
@@ -62,9 +63,10 @@ where
             );
             let num_rounds_submitted = transcript.num_prover_rounds_submitted();
             (
-                transcript.reconstructed_verifer_messages,
+                transcript.reconstructed_verifier_messages,
                 transcript.bookkeeper,
                 num_rounds_submitted,
+                verifier_oracle_refs
             )
         };
 
@@ -103,7 +105,7 @@ where
             let expected_num_ldt_rounds =
                 proof.prover_iop_messages_by_round.len() - num_rounds_submitted;
             debug_assert_eq!(ldt_transcript.current_prover_round, expected_num_ldt_rounds);
-            ldt_transcript.reconstructed_verifer_messages
+            ldt_transcript.reconstructed_verifier_messages
         };
 
         // verify LDT bound
@@ -121,11 +123,10 @@ where
         let verifier_result = V::query_and_decide(
             &ROOT_NAMESPACE,
             verifier_parameter,
-            &mut V::initial_state_for_query_and_decision_phase(verifier_parameter, public_input),
+            public_input,
+            &verifier_oracle_refs,
             &mut sponge,
-            prover_messages_view.iter_mut().collect(),
-            &verifier_messages,
-            &bookkeeper,
+            &mut MessagesCollection::new(prover_messages_view.iter_mut().collect(), &verifier_messages, &bookkeeper),
         )?;
 
         // verify all authentication paths
@@ -202,7 +203,7 @@ where
         hash_params: MTHashParameters<MT>,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifier<S, F>,
+        V: IOPVerifier<S, F> + IOPVerifierWithNoOracleRefs<S, F>,
         S: CryptographicSponge,
     {
         Self::verify::<V, NoLDT<_>, S>(
@@ -228,7 +229,7 @@ where
         ldt_codeword_localization_parameter: usize,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifier<S, F>,
+        V: IOPVerifier<S, F> + IOPVerifierWithNoOracleRefs<S, F>,
         S: CryptographicSponge,
     {
         Self::verify::<V, NoLDT<_>, S>(

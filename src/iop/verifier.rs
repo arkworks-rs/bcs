@@ -1,11 +1,12 @@
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
 
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace, SimulationTranscript};
-use crate::iop::message::{RoundOracle, VerifierMessage};
+use crate::bcs::transcript::{NameSpace, SimulationTranscript};
+use crate::iop::message::{RoundOracle, MessagesCollection, VerifierMessage};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
-use ark_std::vec::Vec;
+use crate::iop::{VerifierParam, VerifierOracleRefs, ProverParam, ProverOracleRefs};
+use crate::iop::prover::IOPProver;
 
 /// The verifier for public coin IOP has two phases.
 /// * **Commit Phase**: Verifier send message that is uniformly sampled from a random oracle. Verifier
@@ -15,12 +16,13 @@ use ark_std::vec::Vec;
 /// * **Query And Decision Phase**: Verifier sends query and receive answer from message oracle.
 ///
 pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
-    /// TODO doc
-    type VerifierOutput;
+    /// Verifier Output
+    type VerifierOutput: Clone;
     /// Verifier Parameter
-    type VerifierParameter: ?Sized;
-    /// Verifier state. May contain input.
-    type VerifierState;
+    type VerifierParameter: VerifierParam;
+    /// A collection of oracle references from other protocols
+    /// used by current verifier.
+    type OracleRefs: VerifierOracleRefs;
     /// Public input
     type PublicInput: ?Sized;
 
@@ -37,24 +39,32 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     ) where
         MT::InnerDigest: Absorb;
 
-    /// Returns the initial state for query and decision phase.
-    fn initial_state_for_query_and_decision_phase(
-        params: &Self::VerifierParameter,
-        public_input: &Self::PublicInput,
-    ) -> Self::VerifierState;
-
     /// Query the oracle using the random oracle. Run the verifier code, and return verifier output that
     /// is valid if prover claim is true. Verifier will return an error if prover message is obviously false,
     /// or oracle cannot answer the query.
     ///
     /// To access prover message oracle and previous verifier messages of current namespace, use bookkeeper.
+    /// TODO: find a good way to access prover message oracles from OracleRefs.
     fn query_and_decide<O: RoundOracle<F>>(
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
-        verifier_state: &mut Self::VerifierState,
-        random_oracle: &mut S,
-        prover_message_oracle: Vec<&mut O>,
-        verifier_messages: &[Vec<VerifierMessage<F>>],
-        bookkeeper: &MessageBookkeeper,
+        public_input: &Self::PublicInput,
+        oracle_refs: &Self::OracleRefs,
+        sponge: &mut S,
+        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error>;
 }
+
+/// An extension for IOPVerifier, requiring that the verifier state type and parameter type is consistent with what is expected from the prover implementation.
+/// Any IOPVerifier that satisfies this requirement automatically implements this trait.
+pub trait IOPVerifierForProver<S: CryptographicSponge, F: PrimeField + Absorb, P: IOPProver<F>>: IOPVerifier<S, F>
+where Self: IOPVerifier<S, F, VerifierParameter=<P::ProverParameter as ProverParam>::VerifierParameter, OracleRefs=<P::RoundOracleRefs as ProverOracleRefs>::VerifierOracleRefs, PublicInput=P::PublicInput>
+{}
+impl <S: CryptographicSponge, F: PrimeField + Absorb, P: IOPProver<F>, V> IOPVerifierForProver<S, F, P> for V
+where V: IOPVerifier<S, F, VerifierParameter=<P::ProverParameter as ProverParam>::VerifierParameter, OracleRefs=<P::RoundOracleRefs as ProverOracleRefs>::VerifierOracleRefs, PublicInput=P::PublicInput>
+{}
+
+/// This trait is an extension for IOPProver, which requires that the prover and verifier do not need to access messages sent in other protocol under the same transcript. 
+/// This essentially means that `OracleRefs` is `()`. Any protocol that satisfies this property will automatically implement this trait.
+pub trait IOPVerifierWithNoOracleRefs<S: CryptographicSponge,F: PrimeField + Absorb>: IOPVerifier<S, F, OracleRefs= ()> {}
+impl<S: CryptographicSponge, F: PrimeField + Absorb, Protocol: IOPVerifier<S, F, OracleRefs= ()>> IOPVerifierWithNoOracleRefs<S, F> for Protocol{}

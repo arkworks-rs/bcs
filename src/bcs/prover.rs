@@ -1,8 +1,8 @@
 use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
 use crate::bcs::MTHashParameters;
-use crate::iop::message::SuccinctRoundOracle;
-use crate::iop::prover::IOPProver;
-use crate::iop::verifier::IOPVerifier;
+use crate::iop::message::{SuccinctRoundOracle, MessagesCollection};
+use crate::iop::prover::IOPProverWithNoOracleRefs;
+use crate::iop::verifier::IOPVerifierForProver;
 use crate::ldt::{NoLDT, LDT};
 use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
@@ -12,6 +12,7 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::vec::Vec;
+use crate::iop::ProverParam;
 
 /// BCSProof contains all prover messages that use succinct oracle, and thus is itself succinct.
 #[derive(CanonicalSerialize, CanonicalDeserialize, Derivative)]
@@ -43,21 +44,24 @@ where
     MT::InnerDigest: Absorb,
 {
     /// Generate proof
+    /// This function requires that IOPProver and IOPVerifier is not a subprotocol, which essentially means that `OracleRefs` for both agent
+    /// needs to be `()`.
     pub fn generate<V, P, L, S>(
         sponge: S,
         public_input: &P::PublicInput,
         private_input: &P::PrivateInput,
         prover_parameter: &P::ProverParameter,
-        verifier_parameter: &V::VerifierParameter,
         ldt_params: &L::LDTParameters,
         hash_params: MTHashParameters<MT>,
     ) -> Result<Self, Error>
     where
-        V: IOPVerifier<S, F, PublicInput = P::PublicInput>,
         L: LDT<F>,
-        P: IOPProver<F>,
+        P: IOPProverWithNoOracleRefs<F>,
+        V: IOPVerifierForProver<S, F, P>,
         S: CryptographicSponge,
     {
+        let verifier_parameter = prover_parameter.to_verifier_param();
+
         // create a BCS transcript
         let mut transcript = {
             Transcript::new(sponge, hash_params.clone(), move |degree| {
@@ -69,7 +73,9 @@ where
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(
             &ROOT_NAMESPACE,
-            &mut P::initial_state(prover_parameter, public_input, private_input),
+            &(),
+            public_input,
+            private_input,
             &mut transcript,
             prover_parameter,
         )?;
@@ -128,15 +134,11 @@ where
         {
             V::query_and_decide(
                 &ROOT_NAMESPACE,
-                verifier_parameter,
-                &mut V::initial_state_for_query_and_decision_phase(
-                    verifier_parameter,
-                    public_input,
-                ),
+                &verifier_parameter,
+                public_input,
+                &(),
                 &mut sponge,
-                prover_message_oracles.iter_mut().collect(),
-                &verifier_messages,
-                &bookkeeper,
+                &mut MessagesCollection::new(prover_message_oracles.iter_mut().collect(), &verifier_messages, &bookkeeper)
             )?;
         }
 
@@ -195,12 +197,11 @@ where
         public_input: &P::PublicInput,
         private_input: &P::PrivateInput,
         prover_parameter: &P::ProverParameter,
-        verifier_parameter: &V::VerifierParameter,
         hash_params: MTHashParameters<MT>,
     ) -> Result<Self, Error>
     where
-        V: IOPVerifier<S, F, PublicInput = P::PublicInput>,
-        P: IOPProver<F>,
+        V: IOPVerifierForProver<S, F, P>,
+        P: IOPProverWithNoOracleRefs<F>,
         S: CryptographicSponge,
     {
         Self::generate::<V, P, NoLDT<F>, _>(
@@ -208,7 +209,6 @@ where
             public_input,
             private_input,
             prover_parameter,
-            verifier_parameter,
             &None,
             hash_params,
         )
@@ -221,14 +221,13 @@ where
         public_input: &P::PublicInput,
         private_input: &P::PrivateInput,
         prover_parameter: &P::ProverParameter,
-        verifier_parameter: &V::VerifierParameter,
         hash_params: MTHashParameters<MT>,
         ldt_codeword_domain: Radix2CosetDomain<F>,
         ldt_codeword_localization_parameter: usize,
     ) -> Result<Self, Error>
     where
-        V: IOPVerifier<S, F, PublicInput = P::PublicInput>,
-        P: IOPProver<F>,
+        V: IOPVerifierForProver<S, F, P>,
+        P: IOPProverWithNoOracleRefs<F>,
         S: CryptographicSponge,
     {
         Self::generate::<V, P, NoLDT<F>, _>(
@@ -236,7 +235,6 @@ where
             public_input,
             private_input,
             prover_parameter,
-            verifier_parameter,
             &Some((ldt_codeword_domain, ldt_codeword_localization_parameter)),
             hash_params,
         )

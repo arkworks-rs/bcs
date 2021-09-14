@@ -6,6 +6,77 @@ use ark_crypto_primitives::MerkleTree;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::vec::Vec;
+use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
+
+/// Contains location of round oracles in a transcript.
+#[derive(Clone, Copy, Debug)]
+pub struct MsgRoundRef {
+    pub(crate) index: usize,
+    pub(crate) trace: TraceInfo
+}
+
+impl MsgRoundRef {
+    /// Returns a new `RoundOracleRef
+    pub fn new(index: usize, trace: TraceInfo) -> Self {
+        MsgRoundRef { index, trace }
+    }
+
+    /// Get the trace for the round oracle reference.
+    pub fn trace(&self) -> TraceInfo {
+        self.trace
+    }
+}
+
+/// Stores sent prover and verifier messages in order.
+/// Message can be accessed using namespace, or `MsgRoundRef`.
+/// This struct is used by verifier to access prover message oracles and verifier messages.
+pub struct MessagesCollection<'a, Oracle, VM> {
+    pub(crate) prover_messages: Vec<Oracle>,
+    pub(crate) verifier_messages: &'a[Vec<VM>],
+    pub(crate) bookkeeper: &'a MessageBookkeeper
+}
+
+impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
+    /// Constructor for Messages Collection
+    pub(crate) fn new(prover_messages: Vec<Oracle>, verifier_messages: &'a [Vec<VM>], bookkeeper: &'a MessageBookkeeper) -> Self {
+        MessagesCollection { prover_messages, verifier_messages, bookkeeper }
+    }
+
+    /// Return the prover message sent at `round` in `namespace`.
+    pub fn prover_message(&mut self, namespace: &NameSpace, round: usize) -> &mut Oracle {
+        let round_ref = self.prover_message_as_ref(namespace, round).clone();
+        self.prover_message_using_ref(round_ref)
+    }
+
+    /// Return the reference to prover message
+    pub fn prover_message_as_ref(&self, namespace: &NameSpace, round: usize) -> &MsgRoundRef {
+        self.bookkeeper.get_message_indices(namespace).prover_message_refs.get(round).expect("round out of range")
+    }
+
+    /// Given a `MsgRoundRef`, return the corresponding prover message.
+    /// This method requires mutable reference because verifier will potentially query an oracle, which
+    /// may change the state.
+    pub fn prover_message_using_ref(& mut self, oracle_ref: MsgRoundRef) -> &mut Oracle {
+        &mut self.prover_messages[oracle_ref.index]
+    }
+
+    /// Return the verifier message sent at `round` in `namespace`.
+    pub fn verifier_message(&self, namespace: &NameSpace, round: usize) -> &'a Vec<VM> {
+        let round_ref = self.verifier_message_as_ref(namespace, round);
+        self.verifier_message_using_ref(*round_ref)
+    }
+
+    /// Return the reference to verifier message
+    pub fn verifier_message_as_ref(&self, namespace: &NameSpace, round: usize) -> &MsgRoundRef {
+        self.bookkeeper.get_message_indices(namespace).verifier_message_refs.get(round).expect("round out of range")
+    }
+
+    /// Given a `MsgRoundRef`, return the corresponding verifier message.
+    pub fn verifier_message_using_ref(&self, oracle_ref: MsgRoundRef) -> &'a Vec<VM> {
+        &self.verifier_messages[oracle_ref.index]
+    }
+
+}
 
 /// A trait for all oracle messages (including RS-code oracles, Non RS-code oracles, and IP short messages) sent in one round.
 /// Those oracles (except IP short messages) need to have same length.
@@ -160,6 +231,7 @@ impl<F: PrimeField> PendingProverMessage<F> {
         let recording_oracle = RecordingRoundOracle {
             info,
             reed_solomon_codes: self.reed_solomon_codes,
+            message_oracles: self.message_oracles,
             short_messages: self.short_messages,
             all_coset_elements,
             queried_coset_index: Vec::new(),
@@ -208,10 +280,27 @@ pub struct RecordingRoundOracle<F: PrimeField> {
     pub queried_coset_index: Vec<usize>,
     /// All cosets. Axes: `[coset index, oracle index (RS-code first), element position in coset]`
     pub all_coset_elements: Vec<Vec<Vec<F>>>,
-    /// low degree oracle evaluations in this round. The data stored is a duplicate to part of `all_coset_elements`, but is handy for LDT to process.
-    pub reed_solomon_codes: Vec<(Vec<F>, usize)>,
+    /// low degree oracle evaluations in this round. The data stored is a duplicate to part of `all_coset_elements`, but is handy for prover wants to access it later.
+    pub(crate) reed_solomon_codes: Vec<(Vec<F>, usize)>,
+    /// message oracles with no degree bound in this round. The data stored is a duplicate to part of `all_coset_elements`, but is handy if the prover wants to access it later.
+    pub(crate) message_oracles: Vec<Vec<F>>,
     /// Store the non-oracle IP messages in this round
-    pub short_messages: Vec<Vec<F>>,
+    pub(crate) short_messages: Vec<Vec<F>>,
+}
+
+impl<F: PrimeField> RecordingRoundOracle<F> {
+    /// Get reed solomon codes sent in this round.
+    pub fn reed_solomon_codes(&self) -> &Vec<(Vec<F>, usize)> {
+        &self.reed_solomon_codes
+    }
+    /// Get message oracles with degree bound sent in this round.
+    pub fn message_oracles(&self) -> &Vec<Vec<F>> {
+        &self.message_oracles
+    }
+    /// Get short non-oracle messages sent in this round. 
+    pub fn short_messages(&self) -> &Vec<Vec<F>> {
+        &self.short_messages
+    }
 }
 
 /// If the leaf is coset, the info also contains information about the stride of coset, and
@@ -234,6 +323,13 @@ pub struct ProverRoundMessageInfo {
     /// log2(coset size)
     /// Set it to zero to disable leaf as coset.
     pub localization_parameter: usize,
+}
+
+impl ProverRoundMessageInfo {
+    /// Return a new round message information.
+    pub fn new(reed_solomon_code_degree_bound: Vec<usize>, num_message_oracles: usize, num_short_messages: usize, oracle_length: usize, localization_parameter: usize) -> Self {
+        ProverRoundMessageInfo { reed_solomon_code_degree_bound, num_message_oracles, num_short_messages, oracle_length, localization_parameter }
+    }
 }
 
 impl ProverRoundMessageInfo {

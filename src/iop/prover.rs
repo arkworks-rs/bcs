@@ -2,40 +2,38 @@ use crate::bcs::transcript::{NameSpace, Transcript};
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
+use crate::iop::{ProverParam, ProverOracleRefs};
 
-/// A leaf-handling prover for public-coin IOP. This prover does not include low
-/// degree test. Use RS-IOP Prover instead if the prover sends
-/// polynomial using RS-code.
+
+/// A Prover for Public Coin IOP.
 pub trait IOPProver<F: PrimeField + Absorb> {
     /// Prover parameter should be a superset of verifier parameter.
-    type ProverParameter: ?Sized;
+    type ProverParameter: ProverParam;
 
-    /// Prover State. May contain witness.
-    /// Prover state should be a superset of verifier state.
-    type ProverState;
+    /// A collection of oracle references from other protocols
+    /// used by current prover.
+    type RoundOracleRefs: ProverOracleRefs;
+
     /// Public input
     type PublicInput: ?Sized;
     /// Private input
     type PrivateInput: ?Sized;
 
-    /// Returns the initial state of the prover.
-    fn initial_state(
-        params: &Self::ProverParameter,
-        public_input: &Self::PublicInput,
-        private_input: &Self::PrivateInput,
-    ) -> Self::ProverState;
-
-    /// TODO doc
-    ///
-    /// If the prover involves a subprotocol, consider create a separate namespace for them,
-    /// using `create_subprotocol_namespace(namespace)`. Doing so, subprotocol messages will not
-    /// pollute the current namespace.
+    /// Run the interactive prover, given the initial state, transcript, and parameter.
+    /// If the prover involves a subprotocol, consider create a separate namespace for them.
     fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         namespace: &NameSpace,
-        state: &mut Self::ProverState,
+        oracle_refs: &Self::RoundOracleRefs,
+        public_input: &Self::PublicInput,
+        private_input: &Self::PrivateInput,
         transcript: &mut Transcript<MT, S, F>,
         prover_parameter: &Self::ProverParameter,
     ) -> Result<(), crate::Error>
     where
         MT::InnerDigest: Absorb;
 }
+
+/// This trait is an extension for IOPProver, which requires that the prover and verifier do not need to access messages sent in other protocol under the same transcript. 
+/// This essentially means that `OracleRefs` is `()`. Any protocol that satisfies this property will automatically implement this trait.
+pub trait IOPProverWithNoOracleRefs<F: PrimeField + Absorb>: IOPProver<F, RoundOracleRefs= ()> {}
+impl<F: PrimeField + Absorb, Protocol: IOPProver<F, RoundOracleRefs= ()>> IOPProverWithNoOracleRefs<F> for Protocol{}

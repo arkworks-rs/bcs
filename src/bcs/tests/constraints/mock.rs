@@ -1,9 +1,8 @@
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
 use crate::bcs::tests::mock::MockTest1Verifier;
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::iop::constraints::IOPVerifierWithGadget;
-use crate::iop::message::ProverRoundMessageInfo;
+use crate::iop::message::{ProverRoundMessageInfo, MessagesCollection};
 use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
@@ -18,12 +17,12 @@ use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
 use ark_std::test_rng;
+use crate::bcs::transcript::NameSpace;
 
 impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, CF>
     for MockTest1Verifier<CF>
 {
     type VerifierOutputVar = Boolean<CF>;
-    type VerifierStateVar = ();
     type PublicInputVar = ();
 
     fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
@@ -78,21 +77,14 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         Ok(())
     }
 
-    fn initial_state_for_query_and_decision_phase_var(
-        _public_input: &Self::PublicInputVar,
-    ) -> Result<Self::VerifierStateVar, SynthesisError> {
-        Ok(())
-    }
 
     fn query_and_decide_var(
         cs: ConstraintSystemRef<CF>,
-        _namespace: &NameSpace,
+        namespace: &NameSpace,
         _verifier_parameter: &Self::VerifierParameter,
-        _verifier_state: &mut Self::VerifierStateVar,
-        _random_oracle: &mut S::Var,
-        mut prover_message_oracle: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        verifier_messages: &[Vec<VerifierMessageVar<CF>>],
-        _bookkeeper: &MessageBookkeeper,
+        _oracle_refs: &Self::OracleRefs,
+        _sponge: &mut S::Var,
+        mut messages_in_commit_phase: MessagesCollection<&mut SuccinctRoundOracleVarView<CF>, VerifierMessageVar<CF>>
     ) -> Result<Self::VerifierOutputVar, SynthesisError> {
         // verify if message is indeed correct
         let mut rng = test_rng();
@@ -103,11 +95,11 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         let pm1_2: Vec<_> = (0..256).map(|_| random_fe()).collect();
         let pm1_3: Vec<_> = (0..256).map(|_| random_fe()).collect();
 
-        prover_message_oracle[0]
+        messages_in_commit_phase.prover_message(namespace, 0)
             .get_short_message(0)
             .enforce_equal(pm1_1.as_slice())?;
 
-        prover_message_oracle[0]
+        messages_in_commit_phase.prover_message(namespace, 0)
             .query(
                 &[
                     UInt8::new_witness(cs.cs(), || Ok(123))?.to_bits_le()?,
@@ -125,18 +117,18 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             )
             .try_for_each(|(left, right)| left.enforce_equal(&right))?;
         assert!(cs.cs().is_satisfied().unwrap());
-        let vm1_1 = verifier_messages[0][0]
+        let vm1_1 = messages_in_commit_phase.verifier_message(namespace, 0)[0]
             .clone()
             .try_into_field_elements()
             .unwrap();
         assert_eq!(vm1_1.len(), 3);
-        let vm1_2 = verifier_messages[0][1].clone().try_into_bytes().unwrap();
+        let vm1_2 = messages_in_commit_phase.verifier_message(namespace, 0)[1].clone().try_into_bytes().unwrap();
         assert_eq!(vm1_2.len(), 16);
-        let vm2_1 = verifier_messages[1][0].clone().try_into_bits().unwrap();
+        let vm2_1 = messages_in_commit_phase.verifier_message(namespace, 1)[0].clone().try_into_bits().unwrap();
         assert_eq!(vm2_1.len(), 19);
 
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square().unwrap()).collect();
-        pm2_1.enforce_equal(prover_message_oracle[1].get_short_message(0).as_slice())?;
+        pm2_1.enforce_equal(messages_in_commit_phase.prover_message(namespace, 1).get_short_message(0).as_slice())?;
 
         let pm2_2: Vec<_> = (0..256u128)
             .map(|x| {
@@ -145,7 +137,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             })
             .collect();
 
-        prover_message_oracle[1]
+        messages_in_commit_phase.prover_message(namespace, 1)
             .query(
                 &[
                     UInt8::constant(19).to_bits_le()?,
@@ -168,9 +160,9 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
         let pm3_1: Vec<_> = (0..6).map(|_| random_fe()).collect();
 
-        pm3_1.enforce_equal(prover_message_oracle[2].get_short_message(0).as_slice())?;
+        pm3_1.enforce_equal(messages_in_commit_phase.prover_message(namespace, 2).get_short_message(0).as_slice())?;
 
-        prover_message_oracle[2].query(
+        messages_in_commit_phase.prover_message(namespace, 2).query(
             &[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]],
             iop_trace!(),
         )?; // query 1, 2

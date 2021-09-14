@@ -5,12 +5,12 @@ use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
 use ark_sponge::Absorb;
-use ark_std::vec::Vec;
 
 use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
+use crate::bcs::transcript::NameSpace;
 use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
 use crate::iop::verifier::IOPVerifier;
+use crate::iop::message::MessagesCollection;
 
 /// Defines prover and verifier message variable.
 pub mod message;
@@ -30,8 +30,6 @@ where
 {
     /// Verifier Output
     type VerifierOutputVar;
-    /// Verifier State.
-    type VerifierStateVar;
     /// Public Input Variable
     type PublicInputVar: ?Sized;
 
@@ -50,11 +48,6 @@ where
         MT::InnerDigest: Absorb,
         MTG::InnerDigest: AbsorbGadget<CF>;
 
-    /// Returns the initial state for query and decision phase.
-    fn initial_state_for_query_and_decision_phase_var(
-        public_input: &Self::PublicInputVar,
-    ) -> Result<Self::VerifierStateVar, SynthesisError>;
-
     /// Query the oracle using the random oracle. Run the verifier code, and return verifier output that
     /// is valid if prover claim is true. Verifier will return an error if prover message is obviously false,
     /// or oracle cannot answer the query.
@@ -64,10 +57,8 @@ where
         cs: ConstraintSystemRef<CF>,
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
-        verifier_state: &mut Self::VerifierStateVar,
-        random_oracle: &mut S::Var,
-        prover_message_oracle: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        verifier_messages: &[Vec<VerifierMessageVar<CF>>],
-        bookkeeper: &MessageBookkeeper,
+        oracle_refs: &Self::OracleRefs,
+        sponge: &mut S::Var,
+        messages_in_commit_phase: MessagesCollection<&mut SuccinctRoundOracleVarView<CF>, VerifierMessageVar<CF>>
     ) -> Result<Self::VerifierOutputVar, SynthesisError>;
 }

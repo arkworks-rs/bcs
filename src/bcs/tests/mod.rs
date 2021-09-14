@@ -61,7 +61,6 @@ fn test_bcs() {
         &(),
         &(),
         &(),
-        &(),
         &ldt_parameters,
         mt_hash_param.clone(),
     )
