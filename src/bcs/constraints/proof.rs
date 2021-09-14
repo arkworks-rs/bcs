@@ -1,19 +1,20 @@
-use crate::bcs::prover::BCSProof;
-use crate::iop::constraints::message::SuccinctRoundOracleVar;
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-use ark_crypto_primitives::merkle_tree::Config;
-use ark_crypto_primitives::PathVar;
+use crate::{bcs::prover::BCSProof, iop::constraints::message::SuccinctRoundOracleVar};
+use ark_crypto_primitives::{
+    merkle_tree::{constraints::ConfigGadget, Config},
+    PathVar,
+};
 use ark_ff::PrimeField;
-use ark_r1cs_std::alloc::{AllocVar, AllocationMode};
-use ark_r1cs_std::fields::fp::FpVar;
+use ark_r1cs_std::{
+    alloc::{AllocVar, AllocationMode},
+    fields::fp::FpVar,
+};
 use ark_relations::r1cs::{Namespace, SynthesisError};
-use ark_sponge::constraints::AbsorbGadget;
-use ark_sponge::Absorb;
-use ark_std::borrow::Borrow;
-use ark_std::vec::Vec;
+use ark_sponge::{constraints::AbsorbGadget, Absorb};
+use ark_std::{borrow::Borrow, vec::Vec};
 
 /// Variable for BCS Proof.
-/// BCSProof contains all prover messages that use succinct oracle, and thus is itself succinct.
+/// BCSProof contains all prover messages that use succinct oracle, and thus is
+/// itself succinct.
 pub struct BCSProofVar<MT, MTG, CF>
 where
     MT: Config,
@@ -22,15 +23,19 @@ where
     MT::InnerDigest: Absorb,
     MTG::InnerDigest: AbsorbGadget<CF>,
 {
-    /// Messages sent by prover in commit phase. Each item in the vector represents a list of
-    /// message oracles (reed solomon codes go first) with same length. The length constraints do not hold for short messages (IP message).
-    /// All non-IP messages in the same prover round share the same merkle tree. Each merkle tree leaf is
-    /// a vector which each element correspond to the same coset of different oracles.
+    /// Messages sent by prover in commit phase. Each item in the vector
+    /// represents a list of message oracles (reed solomon codes go first)
+    /// with same length. The length constraints do not hold for short messages
+    /// (IP message). All non-IP messages in the same prover round share the
+    /// same merkle tree. Each merkle tree leaf is a vector which each
+    /// element correspond to the same coset of different oracles.
     pub prover_iop_messages_by_round: Vec<SuccinctRoundOracleVar<CF>>,
-    /// Merkle tree roots for all prover messages (including main prover and ldt prover).
+    /// Merkle tree roots for all prover messages (including main prover and ldt
+    /// prover).
     pub prover_messages_mt_root: Vec<Option<MTG::InnerDigest>>,
     /// Merkle tree paths for queried prover messages in main protocol.
-    /// `prover_messages_mt_path[i][j]` is the path for jth query at ith round of prover message.
+    /// `prover_messages_mt_path[i][j]` is the path for jth query at ith round
+    /// of prover message.
     pub prover_oracles_mt_path: Vec<Vec<PathVar<MT, CF, MTG>>>,
 }
 

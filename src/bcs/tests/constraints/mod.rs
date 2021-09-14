@@ -1,33 +1,42 @@
-use ark_crypto_primitives::crh::poseidon;
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-use ark_crypto_primitives::merkle_tree::IdentityDigestConverter;
+use ark_crypto_primitives::{
+    crh::poseidon,
+    merkle_tree::{constraints::ConfigGadget, IdentityDigestConverter},
+};
 use ark_r1cs_std::fields::fp::FpVar;
 
-use crate::bcs::constraints::proof::BCSProofVar;
-use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::constraints::verifier::BCSVerifierGadget;
-use crate::bcs::constraints::MTHashParametersVar;
-use crate::bcs::prover::BCSProof;
-use crate::bcs::tests::mock::{MockTest1Verifier, MockTestProver};
-use crate::bcs::tests::{FieldMTConfig, Fr};
-use crate::bcs::transcript::ROOT_NAMESPACE;
-use crate::bcs::MTHashParameters;
-use crate::iop::constraints::IOPVerifierWithGadget;
-use crate::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
-use crate::ldt::LDT;
-use crate::test_utils::poseidon_parameters;
+use crate::{
+    bcs::{
+        constraints::{
+            proof::BCSProofVar,
+            transcript::{test_utils::check_commit_phase_correctness_var, SimulationTranscriptVar},
+            verifier::BCSVerifierGadget,
+            MTHashParametersVar,
+        },
+        prover::BCSProof,
+        tests::{
+            mock::{MockTest1Verifier, MockTestProver},
+            FieldMTConfig, Fr,
+        },
+        transcript::ROOT_NAMESPACE,
+        MTHashParameters,
+    },
+    iop::constraints::IOPVerifierWithGadget,
+    ldt::{
+        rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+        LDT,
+    },
+    test_utils::poseidon_parameters,
+};
 use ark_crypto_primitives::crh::poseidon::constraints::CRHParametersVar;
-use ark_ldt::domain::Radix2CosetDomain;
-use ark_ldt::fri::FRIParameters;
-use ark_r1cs_std::alloc::AllocVar;
-use ark_r1cs_std::R1CSVar;
+use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
+use ark_r1cs_std::{alloc::AllocVar, R1CSVar};
 use ark_relations::r1cs::ConstraintSystem;
-use ark_sponge::constraints::CryptographicSpongeVar;
-use ark_sponge::poseidon::constraints::PoseidonSpongeVar;
-use ark_sponge::poseidon::PoseidonSponge;
-use ark_sponge::CryptographicSponge;
+use ark_sponge::{
+    constraints::CryptographicSpongeVar,
+    poseidon::{constraints::PoseidonSpongeVar, PoseidonSponge},
+    CryptographicSponge,
+};
 use ark_std::One;
-use crate::bcs::constraints::transcript::test_utils::check_commit_phase_correctness_var;
 
 mod mock;
 
@@ -62,14 +71,29 @@ fn test_restore() {
         leaf_hash_param: poseidon_parameters(),
         inner_hash_param: poseidon_parameters(),
     };
-    check_commit_phase_correctness_var::<Fr, _, FieldMTConfig, FieldMTConfig, MockTestProver<Fr>, MockTest1Verifier<Fr>, LinearCombinationLDT<Fr>>
-        (sponge, sponge_var, &(), &(), &(), &(), &(), &ldt_parameters, mt_hash_param);
-
+    check_commit_phase_correctness_var::<
+        Fr,
+        _,
+        FieldMTConfig,
+        FieldMTConfig,
+        MockTestProver<Fr>,
+        MockTest1Verifier<Fr>,
+        LinearCombinationLDT<Fr>,
+    >(
+        sponge,
+        sponge_var,
+        &(),
+        &(),
+        &(),
+        &(),
+        &(),
+        &ldt_parameters,
+        mt_hash_param,
+    );
 }
 
 #[test]
 fn test_bcs() {
-
     let fri_parameters = FRIParameters::new(
         64,
         vec![1, 2, 1],

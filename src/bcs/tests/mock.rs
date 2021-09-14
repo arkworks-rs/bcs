@@ -1,24 +1,27 @@
-use crate::bcs::tests::FieldMTConfig;
-use crate::bcs::transcript::test_utils::check_commit_phase_correctness;
-use crate::bcs::transcript::{NameSpace, SimulationTranscript, Transcript};
-use crate::bcs::MTHashParameters;
-use crate::iop::message::{ProverRoundMessageInfo, RoundOracle, VerifierMessage, MessagesCollection};
-use crate::iop::prover::IOPProver;
-use crate::iop::verifier::IOPVerifier;
-use crate::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
-use crate::test_utils::poseidon_parameters;
-use crate::Error;
+use crate::{
+    bcs::{
+        tests::FieldMTConfig,
+        transcript::{
+            test_utils::check_commit_phase_correctness, NameSpace, SimulationTranscript, Transcript,
+        },
+        MTHashParameters,
+    },
+    iop::{
+        message::{MessagesCollection, ProverRoundMessageInfo, RoundOracle, VerifierMessage},
+        prover::IOPProver,
+        verifier::IOPVerifier,
+    },
+    ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+    test_utils::poseidon_parameters,
+    Error,
+};
 use ark_bls12_381::fr::Fr;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::{PrimeField, ToConstraintField};
-use ark_ldt::domain::Radix2CosetDomain;
-use ark_ldt::fri::FRIParameters;
-use ark_poly::univariate::DensePolynomial;
-use ark_poly::UVPolynomial;
-use ark_sponge::poseidon::PoseidonSponge;
-use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
-use ark_std::marker::PhantomData;
-use ark_std::{test_rng, One};
+use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
+use ark_poly::{univariate::DensePolynomial, UVPolynomial};
+use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge, FieldElementSize};
+use ark_std::{marker::PhantomData, test_rng, One};
 
 /// TODO: add a README here describing the dummy protocol
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
@@ -180,28 +183,38 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         let pm1_3: Vec<_> = (0..256).map(|_| F::rand(&mut rng)).collect();
 
         assert_eq!(
-            messages_in_commit_phase.prover_message(namespace, 0).get_short_message(0, iop_trace!()),
+            messages_in_commit_phase
+                .prover_message(namespace, 0)
+                .get_short_message(0, iop_trace!()),
             &pm1_1
         );
         assert_eq!(
-            messages_in_commit_phase.prover_message(namespace, 0).query(&[123, 223], iop_trace!("mock query 0")),
+            messages_in_commit_phase
+                .prover_message(namespace, 0)
+                .query(&[123, 223], iop_trace!("mock query 0")),
             vec![vec![pm1_2[123], pm1_3[123]], vec![pm1_2[223], pm1_3[223]]]
         );
 
-        let vm1_1 = if let VerifierMessage::FieldElements(fe) = messages_in_commit_phase.verifier_message(namespace, 0)[0].clone() {
+        let vm1_1 = if let VerifierMessage::FieldElements(fe) =
+            messages_in_commit_phase.verifier_message(namespace, 0)[0].clone()
+        {
             assert_eq!(fe.len(), 3);
             fe
         } else {
             panic!("invalid vm message type")
         };
-        let vm1_2 = if let VerifierMessage::Bytes(bytes) =messages_in_commit_phase.verifier_message(namespace, 0)[1].clone() {
+        let vm1_2 = if let VerifierMessage::Bytes(bytes) =
+            messages_in_commit_phase.verifier_message(namespace, 0)[1].clone()
+        {
             assert_eq!(bytes.len(), 16);
             bytes
         } else {
             panic!("invalid vm message type");
         };
 
-        if let VerifierMessage::Bits(bits) = &messages_in_commit_phase.verifier_message(namespace, 1)[0] {
+        if let VerifierMessage::Bits(bits) =
+            &messages_in_commit_phase.verifier_message(namespace, 1)[0]
+        {
             assert_eq!(bits.len(), 19);
         } else {
             panic!("invalid vm message type");
@@ -210,7 +223,9 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square()).collect();
 
         assert_eq!(
-            messages_in_commit_phase.prover_message(namespace, 1).get_short_message(0, iop_trace!()),
+            messages_in_commit_phase
+                .prover_message(namespace, 1)
+                .get_short_message(0, iop_trace!()),
             &pm2_1
         );
 
@@ -222,17 +237,23 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             .collect();
 
         assert_eq!(
-            messages_in_commit_phase.prover_message(namespace, 1).query(&[19, 29, 39], iop_trace!()),
+            messages_in_commit_phase
+                .prover_message(namespace, 1)
+                .query(&[19, 29, 39], iop_trace!()),
             vec![vec![pm2_2[19]], vec![pm2_2[29]], vec![pm2_2[39]]]
         );
 
         let pm3_1: Vec<_> = (0..6).map(|_| F::rand(&mut rng)).collect();
         assert_eq!(
-            messages_in_commit_phase.prover_message(namespace, 2).get_short_message(0, iop_trace!()),
+            messages_in_commit_phase
+                .prover_message(namespace, 2)
+                .get_short_message(0, iop_trace!()),
             &pm3_1
         );
         // just query some points
-        messages_in_commit_phase.prover_message(namespace, 2).query(&vec![1, 2], iop_trace!());
+        messages_in_commit_phase
+            .prover_message(namespace, 2)
+            .query(&vec![1, 2], iop_trace!());
 
         Ok(true)
     }

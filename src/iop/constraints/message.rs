@@ -1,11 +1,11 @@
-use crate::iop::message::{ProverRoundMessageInfo, SuccinctRoundOracle, VerifierMessage};
-use crate::tracer::TraceInfo;
+use crate::{
+    iop::message::{ProverRoundMessageInfo, SuccinctRoundOracle, VerifierMessage},
+    tracer::TraceInfo,
+};
 use ark_ff::PrimeField;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_r1cs_std::prelude::*;
-use ark_relations::r1cs::{Namespace, SynthesisError, ConstraintSystemRef};
-use ark_std::borrow::Borrow;
-use ark_std::vec::Vec;
+use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
+use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
+use ark_std::{borrow::Borrow, vec::Vec};
 
 /// Constraint Gadget for `RoundOracleVar`
 pub trait RoundOracleVar<F: PrimeField> {}
@@ -23,8 +23,8 @@ pub struct SuccinctRoundOracleVar<F: PrimeField> {
 }
 
 impl<F: PrimeField> SuccinctRoundOracleVar<F> {
-    /// Return a view of succinct round oracle var. View contains a reference to the oracle,
-    /// as well as recorded queries and position pointer.
+    /// Return a view of succinct round oracle var. View contains a reference to
+    /// the oracle, as well as recorded queries and position pointer.
     pub fn get_view(&self) -> SuccinctRoundOracleVarView<F> {
         SuccinctRoundOracleVarView {
             oracle: &self,
@@ -72,7 +72,8 @@ impl<F: PrimeField> AllocVar<SuccinctRoundOracle<F>, F> for SuccinctRoundOracleV
 }
 
 #[derive(Clone)]
-/// A reference to the succinct oracle variable plus a state recording current query position.
+/// A reference to the succinct oracle variable plus a state recording current
+/// query position.
 pub struct SuccinctRoundOracleVarView<'a, F: PrimeField> {
     pub(crate) oracle: &'a SuccinctRoundOracleVar<F>,
     /// queries calculated by the verifier
@@ -81,7 +82,8 @@ pub struct SuccinctRoundOracleVarView<'a, F: PrimeField> {
 }
 
 impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
-    /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
+    /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf
+    /// `i` at oracle `j`.
     pub fn query(
         &mut self,
         position: &[Vec<Boolean<F>>],
@@ -105,8 +107,9 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
             .iter()
             .map(|bits| fit_bits_to_length(bits, log_oracle_length))
             .collect::<Vec<_>>();
-        // coset index = position % num_cosets = the least significant `log_num_cosets` bits of pos
-        // element index in coset = position / num_cosets = all other bits
+        // coset index = position % num_cosets = the least significant `log_num_cosets`
+        // bits of pos element index in coset = position / num_cosets = all
+        // other bits
         let coset_index = position
             .iter()
             .map(|pos| pos[..log_num_cosets].to_vec())
@@ -130,7 +133,8 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
     }
 
     /// Return the queried coset at `coset_index` of all oracles.
-    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
+    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
+    /// in this coset.
     pub fn query_coset(
         &mut self,
         coset_index: &[Vec<Boolean<F>>],
@@ -173,7 +177,8 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVarView<'a, F> {
         self.get_info().oracle_length
     }
 
-    /// Get oracle info, including number of oracles for each type and degree bound of each RS code oracle.
+    /// Get oracle info, including number of oracles for each type and degree
+    /// bound of each RS code oracle.
     #[inline]
     pub fn get_info(&self) -> &ProverRoundMessageInfo {
         &self.oracle.info
@@ -202,7 +207,8 @@ pub enum VerifierMessageVar<F: PrimeField> {
 }
 
 impl<F: PrimeField> VerifierMessageVar<F> {
-    /// If `self` contains field elements, return those elements. Otherwise return `None`.
+    /// If `self` contains field elements, return those elements. Otherwise
+    /// return `None`.
     pub fn try_into_field_elements(self) -> Option<Vec<FpVar<F>>> {
         if let VerifierMessageVar::FieldElements(fe) = self {
             Some(fe)
@@ -246,21 +252,21 @@ impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {
                     .map(|x| FpVar::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::FieldElements(var?))
-            }
+            },
             VerifierMessage::Bits(bits) => {
                 let var: Result<Vec<_>, _> = bits
                     .iter()
                     .map(|x| Boolean::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bits(var?))
-            }
+            },
             VerifierMessage::Bytes(bytes) => {
                 let var: Result<Vec<_>, _> = bytes
                     .iter()
                     .map(|x| UInt8::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bytes(var?))
-            }
+            },
         }
     }
 }
@@ -272,7 +278,7 @@ impl<F: PrimeField> R1CSVar<F> for VerifierMessageVar<F> {
         match self {
             Self::Bits(v) => v[0].cs(),
             Self::Bytes(v) => v[0].cs(),
-            Self::FieldElements(v) => v[0].cs()
+            Self::FieldElements(v) => v[0].cs(),
         }
     }
 
@@ -280,12 +286,13 @@ impl<F: PrimeField> R1CSVar<F> for VerifierMessageVar<F> {
         match self {
             Self::Bits(v) => Ok(Self::Value::Bits(v.value()?)),
             Self::Bytes(v) => Ok(Self::Value::Bytes(v.value()?)),
-            Self::FieldElements(v) => Ok(Self::Value::FieldElements(v.value()?))
+            Self::FieldElements(v) => Ok(Self::Value::FieldElements(v.value()?)),
         }
     }
 }
 
-/// fix a bit array to a certain length by remove extra element on the end or pad with zero
+/// fix a bit array to a certain length by remove extra element on the end or
+/// pad with zero
 fn fit_bits_to_length<F: PrimeField>(bits: &[Boolean<F>], length: usize) -> Vec<Boolean<F>> {
     if bits.len() < length {
         bits.to_vec()

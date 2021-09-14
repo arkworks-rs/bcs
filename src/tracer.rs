@@ -1,5 +1,4 @@
-use ark_std::fmt::Debug;
-use ark_std::fmt::{Display, Formatter};
+use ark_std::fmt::{Debug, Display, Formatter};
 
 #[derive(Clone, Copy)]
 #[allow(unused)]
@@ -34,7 +33,8 @@ impl Debug for TraceInfo {
 }
 
 impl TraceInfo {
-    /// Returns a new `TraceInfo`. Note that this function should not be directly called. Instead, use `iop_trace!` instead.
+    /// Returns a new `TraceInfo`. Note that this function should not be
+    /// directly called. Instead, use `iop_trace!` instead.
     pub fn new(
         description: Option<&'static str>,
         file_name: &'static str,

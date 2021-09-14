@@ -1,9 +1,10 @@
-use crate::bcs::transcript::{NameSpace, Transcript};
+use crate::{
+    bcs::transcript::{NameSpace, Transcript},
+    iop::{ProverOracleRefs, ProverParam},
+};
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
-use crate::iop::{ProverParam, ProverOracleRefs};
-
 
 /// A Prover for Public Coin IOP.
 pub trait IOPProver<F: PrimeField + Absorb> {
@@ -19,8 +20,9 @@ pub trait IOPProver<F: PrimeField + Absorb> {
     /// Private input
     type PrivateInput: ?Sized;
 
-    /// Run the interactive prover, given the initial state, transcript, and parameter.
-    /// If the prover involves a subprotocol, consider create a separate namespace for them.
+    /// Run the interactive prover, given the initial state, transcript, and
+    /// parameter. If the prover involves a subprotocol, consider create a
+    /// separate namespace for them.
     fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         namespace: &NameSpace,
         oracle_refs: &Self::RoundOracleRefs,
@@ -33,7 +35,16 @@ pub trait IOPProver<F: PrimeField + Absorb> {
         MT::InnerDigest: Absorb;
 }
 
-/// This trait is an extension for IOPProver, which requires that the prover and verifier do not need to access messages sent in other protocol under the same transcript. 
-/// This essentially means that `OracleRefs` is `()`. Any protocol that satisfies this property will automatically implement this trait.
-pub trait IOPProverWithNoOracleRefs<F: PrimeField + Absorb>: IOPProver<F, RoundOracleRefs= ()> {}
-impl<F: PrimeField + Absorb, Protocol: IOPProver<F, RoundOracleRefs= ()>> IOPProverWithNoOracleRefs<F> for Protocol{}
+/// This trait is an extension for IOPProver, which requires that the prover and
+/// verifier do not need to access messages sent in other protocol under the
+/// same transcript. This essentially means that `OracleRefs` is `()`. Any
+/// protocol that satisfies this property will automatically implement this
+/// trait.
+pub trait IOPProverWithNoOracleRefs<F: PrimeField + Absorb>:
+    IOPProver<F, RoundOracleRefs = ()>
+{
+}
+impl<F: PrimeField + Absorb, Protocol: IOPProver<F, RoundOracleRefs = ()>>
+    IOPProverWithNoOracleRefs<F> for Protocol
+{
+}

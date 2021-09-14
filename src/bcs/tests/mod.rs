@@ -1,23 +1,30 @@
 #[cfg(feature = "r1cs")]
 mod constraints;
-/// Contains the mock IOP prover and verifier to solely test correctness of transcript.
+/// Contains the mock IOP prover and verifier to solely test correctness of
+/// transcript.
 pub(crate) mod mock;
 
-use crate::bcs::prover::BCSProof;
-use crate::bcs::tests::mock::{MockTest1Verifier, MockTestProver};
-use crate::bcs::transcript::{SimulationTranscript, ROOT_NAMESPACE};
-use crate::bcs::verifier::BCSVerifier;
-use crate::bcs::MTHashParameters;
-use crate::iop::verifier::IOPVerifier;
-use crate::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
-use crate::ldt::LDT;
-use crate::test_utils::poseidon_parameters;
-use ark_crypto_primitives::crh::poseidon;
-use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};
-use ark_ldt::domain::Radix2CosetDomain;
-use ark_ldt::fri::FRIParameters;
-use ark_sponge::poseidon::PoseidonSponge;
-use ark_sponge::CryptographicSponge;
+use crate::{
+    bcs::{
+        prover::BCSProof,
+        tests::mock::{MockTest1Verifier, MockTestProver},
+        transcript::{SimulationTranscript, ROOT_NAMESPACE},
+        verifier::BCSVerifier,
+        MTHashParameters,
+    },
+    iop::verifier::IOPVerifier,
+    ldt::{
+        rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+        LDT,
+    },
+    test_utils::poseidon_parameters,
+};
+use ark_crypto_primitives::{
+    crh::poseidon,
+    merkle_tree::{Config, IdentityDigestConverter},
+};
+use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
+use ark_sponge::{poseidon::PoseidonSponge, CryptographicSponge};
 use ark_std::One;
 
 pub(crate) type Fr = ark_bls12_381::Fr;
@@ -35,7 +42,8 @@ impl Config for FieldMTConfig {
 }
 
 #[test]
-/// Test if restore_state_from_commit_phase message works. This test uses a dummy protocol described as `MockTestProver`.
+/// Test if restore_state_from_commit_phase message works. This test uses a
+/// dummy protocol described as `MockTestProver`.
 fn test_bcs() {
     let fri_parameters = FRIParameters::new(
         64,

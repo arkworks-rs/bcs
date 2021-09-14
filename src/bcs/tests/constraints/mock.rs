@@ -1,23 +1,32 @@
-use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::tests::mock::MockTest1Verifier;
-use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
-use crate::iop::constraints::IOPVerifierWithGadget;
-use crate::iop::message::{ProverRoundMessageInfo, MessagesCollection};
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-use ark_crypto_primitives::merkle_tree::Config;
+use crate::{
+    bcs::{
+        constraints::transcript::SimulationTranscriptVar, tests::mock::MockTest1Verifier,
+        transcript::NameSpace,
+    },
+    iop::{
+        constraints::{
+            message::{SuccinctRoundOracleVarView, VerifierMessageVar},
+            IOPVerifierWithGadget,
+        },
+        message::{MessagesCollection, ProverRoundMessageInfo},
+    },
+};
+use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
 use ark_ff::PrimeField;
-use ark_r1cs_std::alloc::AllocVar;
-use ark_r1cs_std::bits::uint8::UInt8;
-use ark_r1cs_std::boolean::Boolean;
-use ark_r1cs_std::eq::EqGadget;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_r1cs_std::fields::FieldVar;
-use ark_r1cs_std::{ToBitsGadget, ToConstraintFieldGadget};
+use ark_r1cs_std::{
+    alloc::AllocVar,
+    bits::uint8::UInt8,
+    boolean::Boolean,
+    eq::EqGadget,
+    fields::{fp::FpVar, FieldVar},
+    ToBitsGadget, ToConstraintFieldGadget,
+};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
-use ark_sponge::Absorb;
+use ark_sponge::{
+    constraints::{AbsorbGadget, SpongeWithGadget},
+    Absorb,
+};
 use ark_std::test_rng;
-use crate::bcs::transcript::NameSpace;
 
 impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, CF>
     for MockTest1Verifier<CF>
@@ -77,14 +86,16 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         Ok(())
     }
 
-
     fn query_and_decide_var(
         cs: ConstraintSystemRef<CF>,
         namespace: &NameSpace,
         _verifier_parameter: &Self::VerifierParameter,
         _oracle_refs: &Self::OracleRefs,
         _sponge: &mut S::Var,
-        mut messages_in_commit_phase: MessagesCollection<&mut SuccinctRoundOracleVarView<CF>, VerifierMessageVar<CF>>
+        mut messages_in_commit_phase: MessagesCollection<
+            &mut SuccinctRoundOracleVarView<CF>,
+            VerifierMessageVar<CF>,
+        >,
     ) -> Result<Self::VerifierOutputVar, SynthesisError> {
         // verify if message is indeed correct
         let mut rng = test_rng();
@@ -95,11 +106,13 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         let pm1_2: Vec<_> = (0..256).map(|_| random_fe()).collect();
         let pm1_3: Vec<_> = (0..256).map(|_| random_fe()).collect();
 
-        messages_in_commit_phase.prover_message(namespace, 0)
+        messages_in_commit_phase
+            .prover_message(namespace, 0)
             .get_short_message(0)
             .enforce_equal(pm1_1.as_slice())?;
 
-        messages_in_commit_phase.prover_message(namespace, 0)
+        messages_in_commit_phase
+            .prover_message(namespace, 0)
             .query(
                 &[
                     UInt8::new_witness(cs.cs(), || Ok(123))?.to_bits_le()?,
@@ -122,13 +135,24 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             .try_into_field_elements()
             .unwrap();
         assert_eq!(vm1_1.len(), 3);
-        let vm1_2 = messages_in_commit_phase.verifier_message(namespace, 0)[1].clone().try_into_bytes().unwrap();
+        let vm1_2 = messages_in_commit_phase.verifier_message(namespace, 0)[1]
+            .clone()
+            .try_into_bytes()
+            .unwrap();
         assert_eq!(vm1_2.len(), 16);
-        let vm2_1 = messages_in_commit_phase.verifier_message(namespace, 1)[0].clone().try_into_bits().unwrap();
+        let vm2_1 = messages_in_commit_phase.verifier_message(namespace, 1)[0]
+            .clone()
+            .try_into_bits()
+            .unwrap();
         assert_eq!(vm2_1.len(), 19);
 
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square().unwrap()).collect();
-        pm2_1.enforce_equal(messages_in_commit_phase.prover_message(namespace, 1).get_short_message(0).as_slice())?;
+        pm2_1.enforce_equal(
+            messages_in_commit_phase
+                .prover_message(namespace, 1)
+                .get_short_message(0)
+                .as_slice(),
+        )?;
 
         let pm2_2: Vec<_> = (0..256u128)
             .map(|x| {
@@ -137,7 +161,8 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             })
             .collect();
 
-        messages_in_commit_phase.prover_message(namespace, 1)
+        messages_in_commit_phase
+            .prover_message(namespace, 1)
             .query(
                 &[
                     UInt8::constant(19).to_bits_le()?,
@@ -160,12 +185,19 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
         let pm3_1: Vec<_> = (0..6).map(|_| random_fe()).collect();
 
-        pm3_1.enforce_equal(messages_in_commit_phase.prover_message(namespace, 2).get_short_message(0).as_slice())?;
+        pm3_1.enforce_equal(
+            messages_in_commit_phase
+                .prover_message(namespace, 2)
+                .get_short_message(0)
+                .as_slice(),
+        )?;
 
-        messages_in_commit_phase.prover_message(namespace, 2).query(
-            &[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]],
-            iop_trace!(),
-        )?; // query 1, 2
+        messages_in_commit_phase
+            .prover_message(namespace, 2)
+            .query(
+                &[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]],
+                iop_trace!(),
+            )?; // query 1, 2
         Ok(Boolean::TRUE)
     }
 }

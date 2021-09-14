@@ -1,22 +1,25 @@
-use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::transcript::ROOT_NAMESPACE;
-use crate::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
-use crate::iop::message::ProverRoundMessageInfo;
-use crate::ldt::constraints::LDTWithGadget;
-use crate::ldt::rl_ldt::LinearCombinationLDT;
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-use ark_crypto_primitives::merkle_tree::Config;
+use crate::{
+    bcs::{constraints::transcript::SimulationTranscriptVar, transcript::ROOT_NAMESPACE},
+    iop::{
+        constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar},
+        message::ProverRoundMessageInfo,
+    },
+    ldt::{constraints::LDTWithGadget, rl_ldt::LinearCombinationLDT},
+};
+use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
 use ark_ff::PrimeField;
-use ark_ldt::domain::Radix2CosetDomain;
-use ark_ldt::fri::constraints::FRIVerifierGadget;
-use ark_r1cs_std::boolean::Boolean;
-use ark_r1cs_std::eq::EqGadget;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_r1cs_std::fields::FieldVar;
-use ark_r1cs_std::poly::polynomial::univariate::dense::DensePolynomialVar;
+use ark_ldt::{domain::Radix2CosetDomain, fri::constraints::FRIVerifierGadget};
+use ark_r1cs_std::{
+    boolean::Boolean,
+    eq::EqGadget,
+    fields::{fp::FpVar, FieldVar},
+    poly::polynomial::univariate::dense::DensePolynomialVar,
+};
 use ark_relations::r1cs::SynthesisError;
-use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
-use ark_sponge::Absorb;
+use ark_sponge::{
+    constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
+    Absorb,
+};
 use ark_std::vec::Vec;
 
 impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
@@ -225,8 +228,8 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
     }
 }
 
-/// return evaluation of x^{degree_to_raise} at specific location (with coset structure)
-/// For now, we assume the offset of codeword domain is constant.
+/// return evaluation of x^{degree_to_raise} at specific location (with coset
+/// structure) For now, we assume the offset of codeword domain is constant.
 /// TODO: in the future, the offset can also be an variable.
 fn degree_raise_poly_query<F: PrimeField>(
     domain: Radix2CosetDomain<F>,
@@ -261,11 +264,8 @@ mod tests {
     use crate::ldt::constraints::rl_ldt::degree_raise_poly_query;
     use ark_bls12_381::Fr;
     use ark_ldt::domain::Radix2CosetDomain;
-    use ark_poly::polynomial::univariate::DensePolynomial;
-    use ark_poly::UVPolynomial;
-    use ark_r1cs_std::alloc::AllocVar;
-    use ark_r1cs_std::boolean::Boolean;
-    use ark_r1cs_std::R1CSVar;
+    use ark_poly::{polynomial::univariate::DensePolynomial, UVPolynomial};
+    use ark_r1cs_std::{alloc::AllocVar, boolean::Boolean, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{One, Zero};
 

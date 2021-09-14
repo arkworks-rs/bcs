@@ -13,10 +13,11 @@ pub mod message;
 
 /// A collection of oracle references from other protocols
 /// used by current prover.
-pub trait ProverOracleRefs: Clone + Debug{
-    ///  A improper subset of `self` that will be used by verifier. 
+pub trait ProverOracleRefs: Clone + Debug {
+    ///  A improper subset of `self` that will be used by verifier.
     type VerifierOracleRefs: VerifierOracleRefs;
-    /// Derive Verifier state at the beginning of `query_and_decide` function using prover state at the end of commit phase.
+    /// Derive Verifier state at the beginning of `query_and_decide` function
+    /// using prover state at the end of commit phase.
     fn to_verifier_oracle_refs(&self) -> Self::VerifierOracleRefs;
 }
 
@@ -31,13 +32,14 @@ impl ProverOracleRefs for () {
 /// A collection of oracle references from other protocols
 /// used by current prover.
 pub trait VerifierOracleRefs: Clone + Debug {}
-impl <T: Clone + Debug> VerifierOracleRefs for T {}
+impl<T: Clone + Debug> VerifierOracleRefs for T {}
 
 /// Prover parameter used by IOP Prover.
 pub trait ProverParam: Clone + Debug {
     /// Verifier state should be a improper subset of `self`.
     type VerifierParameter: VerifierParam;
-    /// Derive Verifier state at the beginning of `query_and_decide` function using prover state at the end of commit phase.
+    /// Derive Verifier state at the beginning of `query_and_decide` function
+    /// using prover state at the end of commit phase.
     fn to_verifier_param(&self) -> Self::VerifierParameter;
 }
 
@@ -51,9 +53,4 @@ impl ProverParam for () {
 
 /// Parameter used by the IOP Verifier.
 pub trait VerifierParam: Clone + Debug {}
-impl <T: Clone + Debug> VerifierParam for T {}
-
-
-
-
-
+impl<T: Clone + Debug> VerifierParam for T {}

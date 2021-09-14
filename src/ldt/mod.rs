@@ -5,9 +5,11 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
 
-use crate::bcs::transcript::{SimulationTranscript, Transcript};
-use crate::iop::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage};
-use crate::Error;
+use crate::{
+    bcs::transcript::{SimulationTranscript, Transcript},
+    iop::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage},
+    Error,
+};
 use ark_std::vec::Vec;
 
 #[cfg(feature = "r1cs")]
@@ -21,15 +23,16 @@ pub trait LDT<F: PrimeField + Absorb> {
     /// Parameters of `Self`
     type LDTParameters: Clone;
 
-    /// Given the degree bound of codeword, return the expected evaluation domain and localization_parameter.
-    /// localization parameter is log2(size of query coset)
-    /// # Panics
+    /// Given the degree bound of codeword, return the expected evaluation
+    /// domain and localization_parameter. localization parameter is
+    /// log2(size of query coset) # Panics
     /// `ldt_info` will panic if `degree_bound` is not supported by this LDT.
     fn ldt_info(param: &Self::LDTParameters, degree_bound: usize) -> (Radix2CosetDomain<F>, usize);
 
-    /// Given the list of codewords along with its degree bound, send LDT prover messages.
-    /// `codewords[i][j][k]` is the `k`th leaf of `j`th RS oracle at IOP round `i`.
-    /// LDT prover cannot send LDT oracles through `ldt_transcript`.
+    /// Given the list of codewords along with its degree bound, send LDT prover
+    /// messages. `codewords[i][j][k]` is the `k`th leaf of `j`th RS oracle
+    /// at IOP round `i`. LDT prover cannot send LDT oracles through
+    /// `ldt_transcript`.
     fn prove<'a, MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
         codewords: impl IntoIterator<Item = &'a Vec<(Vec<F>, usize)>>,
@@ -38,17 +41,20 @@ pub trait LDT<F: PrimeField + Absorb> {
     where
         MT::InnerDigest: Absorb;
 
-    /// Simulate interaction with prover in commit phase, reconstruct verifier messages and verifier state
-    /// using the sponge provided in the simulation transcript. Returns the verifier state for query and decision phase.
+    /// Simulate interaction with prover in commit phase, reconstruct verifier
+    /// messages and verifier state using the sponge provided in the
+    /// simulation transcript. Returns the verifier state for query and decision
+    /// phase.
     fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>, // FRI only gets degree bound information from this phase
+        codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>, /* FRI only gets degree bound information from this phase */
         transcript: &mut SimulationTranscript<MT, S, F>,
     ) where
         MT::InnerDigest: Absorb;
 
-    /// Verify `codewords` is low-degree, given the succinct codewords oracle and proof.
-    /// `codewords_oracles[i]` includes all oracles sent on round `i`.
+    /// Verify `codewords` is low-degree, given the succinct codewords oracle
+    /// and proof. `codewords_oracles[i]` includes all oracles sent on round
+    /// `i`.
     fn query_and_decide<S: CryptographicSponge, O: RoundOracle<F>>(
         param: &Self::LDTParameters,
         random_oracle: &mut S,
@@ -64,7 +70,8 @@ pub struct NoLDT<F: PrimeField + Absorb> {
 }
 
 impl<F: PrimeField + Absorb> NoLDT<F> {
-    /// Specify the evaluation domain and localization_parameter of the codeword, using this dummy LDT.
+    /// Specify the evaluation domain and localization_parameter of the
+    /// codeword, using this dummy LDT.
     pub fn parameter(
         evaluation_domain: Radix2CosetDomain<F>,
         localization_parameter: usize,
@@ -74,7 +81,8 @@ impl<F: PrimeField + Absorb> NoLDT<F> {
 }
 
 impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
-    /// If LDTParameters is None, `ldt_info` will panic, so transcript would not allow low degree oracles to be sent.
+    /// If LDTParameters is None, `ldt_info` will panic, so transcript would not
+    /// allow low degree oracles to be sent.
     type LDTParameters = Option<(Radix2CosetDomain<F>, usize)>;
 
     fn ldt_info(

@@ -1,16 +1,21 @@
-use crate::bcs::prover::BCSProof;
-use crate::bcs::transcript::{SimulationTranscript, ROOT_NAMESPACE};
-use crate::bcs::MTHashParameters;
-use crate::iop::verifier::{IOPVerifier, IOPVerifierWithNoOracleRefs};
-use crate::ldt::{NoLDT, LDT};
-use crate::Error;
+use crate::{
+    bcs::{
+        prover::BCSProof,
+        transcript::{SimulationTranscript, ROOT_NAMESPACE},
+        MTHashParameters,
+    },
+    iop::{
+        message::MessagesCollection,
+        verifier::{IOPVerifier, IOPVerifierWithNoOracleRefs},
+    },
+    ldt::{NoLDT, LDT},
+    Error,
+};
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
-use ark_std::marker::PhantomData;
-use ark_std::vec::Vec;
-use crate::iop::message::MessagesCollection;
+use ark_std::{marker::PhantomData, vec::Vec};
 
 /// Verifier for BCS proof.
 pub struct BCSVerifier<MT, F>
@@ -29,8 +34,9 @@ where
     F: PrimeField + Absorb,
     MT::InnerDigest: Absorb,
 {
-    /// Given a BCS transformed (RS-)IOP proof, verify the correctness of this proof.
-    /// `sponge` should be the same state as in beginning of `BCSProver::prove` function.
+    /// Given a BCS transformed (RS-)IOP proof, verify the correctness of this
+    /// proof. `sponge` should be the same state as in beginning of
+    /// `BCSProver::prove` function.
     pub fn verify<V, L, S>(
         mut sponge: S,
         proof: &BCSProof<MT, F>,
@@ -66,7 +72,7 @@ where
                 transcript.reconstructed_verifier_messages,
                 transcript.bookkeeper,
                 num_rounds_submitted,
-                verifier_oracle_refs
+                verifier_oracle_refs,
             )
         };
 
@@ -82,7 +88,8 @@ where
             .map(|msg| msg.get_view())
             .collect();
 
-        // simulate LDT prove: reconstruct LDT verifier messages to restore LDT verifier state
+        // simulate LDT prove: reconstruct LDT verifier messages to restore LDT verifier
+        // state
         let ldt_verifier_messages = {
             let mut ldt_transcript = SimulationTranscript::new_transcript_with_offset(
                 &proof,
@@ -126,7 +133,11 @@ where
             public_input,
             &verifier_oracle_refs,
             &mut sponge,
-            &mut MessagesCollection::new(prover_messages_view.iter_mut().collect(), &verifier_messages, &bookkeeper),
+            &mut MessagesCollection::new(
+                prover_messages_view.iter_mut().collect(),
+                &verifier_messages,
+                &bookkeeper,
+            ),
         )?;
 
         // verify all authentication paths
@@ -134,7 +145,8 @@ where
         let all_prover_oracles = prover_messages_view
             .iter()
             .chain(ldt_prover_messages_view.iter());
-        // we clone all the paths because we need to replace its leaf position with verifier calculated one
+        // we clone all the paths because we need to replace its leaf position with
+        // verifier calculated one
         let all_paths = proof.prover_oracles_mt_path.clone();
         let all_mt_roots = &proof.prover_messages_mt_root;
 
@@ -194,7 +206,8 @@ where
         Ok(verifier_result)
     }
 
-    /// Verify without LDT. If verifier tries to get a low-degree oracle, this function will panic.
+    /// Verify without LDT. If verifier tries to get a low-degree oracle, this
+    /// function will panic.
     pub fn verify_with_ldt_disabled<V, S>(
         sponge: S,
         proof: &BCSProof<MT, F>,
@@ -218,7 +231,8 @@ where
 
     /// Verify without LDT.
     ///
-    /// ** Warning **: If verifier tries to get an low-degree oracle, no LDT will be automatically performed.
+    /// ** Warning **: If verifier tries to get an low-degree oracle, no LDT
+    /// will be automatically performed.
     pub fn verify_with_dummy_ldt<V, S>(
         sponge: S,
         proof: &BCSProof<MT, F>,

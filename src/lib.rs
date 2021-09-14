@@ -10,7 +10,7 @@
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
-#![recursion_limit="256"]
+#![recursion_limit = "256"]
 
 #[macro_use]
 extern crate derivative;
@@ -20,11 +20,12 @@ extern crate derivative;
 pub mod tracer;
 
 /// A public coin, leaf handling, interactive oracle proof protocol.
-/// Prover sends out messages that can be encoded to field elements. Verifier sample field element as message.
+/// Prover sends out messages that can be encoded to field elements. Verifier
+/// sample field element as message.
 pub mod iop;
 
-/// A compiler to convert any public coin IOP to non-interactive one using BCS transform.
-/// Source: [BCS16](https://eprint.iacr.org/2016/116)
+/// A compiler to convert any public coin IOP to non-interactive one using BCS
+/// transform. Source: [BCS16](https://eprint.iacr.org/2016/116)
 pub mod bcs;
 /// Defines trait for performing LDT.
 /// TODO: move this to `ark-ldt`

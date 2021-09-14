@@ -1,20 +1,26 @@
-use crate::bcs::transcript::{Transcript, ROOT_NAMESPACE};
-use crate::bcs::MTHashParameters;
-use crate::iop::message::{SuccinctRoundOracle, MessagesCollection};
-use crate::iop::prover::IOPProverWithNoOracleRefs;
-use crate::iop::verifier::IOPVerifierForProver;
-use crate::ldt::{NoLDT, LDT};
-use crate::Error;
-use ark_crypto_primitives::merkle_tree::Config as MTConfig;
-use ark_crypto_primitives::Path;
+use crate::{
+    bcs::{
+        transcript::{Transcript, ROOT_NAMESPACE},
+        MTHashParameters,
+    },
+    iop::{
+        message::{MessagesCollection, SuccinctRoundOracle},
+        prover::IOPProverWithNoOracleRefs,
+        verifier::IOPVerifierForProver,
+        ProverParam,
+    },
+    ldt::{NoLDT, LDT},
+    Error,
+};
+use ark_crypto_primitives::{merkle_tree::Config as MTConfig, Path};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::vec::Vec;
-use crate::iop::ProverParam;
 
-/// BCSProof contains all prover messages that use succinct oracle, and thus is itself succinct.
+/// BCSProof contains all prover messages that use succinct oracle, and thus is
+/// itself succinct.
 #[derive(CanonicalSerialize, CanonicalDeserialize, Derivative)]
 #[derivative(Clone(bound = "MT: MTConfig, F: PrimeField"))]
 pub struct BCSProof<MT, F>
@@ -23,17 +29,21 @@ where
     F: PrimeField,
     MT::InnerDigest: Absorb,
 {
-    /// Messages sent by prover in commit phase. Each item in the vector represents a list of
-    /// message oracles (reed solomon codes go first) with same length. The length constraints do not hold for short messages (IP message).
-    /// All non-IP messages in the same prover round share the same merkle tree. Each merkle tree leaf is
-    /// a vector which each element correspond to the same coset of different oracles.
+    /// Messages sent by prover in commit phase. Each item in the vector
+    /// represents a list of message oracles (reed solomon codes go first)
+    /// with same length. The length constraints do not hold for short messages
+    /// (IP message). All non-IP messages in the same prover round share the
+    /// same merkle tree. Each merkle tree leaf is a vector which each
+    /// element correspond to the same coset of different oracles.
     pub prover_iop_messages_by_round: Vec<SuccinctRoundOracle<F>>,
 
     // BCS data below: maybe combine
-    /// Merkle tree roots for all prover messages (including main prover and ldt prover).
+    /// Merkle tree roots for all prover messages (including main prover and ldt
+    /// prover).
     pub prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
     /// Merkle tree paths for queried prover messages in main protocol.
-    /// `prover_messages_mt_path[i][j]` is the path for jth query at ith round of prover message.
+    /// `prover_messages_mt_path[i][j]` is the path for jth query at ith round
+    /// of prover message.
     pub prover_oracles_mt_path: Vec<Vec<Path<MT>>>,
 }
 
@@ -44,7 +54,8 @@ where
     MT::InnerDigest: Absorb,
 {
     /// Generate proof
-    /// This function requires that IOPProver and IOPVerifier is not a subprotocol, which essentially means that `OracleRefs` for both agent
+    /// This function requires that IOPProver and IOPVerifier is not a
+    /// subprotocol, which essentially means that `OracleRefs` for both agent
     /// needs to be `()`.
     pub fn generate<V, P, L, S>(
         sponge: S,
@@ -119,7 +130,8 @@ where
         let ldt_merkle_trees = ldt_transcript.merkle_tree_for_each_round;
         let ldt_verifier_messages = ldt_transcript.verifier_messages;
 
-        // run LDT verifier code to obtain all queries. We will use this query to generate succinct oracles from message recording oracle.
+        // run LDT verifier code to obtain all queries. We will use this query to
+        // generate succinct oracles from message recording oracle.
         {
             L::query_and_decide(
                 ldt_params,
@@ -138,7 +150,11 @@ where
                 public_input,
                 &(),
                 &mut sponge,
-                &mut MessagesCollection::new(prover_message_oracles.iter_mut().collect(), &verifier_messages, &bookkeeper)
+                &mut MessagesCollection::new(
+                    prover_message_oracles.iter_mut().collect(),
+                    &verifier_messages,
+                    &bookkeeper,
+                ),
             )?;
         }
 
@@ -191,7 +207,8 @@ where
         })
     }
 
-    /// Generate proof without LDT. Panic if prover tries to send lower degree oracles.
+    /// Generate proof without LDT. Panic if prover tries to send lower degree
+    /// oracles.
     pub fn generate_with_ldt_disabled<V, P, S>(
         sponge: S,
         public_input: &P::PublicInput,

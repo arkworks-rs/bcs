@@ -1,33 +1,33 @@
-use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
-use crate::iop::message::{
-    ProverRoundMessageInfo, RoundOracle, SuccinctRoundOracleView, VerifierMessage,
+use crate::{
+    bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE},
+    iop::message::{ProverRoundMessageInfo, RoundOracle, SuccinctRoundOracleView, VerifierMessage},
+    ldt::LDT,
+    Error,
 };
-use crate::ldt::LDT;
-use crate::Error;
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
-use ark_ldt::direct::DirectLDT;
-use ark_ldt::domain::Radix2CosetDomain;
-use ark_ldt::fri::prover::FRIProver;
-use ark_ldt::fri::verifier::FRIVerifier;
-use ark_ldt::fri::FRIParameters;
-use ark_poly::univariate::DensePolynomial;
-use ark_poly::{Polynomial, UVPolynomial};
+use ark_ldt::{
+    direct::DirectLDT,
+    domain::Radix2CosetDomain,
+    fri::{prover::FRIProver, verifier::FRIVerifier, FRIParameters},
+};
+use ark_poly::{univariate::DensePolynomial, Polynomial, UVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
-use ark_std::marker::PhantomData;
-use ark_std::vec::Vec;
-/// Implementation of LDT using FRI protocol. When taking multiple oracles, this protocol takes a random linear combination.
+use ark_std::{marker::PhantomData, vec::Vec};
+/// Implementation of LDT using FRI protocol. When taking multiple oracles, this
+/// protocol takes a random linear combination.
 ///
-/// Each oracle message can have different degree bound, as long as its degree bound <= tested_degree in FRI parameter.
-/// To enforce individual bound, this protocol follows [SCRSVP19](https://eprint.iacr.org/2018/) section 8, such that we
-/// multiply each oracle by monimial x^{degree_to_raise} and take random linear combination.
-///
+/// Each oracle message can have different degree bound, as long as its degree
+/// bound <= tested_degree in FRI parameter. To enforce individual bound, this protocol follows [SCRSVP19](https://eprint.iacr.org/2018/) section 8, such that we
+/// multiply each oracle by monimial x^{degree_to_raise} and take random linear
+/// combination.
 pub struct LinearCombinationLDT<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
 
 #[derive(Clone)]
-/// Parameter for Linear combination LDT, which includes parameter for FRI and number of queries.
+/// Parameter for Linear combination LDT, which includes parameter for FRI and
+/// number of queries.
 pub struct LinearCombinationLDTParameters<F: PrimeField + Absorb> {
     /// FRI parameter for the linearly combined polynomial
     pub fri_parameters: FRIParameters<F>,
@@ -96,9 +96,11 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     .iter_mut()
                     .zip(oracle.iter())
                     .zip(degree_raise_poly.iter())
-                    .for_each(|((r /*result*/, a /*oracle*/), d /*degree raise poly*/)| {
-                        *r += *coeff * *a * *d
-                    })
+                    .for_each(
+                        |((r /* result */, a /* oracle */), d /* degree raise poly */)| {
+                            *r += *coeff * *a * *d
+                        },
+                    )
             });
 
         let mut current_domain = param.domain;
@@ -116,7 +118,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                         .submit_verifier_current_round(namespace, iop_trace!("ldt alpha"));
                     let (next_domain, next_evaluations) = FRIProver::interactive_phase_single_round(
                         current_domain,
-                        current_evaluations.clone(), // TODO: change argument type to reference so we do not need to clone this
+                        current_evaluations.clone(), /* TODO: change argument type to reference
+                                                      * so we do not need to clone this */
                         localization_current,
                         alpha,
                     );
@@ -394,7 +397,8 @@ fn degree_raise_poly_query<F: PrimeField>(
 ) -> Vec<F> {
     let mut result = Vec::with_capacity(1 << log_coset_size);
     let dist_between_coset_elems = 1 << (domain.dim() - log_coset_size as usize);
-    // element h^{raise}(g^{index}^{raise}), h^{raise}(g^{index + dist * 1}^{raise}), h^{raise}(g^{index + dist * 2}^{raise}), ...
+    // element h^{raise}(g^{index}^{raise}), h^{raise}(g^{index + dist *
+    // 1}^{raise}), h^{raise}(g^{index + dist * 2}^{raise}), ...
     let mut curr = domain.offset.pow(&[degree_to_raise])
         * domain.gen().pow(&[coset_index]).pow(&[degree_to_raise]);
     let step = domain
@@ -410,24 +414,31 @@ fn degree_raise_poly_query<F: PrimeField>(
 
 #[cfg(test)]
 mod tests {
-    use crate::bcs::tests::FieldMTConfig;
-    use crate::bcs::transcript::test_utils::check_transcript_consistency;
-    use crate::bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE};
-    use crate::bcs::MTHashParameters;
-    use crate::ldt::rl_ldt::{
-        degree_raise_poly_eval, degree_raise_poly_query, LinearCombinationLDT,
-        LinearCombinationLDTParameters,
+    use crate::{
+        bcs::{
+            tests::FieldMTConfig,
+            transcript::{
+                test_utils::check_transcript_consistency, SimulationTranscript, Transcript,
+                ROOT_NAMESPACE,
+            },
+            MTHashParameters,
+        },
+        ldt::{
+            rl_ldt::{
+                degree_raise_poly_eval, degree_raise_poly_query, LinearCombinationLDT,
+                LinearCombinationLDTParameters,
+            },
+            LDT,
+        },
+        test_utils::poseidon_parameters,
     };
-    use crate::ldt::LDT;
-    use crate::test_utils::poseidon_parameters;
     use ark_bls12_381::Fr;
-    use ark_ldt::domain::Radix2CosetDomain;
-    use ark_ldt::fri::FRIParameters;
-    use ark_poly::domain::Radix2EvaluationDomain;
-    use ark_poly::polynomial::univariate::DensePolynomial;
-    use ark_poly::{EvaluationDomain, UVPolynomial};
-    use ark_sponge::poseidon::PoseidonSponge;
-    use ark_sponge::CryptographicSponge;
+    use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
+    use ark_poly::{
+        domain::Radix2EvaluationDomain, polynomial::univariate::DensePolynomial, EvaluationDomain,
+        UVPolynomial,
+    };
+    use ark_sponge::{poseidon::PoseidonSponge, CryptographicSponge};
     use ark_std::{test_rng, One, Zero};
 
     #[test]

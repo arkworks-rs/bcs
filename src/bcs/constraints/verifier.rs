@@ -1,25 +1,26 @@
-use crate::bcs::constraints::proof::BCSProofVar;
-use crate::bcs::constraints::transcript::SimulationTranscriptVar;
-use crate::bcs::constraints::MTHashParametersVar;
-use crate::bcs::transcript::ROOT_NAMESPACE;
-use crate::iop::constraints::IOPVerifierWithGadget;
-use crate::ldt::constraints::LDTWithGadget;
-use crate::ldt::NoLDT;
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-use ark_crypto_primitives::merkle_tree::Config;
+use crate::{
+    bcs::{
+        constraints::{
+            proof::BCSProofVar, transcript::SimulationTranscriptVar, MTHashParametersVar,
+        },
+        transcript::ROOT_NAMESPACE,
+    },
+    iop::{
+        constraints::IOPVerifierWithGadget, message::MessagesCollection,
+        verifier::IOPVerifierWithNoOracleRefs,
+    },
+    ldt::{constraints::LDTWithGadget, NoLDT},
+};
+use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_r1cs_std::boolean::Boolean;
-use ark_r1cs_std::eq::EqGadget;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_r1cs_std::R1CSVar;
+use ark_r1cs_std::{boolean::Boolean, eq::EqGadget, fields::fp::FpVar, R1CSVar};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
-use ark_sponge::Absorb;
-use ark_std::marker::PhantomData;
-use ark_std::vec::Vec;
-use crate::iop::message::MessagesCollection;
-use crate::iop::verifier::IOPVerifierWithNoOracleRefs;
+use ark_sponge::{
+    constraints::{AbsorbGadget, SpongeWithGadget},
+    Absorb,
+};
+use ark_std::{marker::PhantomData, vec::Vec};
 
 /// Verifier Gadget for BCS proof variable.
 pub struct BCSVerifierGadget<MT, MTG, CF>
@@ -40,8 +41,9 @@ where
     MT::InnerDigest: Absorb,
     MTG::InnerDigest: AbsorbGadget<CF>,
 {
-    /// Given a BCS transformed (RS-)IOP proof, verify the correctness of this proof.
-    /// `sponge` should be the same state as in beginning of `BCSProver::prove` function.
+    /// Given a BCS transformed (RS-)IOP proof, verify the correctness of this
+    /// proof. `sponge` should be the same state as in beginning of
+    /// `BCSProver::prove` function.
     pub fn verify<V, L, S>(
         cs: ConstraintSystemRef<CF>,
         mut sponge: S::Var,
@@ -132,9 +134,11 @@ where
             verifier_parameter,
             &(), // protocol used for BCS should not contain any oracle refs
             &mut sponge,
-            MessagesCollection::new(prover_messages_view.iter_mut().collect(),
-            &verifier_messages,
-            &bookkeeper)
+            MessagesCollection::new(
+                prover_messages_view.iter_mut().collect(),
+                &verifier_messages,
+                &bookkeeper,
+            ),
         )?;
 
         // verify all authentication paths
@@ -142,7 +146,8 @@ where
         let all_prover_oracles = prover_messages_view
             .iter()
             .chain(ldt_prover_messages_view.iter());
-        // we clone all the paths because we need to replace its leaf position with verifier calculated one
+        // we clone all the paths because we need to replace its leaf position with
+        // verifier calculated one
         let all_paths = &proof.prover_oracles_mt_path;
         let all_mt_roots = &proof.prover_messages_mt_root;
 
@@ -171,7 +176,7 @@ where
                         .as_ref()
                         .expect("round oracle has query but has no mt_root")
                 } else {
-                    return Ok(()); /*no queries this round: no need to verify*/
+                    return Ok(()); // no queries this round: no need to verify
                 };
                 round_oracle
                     .coset_queries
@@ -204,7 +209,8 @@ where
         Ok(verifier_result_var)
     }
 
-    /// Verify without LDT. If verifier tries to get a low-degree oracle, this function will panic.
+    /// Verify without LDT. If verifier tries to get a low-degree oracle, this
+    /// function will panic.
     pub fn verify_with_ldt_disabled<V, S>(
         cs: ConstraintSystemRef<CF>,
         sponge: S::Var,
@@ -230,7 +236,8 @@ where
 
     /// Verify without LDT.
     ///
-    /// ** Warning **: If verifier tries to get an low-degree oracle, no LDT will be automatically performed.
+    /// ** Warning **: If verifier tries to get an low-degree oracle, no LDT
+    /// will be automatically performed.
     pub fn verify_with_dummy_ldt<V, S>(
         cs: ConstraintSystemRef<CF>,
         sponge: S::Var,

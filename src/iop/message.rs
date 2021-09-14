@@ -1,18 +1,21 @@
-use crate::bcs::MTHashParameters;
-use crate::tracer::TraceInfo;
-use crate::Error;
-use ark_crypto_primitives::merkle_tree::Config as MTConfig;
-use ark_crypto_primitives::MerkleTree;
+use crate::{
+    bcs::{
+        transcript::{MessageBookkeeper, NameSpace},
+        MTHashParameters,
+    },
+    tracer::TraceInfo,
+    Error,
+};
+use ark_crypto_primitives::{merkle_tree::Config as MTConfig, MerkleTree};
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::vec::Vec;
-use crate::bcs::transcript::{MessageBookkeeper, NameSpace};
 
 /// Contains location of round oracles in a transcript.
 #[derive(Clone, Copy, Debug)]
 pub struct MsgRoundRef {
     pub(crate) index: usize,
-    pub(crate) trace: TraceInfo
+    pub(crate) trace: TraceInfo,
 }
 
 impl MsgRoundRef {
@@ -29,17 +32,26 @@ impl MsgRoundRef {
 
 /// Stores sent prover and verifier messages in order.
 /// Message can be accessed using namespace, or `MsgRoundRef`.
-/// This struct is used by verifier to access prover message oracles and verifier messages.
+/// This struct is used by verifier to access prover message oracles and
+/// verifier messages.
 pub struct MessagesCollection<'a, Oracle, VM> {
     pub(crate) prover_messages: Vec<Oracle>,
-    pub(crate) verifier_messages: &'a[Vec<VM>],
-    pub(crate) bookkeeper: &'a MessageBookkeeper
+    pub(crate) verifier_messages: &'a [Vec<VM>],
+    pub(crate) bookkeeper: &'a MessageBookkeeper,
 }
 
 impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
     /// Constructor for Messages Collection
-    pub(crate) fn new(prover_messages: Vec<Oracle>, verifier_messages: &'a [Vec<VM>], bookkeeper: &'a MessageBookkeeper) -> Self {
-        MessagesCollection { prover_messages, verifier_messages, bookkeeper }
+    pub(crate) fn new(
+        prover_messages: Vec<Oracle>,
+        verifier_messages: &'a [Vec<VM>],
+        bookkeeper: &'a MessageBookkeeper,
+    ) -> Self {
+        MessagesCollection {
+            prover_messages,
+            verifier_messages,
+            bookkeeper,
+        }
     }
 
     /// Return the prover message sent at `round` in `namespace`.
@@ -50,13 +62,17 @@ impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
 
     /// Return the reference to prover message
     pub fn prover_message_as_ref(&self, namespace: &NameSpace, round: usize) -> &MsgRoundRef {
-        self.bookkeeper.get_message_indices(namespace).prover_message_refs.get(round).expect("round out of range")
+        self.bookkeeper
+            .get_message_indices(namespace)
+            .prover_message_refs
+            .get(round)
+            .expect("round out of range")
     }
 
     /// Given a `MsgRoundRef`, return the corresponding prover message.
-    /// This method requires mutable reference because verifier will potentially query an oracle, which
-    /// may change the state.
-    pub fn prover_message_using_ref(& mut self, oracle_ref: MsgRoundRef) -> &mut Oracle {
+    /// This method requires mutable reference because verifier will potentially
+    /// query an oracle, which may change the state.
+    pub fn prover_message_using_ref(&mut self, oracle_ref: MsgRoundRef) -> &mut Oracle {
         &mut self.prover_messages[oracle_ref.index]
     }
 
@@ -68,23 +84,28 @@ impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
 
     /// Return the reference to verifier message
     pub fn verifier_message_as_ref(&self, namespace: &NameSpace, round: usize) -> &MsgRoundRef {
-        self.bookkeeper.get_message_indices(namespace).verifier_message_refs.get(round).expect("round out of range")
+        self.bookkeeper
+            .get_message_indices(namespace)
+            .verifier_message_refs
+            .get(round)
+            .expect("round out of range")
     }
 
     /// Given a `MsgRoundRef`, return the corresponding verifier message.
     pub fn verifier_message_using_ref(&self, oracle_ref: MsgRoundRef) -> &'a Vec<VM> {
         &self.verifier_messages[oracle_ref.index]
     }
-
 }
 
-/// A trait for all oracle messages (including RS-code oracles, Non RS-code oracles, and IP short messages) sent in one round.
-/// Those oracles (except IP short messages) need to have same length.
+/// A trait for all oracle messages (including RS-code oracles, Non RS-code
+/// oracles, and IP short messages) sent in one round. Those oracles (except IP
+/// short messages) need to have same length.
 ///
-/// All oracle messages in the same prover round should will share one merkle tree. Each merkle tree leaf is
-/// a vector which each element correspond to the same location of different oracles. The response of each query
-/// is itself a vector where `result[i]` is oracle `i`'s leaf on this query position. All `reed_solomon_codes` oracle
-/// will come first, and then message oracles.
+/// All oracle messages in the same prover round should will share one merkle
+/// tree. Each merkle tree leaf is a vector which each element correspond to the
+/// same location of different oracles. The response of each query is itself a
+/// vector where `result[i]` is oracle `i`'s leaf on this query position. All
+/// `reed_solomon_codes` oracle will come first, and then message oracles.
 pub trait RoundOracle<F: PrimeField>: Sized {
     /// shows the name of implementation of oracle
     const TYPE: &'static str;
@@ -92,7 +113,8 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     /// Get short message in the oracle by index.
     fn get_short_message(&self, index: usize, tracer: TraceInfo) -> &Vec<F>;
 
-    /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf `i` at oracle `j`.
+    /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf
+    /// `i` at oracle `j`.
     fn query(&mut self, position: &[usize], _tracer: TraceInfo) -> Vec<Vec<F>> {
         #[cfg(feature = "print-trace")]
         {
@@ -106,8 +128,9 @@ pub trait RoundOracle<F: PrimeField>: Sized {
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
         let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
-        // coset index = position % num_cosets = the least significant `log_num_cosets` bits of pos
-        // element index in coset = position / num_cosets = all other bits
+        // coset index = position % num_cosets = the least significant `log_num_cosets`
+        // bits of pos element index in coset = position / num_cosets = all
+        // other bits
         let coset_index = position
             .iter()
             .map(|&pos| pos & ((1 << log_num_cosets) - 1))
@@ -132,7 +155,8 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     }
 
     /// Return the queried coset at `coset_index` of all oracles.
-    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
+    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
+    /// in this coset.
     fn query_coset(&mut self, coset_index: &[usize], _tracer: TraceInfo) -> Vec<Vec<Vec<F>>> {
         #[cfg(feature = "print-trace")]
         {
@@ -146,8 +170,9 @@ pub trait RoundOracle<F: PrimeField>: Sized {
         self.query_coset_without_tracer(coset_index)
     }
 
-    /// Return the queried coset at `coset_index` of all oracles, but without tracing information.
-    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k` in this coset.
+    /// Return the queried coset at `coset_index` of all oracles, but without
+    /// tracing information. `result[i][j][k]` is coset index `i` -> oracle
+    /// index `j` -> element `k` in this coset.
     fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>>;
 
     /// Number of reed_solomon_codes oracles in this round.
@@ -156,7 +181,8 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     /// length of each oracle
     fn oracle_length(&self) -> usize;
 
-    /// Get oracle info, including number of oracles for each type and degree bound of each RS code oracle.
+    /// Get oracle info, including number of oracles for each type and degree
+    /// bound of each RS code oracle.
     fn get_info(&self) -> ProverRoundMessageInfo;
 
     /// Get degree bound of all reed-solomon codes in this round.
@@ -172,8 +198,8 @@ pub(crate) struct PendingProverMessage<F: PrimeField> {
     pub(crate) message_oracles: Vec<Vec<F>>,
     /// Messages without oracle sent in current round
     pub(crate) short_messages: Vec<Vec<F>>,
-    /// length of each oracle message. `oracle_length` is 0 if in this round, prover sends only
-    /// short messages.
+    /// length of each oracle message. `oracle_length` is 0 if in this round,
+    /// prover sends only short messages.
     pub(crate) oracle_length: usize,
     /// localization parameter is log2(coset_size)
     /// Set it to zero to disable leaf as coset.
@@ -198,8 +224,9 @@ impl<F: PrimeField> PendingProverMessage<F> {
     }
 
     /// Generate a merkle tree of `Self` where each leaf is a coset.
-    /// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the leaf will be
-    /// `[oracle[0][3], oracle[0][6], oracle[0][9], oracle[1][3], oracle[1][6], oracle[1][9]]`
+    /// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the
+    /// leaf will be `[oracle[0][3], oracle[0][6], oracle[0][9],
+    /// oracle[1][3], oracle[1][6], oracle[1][9]]`
     pub(crate) fn into_merkle_tree_and_recording_oracle<P: MTConfig<Leaf = [F]>>(
         self, // all RS-codes, all message oracles
         hash_params: &MTHashParameters<P>,
@@ -270,19 +297,25 @@ impl<F: PrimeField> PendingProverMessage<F> {
 }
 
 #[derive(Clone)]
-/// Contains all oracle messages in this round, and is storing queries, in order.
-/// **Sponge absorb order**: Sponge will first absorb all merkle tree roots for `reed_solomon_codes`, then all merkle tree
+/// Contains all oracle messages in this round, and is storing queries, in
+/// order. **Sponge absorb order**: Sponge will first absorb all merkle tree
+/// roots for `reed_solomon_codes`, then all merkle tree
 /// roots for `message_oracles`, then all entire messages for `short_messages`.
 pub struct RecordingRoundOracle<F: PrimeField> {
     /// Oracle Info
     pub info: ProverRoundMessageInfo,
     /// Store the queried coset index, in order
     pub queried_coset_index: Vec<usize>,
-    /// All cosets. Axes: `[coset index, oracle index (RS-code first), element position in coset]`
+    /// All cosets. Axes: `[coset index, oracle index (RS-code first), element
+    /// position in coset]`
     pub all_coset_elements: Vec<Vec<Vec<F>>>,
-    /// low degree oracle evaluations in this round. The data stored is a duplicate to part of `all_coset_elements`, but is handy for prover wants to access it later.
+    /// low degree oracle evaluations in this round. The data stored is a
+    /// duplicate to part of `all_coset_elements`, but is handy for prover wants
+    /// to access it later.
     pub(crate) reed_solomon_codes: Vec<(Vec<F>, usize)>,
-    /// message oracles with no degree bound in this round. The data stored is a duplicate to part of `all_coset_elements`, but is handy if the prover wants to access it later.
+    /// message oracles with no degree bound in this round. The data stored is a
+    /// duplicate to part of `all_coset_elements`, but is handy if the prover
+    /// wants to access it later.
     pub(crate) message_oracles: Vec<Vec<F>>,
     /// Store the non-oracle IP messages in this round
     pub(crate) short_messages: Vec<Vec<F>>,
@@ -297,26 +330,31 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
     pub fn message_oracles(&self) -> &Vec<Vec<F>> {
         &self.message_oracles
     }
-    /// Get short non-oracle messages sent in this round. 
+    /// Get short non-oracle messages sent in this round.
     pub fn short_messages(&self) -> &Vec<Vec<F>> {
         &self.short_messages
     }
 }
 
-/// If the leaf is coset, the info also contains information about the stride of coset, and
-/// each leaf will be a flattened 2d array where first axis is oracle index, and second axis is leaf positions.
+/// If the leaf is coset, the info also contains information about the stride of
+/// coset, and each leaf will be a flattened 2d array where first axis is oracle
+/// index, and second axis is leaf positions.
 ///
-/// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the leaf will be
-/// `[oracle[0][3], oracle[0][6], oracle[0][9], oracle[1][3], oracle[1][6], oracle[1][9]]`
+/// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the leaf
+/// will be `[oracle[0][3], oracle[0][6], oracle[0][9], oracle[1][3],
+/// oracle[1][6], oracle[1][9]]`
 
-/// Contains structure and degree bound information about prover round messages, but does not contain real messages.
+/// Contains structure and degree bound information about prover round messages,
+/// but does not contain real messages.
 #[derive(Eq, PartialEq, Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct ProverRoundMessageInfo {
     /// Degree bounds of oracle evaluations, in order.
     pub reed_solomon_code_degree_bound: Vec<usize>,
-    /// Number of message oracles without degree bound. Those oracles will not be processed by LDT.
+    /// Number of message oracles without degree bound. Those oracles will not
+    /// be processed by LDT.
     pub num_message_oracles: usize,
-    /// Number of short messages. Those messages will be included in proof in entirety.
+    /// Number of short messages. Those messages will be included in proof in
+    /// entirety.
     pub num_short_messages: usize,
     /// Length of each message oracles in current round.
     pub oracle_length: usize,
@@ -327,8 +365,20 @@ pub struct ProverRoundMessageInfo {
 
 impl ProverRoundMessageInfo {
     /// Return a new round message information.
-    pub fn new(reed_solomon_code_degree_bound: Vec<usize>, num_message_oracles: usize, num_short_messages: usize, oracle_length: usize, localization_parameter: usize) -> Self {
-        ProverRoundMessageInfo { reed_solomon_code_degree_bound, num_message_oracles, num_short_messages, oracle_length, localization_parameter }
+    pub fn new(
+        reed_solomon_code_degree_bound: Vec<usize>,
+        num_message_oracles: usize,
+        num_short_messages: usize,
+        oracle_length: usize,
+        localization_parameter: usize,
+    ) -> Self {
+        ProverRoundMessageInfo {
+            reed_solomon_code_degree_bound,
+            num_message_oracles,
+            num_short_messages,
+            oracle_length,
+            localization_parameter,
+        }
     }
 }
 
@@ -405,7 +455,8 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
 pub struct SuccinctRoundOracle<F: PrimeField> {
     /// Oracle Info
     pub info: ProverRoundMessageInfo,
-    /// Queried cosets. Axes `[query order, oracle index (RS-code first), element position in coset]`
+    /// Queried cosets. Axes `[query order, oracle index (RS-code first),
+    /// element position in coset]`
     pub queried_cosets: Vec<Vec<Vec<F>>>,
     // note that we do not store query position here, as they will be calculated in verifier
     /// Store the non-oracle IP messages in this round
@@ -413,7 +464,8 @@ pub struct SuccinctRoundOracle<F: PrimeField> {
 }
 
 impl<F: PrimeField> SuccinctRoundOracle<F> {
-    /// Return a view of `self` such that the view records queries to the oracle.
+    /// Return a view of `self` such that the view records queries to the
+    /// oracle.
     pub fn get_view(&self) -> SuccinctRoundOracleView<F> {
         SuccinctRoundOracleView {
             oracle: &self,
@@ -484,7 +536,8 @@ pub enum VerifierMessage<F: PrimeField> {
 }
 
 impl<F: PrimeField> VerifierMessage<F> {
-    /// If `self` contains field elements, return those elements. Otherwise return `None`.
+    /// If `self` contains field elements, return those elements. Otherwise
+    /// return `None`.
     pub fn try_into_field_elements(self) -> Option<Vec<F>> {
         if let Self::FieldElements(x) = self {
             Some(x)

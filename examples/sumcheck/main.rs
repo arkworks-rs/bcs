@@ -4,45 +4,57 @@ extern crate ark_bcs;
 use ark_bls12_381::fr::Fr;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
-use ark_ldt::domain::Radix2CosetDomain;
-use ark_ldt::fri::FRIParameters;
-use ark_poly::{EvaluationDomain, Radix2EvaluationDomain, UVPolynomial};
-use ark_poly::univariate:: DensePolynomial;
-use ark_sponge::{Absorb, CryptographicSponge};
-use ark_sponge::poseidon::PoseidonSponge;
-use ark_std::{One, test_rng};
-use ark_std::marker::PhantomData;
+use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
+use ark_poly::{
+    univariate::DensePolynomial, EvaluationDomain, Radix2EvaluationDomain, UVPolynomial,
+};
+use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge};
+use ark_std::{marker::PhantomData, test_rng, One};
 
-use ark_bcs::bcs::MTHashParameters;
-use ark_bcs::bcs::prover::BCSProof;
-use ark_bcs::bcs::transcript::{NameSpace, SimulationTranscript, Transcript, create_subprotocol_namespace};
-use ark_bcs::Error;
-use ark_bcs::iop::message::{MessagesCollection,  ProverRoundMessageInfo, RoundOracle, VerifierMessage};
-use ark_bcs::iop::prover::IOPProver;
-use ark_bcs::iop::verifier::IOPVerifier;
-use ark_bcs::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
+use ark_bcs::{
+    bcs::{
+        prover::BCSProof,
+        transcript::{create_subprotocol_namespace, NameSpace, SimulationTranscript, Transcript},
+        MTHashParameters,
+    },
+    iop::{
+        message::{MessagesCollection, ProverRoundMessageInfo, RoundOracle, VerifierMessage},
+        prover::IOPProver,
+        verifier::IOPVerifier,
+    },
+    ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+    Error,
+};
 
-use crate::test_utils::{FieldMTConfig, poseidon_parameters};
-use crate::simple_sumcheck::{SimpleSumcheck, SumcheckOracleRef, SumcheckPublicInput, SumcheckProverParameter};
+use crate::{
+    simple_sumcheck::{
+        SimpleSumcheck, SumcheckOracleRef, SumcheckProverParameter, SumcheckPublicInput,
+    },
+    test_utils::{poseidon_parameters, FieldMTConfig},
+};
 
-mod test_utils;
 mod simple_sumcheck;
+mod test_utils;
 
-/// This protocol takes 3 polynomial coefficients as private input (as well as its sum over summation domain).
-/// The protocol send those three oracles to verifier, and run simple sumcheck on each of them.
+/// This protocol takes 3 polynomial coefficients as private input (as well as
+/// its sum over summation domain). The protocol send those three oracles to
+/// verifier, and run simple sumcheck on each of them.
 pub struct SumcheckExample<F: PrimeField + Absorb> {
-    _field: PhantomData<F>
+    _field: PhantomData<F>,
 }
-
 
 pub struct PublicInput<F: PrimeField + Absorb> {
     evaluation_domain: Radix2EvaluationDomain<F>,
     summation_domain: Radix2EvaluationDomain<F>,
     degrees: (usize, usize, usize),
-    sums: (F, F, F)
+    sums: (F, F, F),
 }
 
-pub struct PrivateInput<F: PrimeField + Absorb>(DensePolynomial<F>, DensePolynomial<F>, DensePolynomial<F>);
+pub struct PrivateInput<F: PrimeField + Absorb>(
+    DensePolynomial<F>,
+    DensePolynomial<F>,
+    DensePolynomial<F>,
+);
 
 impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
     type ProverParameter = ();
@@ -50,36 +62,87 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
     type PublicInput = PublicInput<F>;
     type PrivateInput = PrivateInput<F>;
 
-    fn prove<MT: Config<Leaf=[F]>, S: CryptographicSponge>(namespace: &NameSpace, _oracle_refs: &Self::RoundOracleRefs, public_input: &Self::PublicInput, private_input: &Self::PrivateInput, transcript: &mut Transcript<MT, S, F>, _prover_parameter: &Self::ProverParameter) -> Result<(), Error> where MT::InnerDigest: Absorb {
+    fn prove<MT: Config<Leaf = [F]>, S: CryptographicSponge>(
+        namespace: &NameSpace,
+        _oracle_refs: &Self::RoundOracleRefs,
+        public_input: &Self::PublicInput,
+        private_input: &Self::PrivateInput,
+        transcript: &mut Transcript<MT, S, F>,
+        _prover_parameter: &Self::ProverParameter,
+    ) -> Result<(), Error>
+    where
+        MT::InnerDigest: Absorb,
+    {
         // first, send those 3 polynomial oracles in one round
         transcript.send_univariate_polynomial(public_input.degrees.0, &private_input.0)?;
         transcript.send_univariate_polynomial(public_input.degrees.1, &private_input.1)?;
-        transcript.send_univariate_polynomial(public_input.degrees.2,&private_input.2)?;
-        let round_ref = transcript.submit_prover_current_round(namespace, iop_trace!("polynomials for sumcheck example"))?;
+        transcript.send_univariate_polynomial(public_input.degrees.2, &private_input.2)?;
+        let round_ref = transcript.submit_prover_current_round(
+            namespace,
+            iop_trace!("polynomials for sumcheck example"),
+        )?;
 
         // invoke sumcheck subprotocol
-        let sumcheck_namespaces = (0..3).map(|id|{
-            let ns = create_subprotocol_namespace(namespace, id);
-            transcript.new_namespace(ns.clone(), iop_trace!("sumcheck subprotocol"));
-            ns
-        }).collect::<Vec<_>>();
+        let sumcheck_namespaces = (0..3)
+            .map(|id| {
+                let ns = create_subprotocol_namespace(namespace, id);
+                transcript.new_namespace(ns.clone(), iop_trace!("sumcheck subprotocol"));
+                ns
+            })
+            .collect::<Vec<_>>();
 
         // do sumcheck on each polynomial
 
-        SimpleSumcheck::prove(&sumcheck_namespaces[0],
-                              &SumcheckOracleRef::new(round_ref),
-                              &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.0, public_input.sums.0, 0),
-            &(), transcript, &SumcheckProverParameter{coeffs: private_input.0.clone()})?;
+        SimpleSumcheck::prove(
+            &sumcheck_namespaces[0],
+            &SumcheckOracleRef::new(round_ref),
+            &SumcheckPublicInput::new(
+                public_input.evaluation_domain,
+                public_input.summation_domain,
+                public_input.degrees.0,
+                public_input.sums.0,
+                0,
+            ),
+            &(),
+            transcript,
+            &SumcheckProverParameter {
+                coeffs: private_input.0.clone(),
+            },
+        )?;
 
-        SimpleSumcheck::prove(&sumcheck_namespaces[1],
-                              &SumcheckOracleRef::new(round_ref),
-                              &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.1, public_input.sums.1, 1),
-                              &(), transcript, &SumcheckProverParameter{coeffs: private_input.1.clone()})?;
+        SimpleSumcheck::prove(
+            &sumcheck_namespaces[1],
+            &SumcheckOracleRef::new(round_ref),
+            &SumcheckPublicInput::new(
+                public_input.evaluation_domain,
+                public_input.summation_domain,
+                public_input.degrees.1,
+                public_input.sums.1,
+                1,
+            ),
+            &(),
+            transcript,
+            &SumcheckProverParameter {
+                coeffs: private_input.1.clone(),
+            },
+        )?;
 
-        SimpleSumcheck::prove(&sumcheck_namespaces[2],
-                              &SumcheckOracleRef::new(round_ref),
-                              &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.2, public_input.sums.2, 2),
-                              &(), transcript, &SumcheckProverParameter{coeffs: private_input.2.clone()})?;
+        SimpleSumcheck::prove(
+            &sumcheck_namespaces[2],
+            &SumcheckOracleRef::new(round_ref),
+            &SumcheckPublicInput::new(
+                public_input.evaluation_domain,
+                public_input.summation_domain,
+                public_input.degrees.2,
+                public_input.sums.2,
+                2,
+            ),
+            &(),
+            transcript,
+            &SumcheckProverParameter {
+                coeffs: private_input.2.clone(),
+            },
+        )?;
 
         Ok(())
     }
@@ -91,55 +154,147 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
     type OracleRefs = ();
     type PublicInput = PublicInput<F>;
 
-    fn restore_from_commit_phase<MT: Config<Leaf=[F]>>(namespace: &NameSpace, public_input: &Self::PublicInput, transcript: &mut SimulationTranscript<MT, S, F>, _verifier_parameter: &Self::VerifierParameter) where MT::InnerDigest: Absorb {
-        transcript.receive_prover_current_round(namespace, ProverRoundMessageInfo::new(
-            vec![public_input.degrees.0, public_input.degrees.1, public_input.degrees.2],
-            0,
-            0,
-            public_input.evaluation_domain.size(),
-            0 // localization parameter managed by LDT
-        ), iop_trace!("polynomials for sumcheck example"));
-        let sumcheck_namespaces = (0..3).map(|id|{
-            let ns = create_subprotocol_namespace(namespace, id);
-            transcript.new_namespace(ns.clone(), iop_trace!("sumcheck subprotocol"));
-            ns
-        }).collect::<Vec<_>>();
+    fn restore_from_commit_phase<MT: Config<Leaf = [F]>>(
+        namespace: &NameSpace,
+        public_input: &Self::PublicInput,
+        transcript: &mut SimulationTranscript<MT, S, F>,
+        _verifier_parameter: &Self::VerifierParameter,
+    ) where
+        MT::InnerDigest: Absorb,
+    {
+        transcript.receive_prover_current_round(
+            namespace,
+            ProverRoundMessageInfo::new(
+                vec![
+                    public_input.degrees.0,
+                    public_input.degrees.1,
+                    public_input.degrees.2,
+                ],
+                0,
+                0,
+                public_input.evaluation_domain.size(),
+                0, // localization parameter managed by LDT
+            ),
+            iop_trace!("polynomials for sumcheck example"),
+        );
+        let sumcheck_namespaces = (0..3)
+            .map(|id| {
+                let ns = create_subprotocol_namespace(namespace, id);
+                transcript.new_namespace(ns.clone(), iop_trace!("sumcheck subprotocol"));
+                ns
+            })
+            .collect::<Vec<_>>();
 
-        SimpleSumcheck::restore_from_commit_phase(&sumcheck_namespaces[0],
-        &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.0, public_input.sums.0, 0),
-                                                  transcript, &());
-        SimpleSumcheck::restore_from_commit_phase(&sumcheck_namespaces[1],
-                                                  &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.1, public_input.sums.1, 1),
-                                                  transcript, &());
-        SimpleSumcheck::restore_from_commit_phase(&sumcheck_namespaces[2],
-                                                  &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.2, public_input.sums.2, 2),
-                                                  transcript, &());
+        SimpleSumcheck::restore_from_commit_phase(
+            &sumcheck_namespaces[0],
+            &SumcheckPublicInput::new(
+                public_input.evaluation_domain,
+                public_input.summation_domain,
+                public_input.degrees.0,
+                public_input.sums.0,
+                0,
+            ),
+            transcript,
+            &(),
+        );
+        SimpleSumcheck::restore_from_commit_phase(
+            &sumcheck_namespaces[1],
+            &SumcheckPublicInput::new(
+                public_input.evaluation_domain,
+                public_input.summation_domain,
+                public_input.degrees.1,
+                public_input.sums.1,
+                1,
+            ),
+            transcript,
+            &(),
+        );
+        SimpleSumcheck::restore_from_commit_phase(
+            &sumcheck_namespaces[2],
+            &SumcheckPublicInput::new(
+                public_input.evaluation_domain,
+                public_input.summation_domain,
+                public_input.degrees.2,
+                public_input.sums.2,
+                2,
+            ),
+            transcript,
+            &(),
+        );
     }
 
-    fn query_and_decide<O: RoundOracle<F>>(namespace: &NameSpace, _verifier_parameter: &Self::VerifierParameter, public_input: &Self::PublicInput,
-                                           _oracle_refs: &Self::OracleRefs, sponge: &mut S, messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>)
-        -> Result<Self::VerifierOutput, Error> {
-        // we need to provide sumcheck verifier the references to current oracle being sent
-        let oracle_refs_sumcheck = SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
+    fn query_and_decide<O: RoundOracle<F>>(
+        namespace: &NameSpace,
+        _verifier_parameter: &Self::VerifierParameter,
+        public_input: &Self::PublicInput,
+        _oracle_refs: &Self::OracleRefs,
+        sponge: &mut S,
+        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+    ) -> Result<Self::VerifierOutput, Error> {
+        // we need to provide sumcheck verifier the references to current oracle being
+        // sent
+        let oracle_refs_sumcheck =
+            SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
         // invoke sumcheck subprotocol
-        let sumcheck_namespaces = (0..3).map(|id| create_subprotocol_namespace(namespace, id)).collect::<Vec<_>>();
+        let sumcheck_namespaces = (0..3)
+            .map(|id| create_subprotocol_namespace(namespace, id))
+            .collect::<Vec<_>>();
 
-        let mut result = SimpleSumcheck::query_and_decide(&sumcheck_namespaces[0], &(), &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.0, public_input.sums.0, 0), &oracle_refs_sumcheck, sponge,messages_in_commit_phase)?;
-        result = result && SimpleSumcheck::query_and_decide(&sumcheck_namespaces[1], &(), &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.1, public_input.sums.1, 1), &oracle_refs_sumcheck, sponge,messages_in_commit_phase )?;
-        result = result && SimpleSumcheck::query_and_decide(&sumcheck_namespaces[2], &(), &SumcheckPublicInput::new(public_input.evaluation_domain, public_input.summation_domain, public_input.degrees.2, public_input.sums.2, 2), &oracle_refs_sumcheck, sponge,messages_in_commit_phase )?;
+        let mut result = SimpleSumcheck::query_and_decide(
+            &sumcheck_namespaces[0],
+            &(),
+            &SumcheckPublicInput::new(
+                public_input.evaluation_domain,
+                public_input.summation_domain,
+                public_input.degrees.0,
+                public_input.sums.0,
+                0,
+            ),
+            &oracle_refs_sumcheck,
+            sponge,
+            messages_in_commit_phase,
+        )?;
+        result = result
+            && SimpleSumcheck::query_and_decide(
+                &sumcheck_namespaces[1],
+                &(),
+                &SumcheckPublicInput::new(
+                    public_input.evaluation_domain,
+                    public_input.summation_domain,
+                    public_input.degrees.1,
+                    public_input.sums.1,
+                    1,
+                ),
+                &oracle_refs_sumcheck,
+                sponge,
+                messages_in_commit_phase,
+            )?;
+        result = result
+            && SimpleSumcheck::query_and_decide(
+                &sumcheck_namespaces[2],
+                &(),
+                &SumcheckPublicInput::new(
+                    public_input.evaluation_domain,
+                    public_input.summation_domain,
+                    public_input.degrees.2,
+                    public_input.sums.2,
+                    2,
+                ),
+                &oracle_refs_sumcheck,
+                sponge,
+                messages_in_commit_phase,
+            )?;
 
         Ok(result)
-
     }
 }
 
-
-
-/// A simple univariate sumcheck (currently without ldt, which is completely insecure).
-/// We assume that size of summation domain < degree of testing poly < size of evaluation domain
+/// A simple univariate sumcheck (currently without ldt, which is completely
+/// insecure). We assume that size of summation domain < degree of testing poly
+/// < size of evaluation domain
 fn main() {
     let mut rng = test_rng();
-    let degrees = (69,72,75);
+    let degrees = (69, 72, 75);
     let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);
     let poly1 = DensePolynomial::<Fr>::rand(degrees.1, &mut rng);
     let poly2 = DensePolynomial::<Fr>::rand(degrees.2, &mut rng);
@@ -173,19 +328,19 @@ fn main() {
         inner_hash_param: poseidon_parameters(),
     };
 
-    let vp = PublicInput{
+    let vp = PublicInput {
         sums: (claimed_sum1, claimed_sum2, claimed_sum3),
         degrees: (degrees.0, degrees.1, degrees.2),
         summation_domain,
-        evaluation_domain
+        evaluation_domain,
     };
     let wp = PrivateInput(poly0, poly1, poly2);
 
     let _proof = BCSProof::generate::<
-    SumcheckExample<Fr>,
+        SumcheckExample<Fr>,
         SumcheckExample<Fr>,
         LinearCombinationLDT<Fr>,
-        _
+        _,
     >(
         sponge,
         &vp,
@@ -193,8 +348,8 @@ fn main() {
         &(),
         &ldt_parameter,
         mt_hash_parameters.clone(),
-    ).expect("fail to generate proof");
+    )
+    .expect("fail to generate proof");
 
     // TODO: write examples to verify this proof
-
 }
