@@ -80,11 +80,7 @@ fn test_bcs() {
         SimulationTranscript::new_transcript(&bcs_proof, &mut sponge, |degree| {
             LinearCombinationLDT::ldt_info(&ldt_parameters, degree)
         });
-    MockTest1Verifier::restore_from_commit_phase(
-        &ROOT_NAMESPACE,
-        &mut simulation_transcript,
-        &(),
-    );
+    MockTest1Verifier::restore_from_commit_phase(&ROOT_NAMESPACE, &mut simulation_transcript, &());
     // verify should return no error
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     assert!(

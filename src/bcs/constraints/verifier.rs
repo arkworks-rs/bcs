@@ -64,11 +64,7 @@ where
                 SimulationTranscriptVar::new_transcript(proof, &mut sponge, |degree| {
                     L::ldt_info(ldt_params, degree)
                 });
-            V::restore_from_commit_phase_var(
-                &ROOT_NAMESPACE,
-                &mut transcript,
-                verifier_parameter,
-            )?;
+            V::restore_from_commit_phase_var(&ROOT_NAMESPACE, &mut transcript, verifier_parameter)?;
             assert!(
                 !transcript.is_pending_message_available(),
                 "Sanity check failed: pending verifier message not submitted"

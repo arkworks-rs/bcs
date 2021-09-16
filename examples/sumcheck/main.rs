@@ -8,9 +8,9 @@ use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
 use ark_poly::{
     univariate::DensePolynomial, EvaluationDomain, Radix2EvaluationDomain, UVPolynomial,
 };
+use ark_serialize::CanonicalSerialize;
 use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::{marker::PhantomData, test_rng, One};
-use ark_serialize::CanonicalSerialize;
 
 use ark_bcs::{
     bcs::{
@@ -30,11 +30,11 @@ use ark_bcs::{
 use crate::{
     simple_sumcheck::{
         SimpleSumcheck, SumcheckOracleRef, SumcheckProverParameter, SumcheckPublicInput,
+        SumcheckVerifierParameter,
     },
     test_utils::{poseidon_parameters, FieldMTConfig},
 };
 use ark_bcs::iop::ProverParam;
-use crate::simple_sumcheck::SumcheckVerifierParameter;
 
 mod simple_sumcheck;
 mod test_utils;
@@ -88,23 +88,39 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
         MT::InnerDigest: Absorb,
     {
         // receive two random combination
-        let random_coeffs = transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full, FieldElementSize::Full]);
-        transcript.submit_verifier_current_round(namespace, iop_trace!("Verifier Random Coefficients"));
+        let random_coeffs = transcript
+            .squeeze_verifier_field_elements(&[FieldElementSize::Full, FieldElementSize::Full]);
+        transcript
+            .submit_verifier_current_round(namespace, iop_trace!("Verifier Random Coefficients"));
 
         // multiply each polynomial in private input by the coefficient
-        let poly0 = DensePolynomial::from_coefficients_vec(private_input.0.coeffs.iter().map(|coeff|*coeff * &random_coeffs[0]).into_iter().collect::<Vec<_>>());
+        let poly0 = DensePolynomial::from_coefficients_vec(
+            private_input
+                .0
+                .coeffs
+                .iter()
+                .map(|coeff| *coeff * &random_coeffs[0])
+                .into_iter()
+                .collect::<Vec<_>>(),
+        );
         let asserted_sum0 = public_input.sums.0 * random_coeffs[0];
-        let poly1 = DensePolynomial::from_coefficients_vec(private_input.1.coeffs.iter().map(|coeff|*coeff * &random_coeffs[1]).into_iter().collect::<Vec<_>>());
+        let poly1 = DensePolynomial::from_coefficients_vec(
+            private_input
+                .1
+                .coeffs
+                .iter()
+                .map(|coeff| *coeff * &random_coeffs[1])
+                .into_iter()
+                .collect::<Vec<_>>(),
+        );
         let asserted_sum1 = public_input.sums.1 * random_coeffs[1];
 
         // send two polynomials as oracle
         transcript.send_univariate_polynomial(prover_parameter.degrees.0, &poly0)?;
         transcript.send_univariate_polynomial(prover_parameter.degrees.1, &poly1)?;
 
-        let round_ref = transcript.submit_prover_current_round(
-            namespace,
-            iop_trace!("two polynomials for sumcheck"),
-        )?;
+        let round_ref = transcript
+            .submit_prover_current_round(namespace, iop_trace!("two polynomials for sumcheck"))?;
 
         // invoke sumcheck polynomial on first polynomial
         let ns0 = create_subprotocol_namespace(namespace, 0);
@@ -112,17 +128,14 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
         SimpleSumcheck::prove(
             &ns0,
             &SumcheckOracleRef::new(round_ref),
-            &SumcheckPublicInput::new(
-                asserted_sum0,
-                0,
-            ),
+            &SumcheckPublicInput::new(asserted_sum0, 0),
             &(),
             transcript,
             &SumcheckProverParameter {
                 coeffs: poly0,
                 summation_domain: prover_parameter.summation_domain,
                 evaluation_domain: prover_parameter.evaluation_domain,
-                degree: prover_parameter.degrees.0
+                degree: prover_parameter.degrees.0,
             },
         )?;
 
@@ -132,17 +145,14 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
         SimpleSumcheck::prove(
             &ns1,
             &SumcheckOracleRef::new(round_ref),
-            &SumcheckPublicInput::new(
-                asserted_sum1,
-                1,
-            ),
+            &SumcheckPublicInput::new(asserted_sum1, 1),
             &(),
             transcript,
             &SumcheckProverParameter {
                 coeffs: poly1,
                 summation_domain: prover_parameter.summation_domain,
                 evaluation_domain: prover_parameter.evaluation_domain,
-                degree: prover_parameter.degrees.1
+                degree: prover_parameter.degrees.1,
             },
         )?;
 
@@ -164,23 +174,22 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         MT::InnerDigest: Absorb,
     {
         // verifier send two random combination
-        transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full, FieldElementSize::Full]);
-        transcript.submit_verifier_current_round(namespace, iop_trace!("Verifier Random Coefficients"));
+        transcript
+            .squeeze_verifier_field_elements(&[FieldElementSize::Full, FieldElementSize::Full]);
+        transcript
+            .submit_verifier_current_round(namespace, iop_trace!("Verifier Random Coefficients"));
 
         // receive two prover oracles in one round.
         transcript.receive_prover_current_round(
             namespace,
             ProverRoundMessageInfo::new(
-                vec![
-                    verifier_parameter.degrees.0,
-                    verifier_parameter.degrees.1,
-                ],
+                vec![verifier_parameter.degrees.0, verifier_parameter.degrees.1],
                 0,
                 0,
                 verifier_parameter.evaluation_domain.size(),
-                0
+                0,
             ),
-            iop_trace!("two polynomials for sumcheck")
+            iop_trace!("two polynomials for sumcheck"),
         );
 
         // invoke sumcheck protocol on first protocol
@@ -190,11 +199,11 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         SimpleSumcheck::restore_from_commit_phase(
             &ns0,
             transcript,
-            &SumcheckVerifierParameter{
+            &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
                 evaluation_domain: verifier_parameter.evaluation_domain,
-                summation_domain: verifier_parameter.summation_domain
-            }
+                summation_domain: verifier_parameter.summation_domain,
+            },
         );
 
         // invoke sumcheck protocol on second protocol
@@ -204,11 +213,11 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         SimpleSumcheck::restore_from_commit_phase(
             &ns1,
             transcript,
-            &SumcheckVerifierParameter{
+            &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
                 evaluation_domain: verifier_parameter.evaluation_domain,
-                summation_domain: verifier_parameter.summation_domain
-            }
+                summation_domain: verifier_parameter.summation_domain,
+            },
         );
     }
 
@@ -224,36 +233,43 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         let oracle_refs_sumcheck =
             SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
         // get the random coefficients we squeezed in commit phase
-        let random_coeffs = messages_in_commit_phase.verifier_message(namespace, 0)[0].clone().try_into_field_elements().expect("invalid verifier message type");
-        let asserted_sums = (public_input.sums.0 * random_coeffs[0], public_input.sums.1 * random_coeffs[1]);
-
+        let random_coeffs = messages_in_commit_phase.verifier_message(namespace, 0)[0]
+            .clone()
+            .try_into_field_elements()
+            .expect("invalid verifier message type");
+        let asserted_sums = (
+            public_input.sums.0 * random_coeffs[0],
+            public_input.sums.1 * random_coeffs[1],
+        );
 
         // invoke first sumcheck protocol
         let ns0 = create_subprotocol_namespace(namespace, 0);
-        let mut result = SimpleSumcheck::query_and_decide(&ns0,
-                                         &SumcheckVerifierParameter{
-                                             degree: verifier_parameter.degrees.0,
-                                             evaluation_domain: verifier_parameter.evaluation_domain,
-                                             summation_domain: verifier_parameter.summation_domain
-                                         },
-                                          &SumcheckPublicInput::new(asserted_sums.0, 0),
-                                            &oracle_refs_sumcheck,
+        let mut result = SimpleSumcheck::query_and_decide(
+            &ns0,
+            &SumcheckVerifierParameter {
+                degree: verifier_parameter.degrees.0,
+                evaluation_domain: verifier_parameter.evaluation_domain,
+                summation_domain: verifier_parameter.summation_domain,
+            },
+            &SumcheckPublicInput::new(asserted_sums.0, 0),
+            &oracle_refs_sumcheck,
             sponge,
-            messages_in_commit_phase
+            messages_in_commit_phase,
         )?;
 
         // invoke second sumcheck protocol
         let ns1 = create_subprotocol_namespace(namespace, 1);
-        result &= SimpleSumcheck::query_and_decide(&ns1,
-                                         &SumcheckVerifierParameter{
-                                             degree: verifier_parameter.degrees.1,
-                                             evaluation_domain: verifier_parameter.evaluation_domain,
-                                             summation_domain: verifier_parameter.summation_domain
-                                         },
-                                         &SumcheckPublicInput::new(asserted_sums.1, 1),
-                                         &oracle_refs_sumcheck,
-                                         sponge,
-                                         messages_in_commit_phase
+        result &= SimpleSumcheck::query_and_decide(
+            &ns1,
+            &SumcheckVerifierParameter {
+                degree: verifier_parameter.degrees.1,
+                evaluation_domain: verifier_parameter.evaluation_domain,
+                summation_domain: verifier_parameter.summation_domain,
+            },
+            &SumcheckPublicInput::new(asserted_sums.1, 1),
+            &oracle_refs_sumcheck,
+            sponge,
+            messages_in_commit_phase,
         )?;
 
         Ok(result)
@@ -301,7 +317,7 @@ fn main() {
     let pp = Parameter {
         degrees,
         summation_domain,
-        evaluation_domain
+        evaluation_domain,
     };
 
     let proof = BCSProof::generate::<

@@ -23,13 +23,15 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// Verifier Output
     type VerifierOutput: Clone;
-    /// Verifier Parameter. Verifier parameter can be accessed in `restore_from_commit_phase`, and can affect
-    /// transcript structure (e.g. number of rounds and degree bound).
+    /// Verifier Parameter. Verifier parameter can be accessed in
+    /// `restore_from_commit_phase`, and can affect transcript structure
+    /// (e.g. number of rounds and degree bound).
     type VerifierParameter: VerifierParam;
     /// A collection of oracle references from other protocols
     /// used by current verifier.
     type OracleRefs: VerifierOracleRefs;
-    /// Public input. Public input cannot be accessed in `restore_from_commit_phase`, and thus cannot affect transcript
+    /// Public input. Public input cannot be accessed in
+    /// `restore_from_commit_phase`, and thus cannot affect transcript
     /// structure (e.g. number of rounds).
     type PublicInput: ?Sized;
 
@@ -41,8 +43,9 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// When writing test, use `transcript.check_correctness` after calling this
     /// method to verify the correctness of this method.
     ///
-    /// TODO: do we really need `public_input` in `restore_from_commit_phase`? We can put any argument
-    /// that affects the circuit (e.g. number of rounds) in `verifier_parameter`.
+    /// TODO: do we really need `public_input` in `restore_from_commit_phase`?
+    /// We can put any argument that affects the circuit (e.g. number of
+    /// rounds) in `verifier_parameter`.
     fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,

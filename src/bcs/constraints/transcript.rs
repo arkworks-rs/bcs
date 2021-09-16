@@ -440,12 +440,8 @@ pub mod test_utils {
             &mut sponge_var_vt,
             |degree| L::ldt_info(ldt_params, degree),
         );
-        V::restore_from_commit_phase_var(
-            &ROOT_NAMESPACE,
-            &mut transcript_vt,
-            verifier_parameter,
-        )
-        .unwrap();
+        V::restore_from_commit_phase_var(&ROOT_NAMESPACE, &mut transcript_vt, verifier_parameter)
+            .unwrap();
         check_transcript_var_consistency(&transcript_pt, &transcript_vt);
     }
 }

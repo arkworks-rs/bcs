@@ -32,14 +32,8 @@ pub struct SumcheckPublicInput<F: PrimeField + Absorb> {
 }
 
 impl<F: PrimeField + Absorb> SumcheckPublicInput<F> {
-    pub fn new(
-        claimed_sum: F,
-        which: usize,
-    ) -> Self {
-        SumcheckPublicInput {
-            claimed_sum,
-            which,
-        }
+    pub fn new(claimed_sum: F, which: usize) -> Self {
+        SumcheckPublicInput { claimed_sum, which }
     }
 }
 
@@ -80,10 +74,10 @@ impl<F: PrimeField> ProverParam for SumcheckProverParameter<F> {
     type VerifierParameter = SumcheckVerifierParameter<F>;
 
     fn to_verifier_param(&self) -> Self::VerifierParameter {
-        Self::VerifierParameter{
+        Self::VerifierParameter {
             degree: self.degree,
             evaluation_domain: self.evaluation_domain,
-            summation_domain: self.summation_domain
+            summation_domain: self.summation_domain,
         }
     }
 }
@@ -140,7 +134,8 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheck<F> {
         // remainder should be zero
         assert!(r.is_zero());
 
-        let hx_degree_bound = prover_parameter.degree - prover_parameter.summation_domain.size as usize;
+        let hx_degree_bound =
+            prover_parameter.degree - prover_parameter.summation_domain.size as usize;
         println!("hx: degree {}, bound {}", hx.degree(), hx_degree_bound);
         let px_degree_bound = prover_parameter.summation_domain.size as usize - 1;
         println!("px: degree {}, bound {}", px.degree(), px_degree_bound);
@@ -169,7 +164,8 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     ) where
         MT::InnerDigest: Absorb,
     {
-        let hx_degree_bound = verifier_parameter.degree - verifier_parameter.summation_domain.size as usize;
+        let hx_degree_bound =
+            verifier_parameter.degree - verifier_parameter.summation_domain.size as usize;
         let px_degree_bound = verifier_parameter.summation_domain.size as usize - 1;
         let expected_round_info = ProverRoundMessageInfo {
             num_message_oracles: 0,

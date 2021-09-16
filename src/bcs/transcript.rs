@@ -29,8 +29,8 @@ use ark_std::{boxed::Box, collections::BTreeMap, mem::take};
 /// namespace.
 pub type NameSpace = Vec<u32>;
 /// Given current namespace, create a namespace for subprotocol.
-/// TODO: in Transcript, add a new method called `invoke_subprotocol`, which automatically takes care of
-/// namespace of subprotocol.
+/// TODO: in Transcript, add a new method called `invoke_subprotocol`, which
+/// automatically takes care of namespace of subprotocol.
 pub fn create_subprotocol_namespace(
     current_namespace: &NameSpace,
     subprotocol_id: u32,
@@ -750,11 +750,13 @@ where
     /// stored in transcript and will be later given to verifier in query
     /// and decision phase.
     ///
-    /// **Note**: In original IOP paper, verifier do not use sampled element in commit phase. However,
-    /// this implementation allows verifier to have access to sampled elements in `restore_from_commit_phase` to
+    /// **Note**: In original IOP paper, verifier do not use sampled element in
+    /// commit phase. However, this implementation allows verifier to have
+    /// access to sampled elements in `restore_from_commit_phase` to
     /// add flexibility.
-    /// User may need to check if this flexibility will affect soundness analysis in a case-to-case basis.
-    /// TODO: enable this flexibility in constraints as well
+    /// User may need to check if this flexibility will affect soundness
+    /// analysis in a case-to-case basis. TODO: enable this flexibility in
+    /// constraints as well
     pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) -> Vec<F> {
         let msg = self.sponge.squeeze_field_elements_with_sizes(field_size);
         self.pending_verifier_messages
@@ -768,10 +770,12 @@ where
     /// in transcript and will be later given to verifier in query and
     /// decision phase.
     ///
-    /// **Note**: In original IOP paper, verifier do not use sampled element in commit phase. However,
-    /// this implementation allows verifier to have access to sampled elements in `restore_from_commit_phase` to
+    /// **Note**: In original IOP paper, verifier do not use sampled element in
+    /// commit phase. However, this implementation allows verifier to have
+    /// access to sampled elements in `restore_from_commit_phase` to
     /// add flexibility.
-    /// User may need to check if this flexibility will affect soundness analysis in a case-to-case basis.
+    /// User may need to check if this flexibility will affect soundness
+    /// analysis in a case-to-case basis.
     pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) -> Vec<u8> {
         let msg = self.sponge.squeeze_bytes(num_bytes);
         self.pending_verifier_messages
@@ -785,10 +789,12 @@ where
     /// in transcript and will be later given to verifier in query and
     /// decision phase.
     ///
-    /// **Note**: In original IOP paper, verifier do not use sampled element in commit phase. However,
-    /// this implementation allows verifier to have access to sampled elements in `restore_from_commit_phase` to
+    /// **Note**: In original IOP paper, verifier do not use sampled element in
+    /// commit phase. However, this implementation allows verifier to have
+    /// access to sampled elements in `restore_from_commit_phase` to
     /// add flexibility.
-    /// User may need to check if this flexibility will affect soundness analysis in a case-to-case basis.
+    /// User may need to check if this flexibility will affect soundness
+    /// analysis in a case-to-case basis.
     pub fn squeeze_verifier_field_bits(&mut self, num_bits: usize) -> Vec<bool> {
         let msg = self.sponge.squeeze_bits(num_bits);
         self.pending_verifier_messages
