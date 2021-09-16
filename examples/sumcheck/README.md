@@ -1,18 +1,14 @@
-<h1 align="center">Tutorial</h1>
+<h1 align="center">ark-bcs tutorial</h1>
 
 In this tutorial, we are going to write a public coin RS-IOP for the sum of univariate polynomial.
 
 ##### Table of Contents
 
-[Background](#Background)
-
-[Example Protocol Spec](#example protocol spec)
-
-[Build Simple Univariate Sumcheck](#Build Simple Univariate Sumcheck)
-
-[Build Main Protocol](#Build Main Protocol)
-
-[Put it together: Proof Generation](#Put it together: Proof Generation)
+* [Background](#background)
+* [Example Protocol Spec](#example-protocol-spec)
+* [Build Simple Univariate Sumcheck](#build-simple-univariate-sumcheck)
+* [Build Main Protocol](#build-main-protocol)
+* [Put it together: Proof Generation](#put-it-together-proof-generation)
 
 ## Background
 
