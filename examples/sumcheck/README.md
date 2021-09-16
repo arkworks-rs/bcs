@@ -1,8 +1,20 @@
-# `ark-bcs` Tutorial
+<h1 align="center">Tutorial</h1>
 
 In this tutorial, we are going to write a public coin RS-IOP for the sum of univariate polynomial.
 
-### Background
+##### Table of Contents
+
+[Background](#Background)
+
+[Example Protocol Spec](#example protocol spec)
+
+[Build Simple Univariate Sumcheck](#Build Simple Univariate Sumcheck)
+
+[Build Main Protocol](#Build Main Protocol)
+
+[Put it together: Proof Generation](#Put it together: Proof Generation)
+
+## Background
 
 In `ark-bcs`, a public coin (RS-)IOP have two phases: 
 
@@ -49,3 +61,12 @@ Here is the spec for the example protocol we will build!
 
 Before we write the main protocol, let's build a subprotocol `SimpleSumcheck` so that the main protocol can simply invoke this subprotocol as a black box. Note that this protocol is solely a toy example and not optimized, so do not use it in production!
 
+TODO
+
+## Build Main Protocol
+
+TODO
+
+## Put it together: Proof Generation
+
+TODO
