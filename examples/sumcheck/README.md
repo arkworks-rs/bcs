@@ -24,6 +24,10 @@ Here is a table summarizing what prover/verifier can do in each phase.
 
 ***:  Although in BCS paper, public input can decide number of rounds, `ark-bcs` does not allow transcript structure (e.g. number of rounds, degree bound, etc) to depend on public input. Instead, user can specify verifier parameter that can change the transcript structure.*
 
+## Example Protocol Spec
+
+Here is the spec for the example protocol we will build!
+
 **Private Input**: Coefficients of`poly1`, `Poly2`. *For this example, those two coefficients are selected arbitrarily. In real scenario, those coefficients can come from elsewhere.*
 
 **Public Input:** asserted sum of `poly1` over summation domain, asserted sum of `poly2` over summation domain
