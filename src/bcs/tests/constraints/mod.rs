@@ -86,7 +86,6 @@ fn test_restore() {
         &(),
         &(),
         &(),
-        &(),
         &ldt_parameters,
         mt_hash_param,
     );

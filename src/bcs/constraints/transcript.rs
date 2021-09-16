@@ -394,7 +394,6 @@ pub mod test_utils {
         sponge: S,
         sponge_var: S::Var,
         public_input: &P::PublicInput,
-        public_input_var: &V::PublicInputVar,
         private_input: &P::PrivateInput,
         prover_parameter: &P::ProverParameter,
         verifier_parameter: &V::VerifierParameter,
