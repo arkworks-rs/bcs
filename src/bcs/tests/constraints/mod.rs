@@ -141,7 +141,6 @@ fn test_bcs() {
         );
     MockTest1Verifier::restore_from_commit_phase_var(
         &ROOT_NAMESPACE,
-        &(),
         &mut simulation_transcript,
         &(),
     )

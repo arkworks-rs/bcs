@@ -442,7 +442,6 @@ pub mod test_utils {
         );
         V::restore_from_commit_phase_var(
             &ROOT_NAMESPACE,
-            public_input_var,
             &mut transcript_vt,
             verifier_parameter,
         )

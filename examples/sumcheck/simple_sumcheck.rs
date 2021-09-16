@@ -25,9 +25,6 @@ pub struct SimpleSumcheck<F: PrimeField + Absorb> {
 
 #[derive(Clone)]
 pub struct SumcheckPublicInput<F: PrimeField + Absorb> {
-    evaluation_domain: Radix2EvaluationDomain<F>,
-    summation_domain: Radix2EvaluationDomain<F>,
-    degree: usize,
     claimed_sum: F,
     /// `SumcheckOracleRef` represents one round, which can contain multiple
     /// oracles. Which oracle do we want to look at?
@@ -36,23 +33,17 @@ pub struct SumcheckPublicInput<F: PrimeField + Absorb> {
 
 impl<F: PrimeField + Absorb> SumcheckPublicInput<F> {
     pub fn new(
-        evaluation_domain: Radix2EvaluationDomain<F>,
-        summation_domain: Radix2EvaluationDomain<F>,
-        degree: usize,
         claimed_sum: F,
         which: usize,
     ) -> Self {
         SumcheckPublicInput {
-            evaluation_domain,
-            summation_domain,
-            degree,
             claimed_sum,
             which,
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct SumcheckOracleRef {
     poly: MsgRoundRef,
 }
@@ -67,13 +58,33 @@ impl SumcheckOracleRef {
 pub struct SumcheckProverParameter<F: PrimeField> {
     /// he coefficients corresponding to the `poly` in `SumcheckOracleRef`
     pub coeffs: DensePolynomial<F>,
+    /// Degree of the polynomial input
+    pub degree: usize,
+    /// evaluation domain
+    pub evaluation_domain: Radix2EvaluationDomain<F>,
+    /// summation domain
+    pub summation_domain: Radix2EvaluationDomain<F>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SumcheckVerifierParameter<F: PrimeField> {
+    /// Degree of the polynomial input
+    pub degree: usize,
+    /// evaluation domain
+    pub evaluation_domain: Radix2EvaluationDomain<F>,
+    /// summation domain
+    pub summation_domain: Radix2EvaluationDomain<F>,
 }
 
 impl<F: PrimeField> ProverParam for SumcheckProverParameter<F> {
-    type VerifierParameter = ();
+    type VerifierParameter = SumcheckVerifierParameter<F>;
 
     fn to_verifier_param(&self) -> Self::VerifierParameter {
-        ()
+        Self::VerifierParameter{
+            degree: self.degree,
+            evaluation_domain: self.evaluation_domain,
+            summation_domain: self.summation_domain
+        }
     }
 }
 
@@ -111,16 +122,16 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheck<F> {
         let expected_eval = prover_parameter
             .coeffs
             .clone()
-            .evaluate_over_domain(public_input.evaluation_domain)
+            .evaluate_over_domain(prover_parameter.evaluation_domain)
             .evals;
         assert_eq!(&expected_eval, actual_eval);
 
         let (hx, gx) = prover_parameter
             .coeffs
-            .divide_by_vanishing_poly(public_input.summation_domain.clone())
+            .divide_by_vanishing_poly(prover_parameter.summation_domain)
             .unwrap();
         let claim_sum_over_size = DensePolynomial::from_coefficients_vec(vec![
-            public_input.claimed_sum / F::from(public_input.summation_domain.size as u128),
+            public_input.claimed_sum / F::from(prover_parameter.summation_domain.size as u128),
         ]);
         let x = DensePolynomial::from_coefficients_vec(vec![F::zero(), F::one()]);
         let (px, r) = DenseOrSparsePolynomial::from(gx + (-claim_sum_over_size))
@@ -129,9 +140,9 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheck<F> {
         // remainder should be zero
         assert!(r.is_zero());
 
-        let hx_degree_bound = public_input.degree - public_input.summation_domain.size as usize;
+        let hx_degree_bound = prover_parameter.degree - prover_parameter.summation_domain.size as usize;
         println!("hx: degree {}, bound {}", hx.degree(), hx_degree_bound);
-        let px_degree_bound = public_input.summation_domain.size as usize - 1;
+        let px_degree_bound = prover_parameter.summation_domain.size as usize - 1;
         println!("px: degree {}, bound {}", px.degree(), px_degree_bound);
 
         transcript.send_univariate_polynomial(hx_degree_bound, &hx)?;
@@ -146,25 +157,24 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     // in fact, we can output a subclaim (so verifier do not even need to access the
     // oracle!) but we keep it simple in this example
     type VerifierOutput = bool;
-    type VerifierParameter = ();
+    type VerifierParameter = SumcheckVerifierParameter<F>;
     /// SumcheckOracleRef contains the evaluation oracle for the poly to sum.
     type OracleRefs = SumcheckOracleRef;
     type PublicInput = SumcheckPublicInput<F>;
 
     fn restore_from_commit_phase<MT: Config<Leaf = [F]>>(
         namespace: &NameSpace,
-        public_input: &Self::PublicInput,
         transcript: &mut SimulationTranscript<MT, S, F>,
-        _verifier_parameter: &Self::VerifierParameter,
+        verifier_parameter: &Self::VerifierParameter,
     ) where
         MT::InnerDigest: Absorb,
     {
-        let hx_degree_bound = public_input.degree - public_input.summation_domain.size as usize;
-        let px_degree_bound = public_input.summation_domain.size as usize - 1;
+        let hx_degree_bound = verifier_parameter.degree - verifier_parameter.summation_domain.size as usize;
+        let px_degree_bound = verifier_parameter.summation_domain.size as usize - 1;
         let expected_round_info = ProverRoundMessageInfo {
             num_message_oracles: 0,
             reed_solomon_code_degree_bound: vec![hx_degree_bound, px_degree_bound],
-            oracle_length: public_input.evaluation_domain.size(),
+            oracle_length: verifier_parameter.evaluation_domain.size(),
             num_short_messages: 0,
             localization_parameter: 0, // ignored
         };
@@ -177,7 +187,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
 
     fn query_and_decide<O: RoundOracle<F>>(
         namespace: &NameSpace,
-        _verifier_parameter: &Self::VerifierParameter,
+        verifier_parameter: &Self::VerifierParameter,
         public_input: &Self::PublicInput,
         oracle_refs: &Self::OracleRefs, /* in parent `query_and_decide`, parent can fill out
                                          * this `oracle_refs` using the message in current
@@ -186,8 +196,8 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // // query a random point in evaluation domain
-        let evaluation_domain = public_input.evaluation_domain;
-        let summation_domain = public_input.summation_domain;
+        let evaluation_domain = verifier_parameter.evaluation_domain;
+        let summation_domain = verifier_parameter.summation_domain;
         let claimed_sum = public_input.claimed_sum;
         let evaluation_domain_log_size = evaluation_domain.log_size_of_group;
         let query = random_oracle

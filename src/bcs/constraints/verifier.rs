@@ -66,7 +66,6 @@ where
                 });
             V::restore_from_commit_phase_var(
                 &ROOT_NAMESPACE,
-                public_input,
                 &mut transcript,
                 verifier_parameter,
             )?;
@@ -132,6 +131,7 @@ where
             cs.clone(),
             &ROOT_NAMESPACE,
             verifier_parameter,
+            public_input,
             &(), // protocol used for BCS should not contain any oracle refs
             &mut sponge,
             MessagesCollection::new(

@@ -58,7 +58,6 @@ where
                 });
             let verifier_oracle_refs = V::restore_from_commit_phase::<MT>(
                 &ROOT_NAMESPACE,
-                public_input,
                 &mut transcript,
                 verifier_parameter,
             );

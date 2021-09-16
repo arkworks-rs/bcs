@@ -36,7 +36,6 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
     fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
         namespace: &NameSpace,
-        _public_input: &Self::PublicInputVar,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         _verifier_parameter: &Self::VerifierParameter,
     ) -> Result<(), SynthesisError>
@@ -90,6 +89,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         cs: ConstraintSystemRef<CF>,
         namespace: &NameSpace,
         _verifier_parameter: &Self::VerifierParameter,
+        _public_input_var: &Self::PublicInputVar,
         _oracle_refs: &Self::OracleRefs,
         _sponge: &mut S::Var,
         mut messages_in_commit_phase: MessagesCollection<

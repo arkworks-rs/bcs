@@ -48,7 +48,6 @@ where
     /// method to verify the correctness of this method.
     fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
         namespace: &NameSpace,
-        public_input: &Self::PublicInputVar,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
     ) -> Result<(), SynthesisError>
@@ -67,6 +66,7 @@ where
         cs: ConstraintSystemRef<CF>,
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,
+        public_input_var: &Self::PublicInputVar,
         oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
         messages_in_commit_phase: MessagesCollection<
