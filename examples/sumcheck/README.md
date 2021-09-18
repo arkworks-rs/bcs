@@ -7,8 +7,17 @@ In this tutorial, we are going to write a public coin RS-IOP for the sum of univ
 * [Background](#background)
 * [Example Protocol Spec](#example-protocol-spec)
 * [Build Simple Univariate Sumcheck](#build-simple-univariate-sumcheck)
+   * [Overview of Simple Univariate Sumcheck](#overview-of-simple-univariate-sumcheck)
+      * [prove](#prove)
+      * [restore_from_commit_phase](#restore_from_commit_phase)
+      * [query_and_decide](#query_and_decide)
 * [Build Main Protocol](#build-main-protocol)
+      * [prove](#prove-1)
+      * [restore_from_commit_phase](#restore_from_commit_phase-1)
+      * [query_and_decide](#query_and_decide-1)
 * [Put it together: Proof Generation](#put-it-together-proof-generation)
+* [Bonus: Debug Your IOP Code using iop_trace!](#bonus-debug-your-iop-code-using-iop_trace)
+* [Bonus: Write R1CS Constraints for the Verifier](#bonus-write-r1cs-constraints-for-the-verifier)
 
 ## Background
 
@@ -36,22 +45,24 @@ Here is a table summarizing what prover/verifier can do in each phase.
 
 Here is the spec for the example protocol we will build!
 
-**Private Input**: Coefficients of`poly1`, `Poly2`. *For this example, those two coefficients are selected arbitrarily. In real scenario, those coefficients can come from elsewhere.*
+**Private Input**: Coefficients of`poly0`, `poly1`. *For this example, those two coefficients are selected arbitrarily. In real scenario, those coefficients can come from elsewhere.*
 
-**Public Input:** asserted sum of `poly1` over summation domain, asserted sum of `poly2` over summation domain
+**Public Input:** asserted sum of `poly0` over summation domain, asserted sum of `poly1` over summation domain
 
 **Prover & Parameters:** evaluations domain, summation domain, degree bound
 
 **Satisfy Condition:** asserted sums are correct. 
 
-| Prover                                                       | Verifier                                  |
+| Prover*                                                      | Verifier                                  |
 | ------------------------------------------------------------ | ----------------------------------------- |
-|                                                              | Send two random field elements `r1`, `r2` |
-| Send evaluations`r1*poly1`, `r2*poly2`over evaluation domain in one round.* |                                           |
-| Invoke univariate sumcheck on `r1*poly1`                     | Invoke univariate sumcheck on `r1*poly1`  |
-| Invoke univariate sumcheck on `r2*poly2`                     | Invoke univariate sumcheck on `r2*poly2`  |
+|                                                              | Send two random field elements `r0`, `r1` |
+| Send evaluations`r1*poly0`, `r2*poly1`over evaluation domain in one round.** |                                           |
+| Invoke univariate sumcheck on `r1*poly0`                     | Invoke univariate sumcheck on `r1*poly0`  |
+| Invoke univariate sumcheck on `r2*poly1`                     | Invoke univariate sumcheck on `r2*poly1`  |
 
-**: In real scenario, we probably do not send this message because same message may already present elsewhere (e.g.as witness assignment), and we can simply take a reference to that message.*
+**: Disclaimer: This protocol is solely for an example and is not an implementation of any real-world protocol. However, we believe user can easily extend the example to a much more complex one.*
+
+***: In real scenario, we probably do not send this message because same message may already present elsewhere (e.g.as witness assignment), and we can simply take a reference to that message.*
 
 ## Build Simple Univariate Sumcheck
 
@@ -113,6 +124,12 @@ Additionally, verifier needs to have oracle access to oracle evaluations. In alm
 #[derive(Clone, Debug, Copy)]
 pub struct SumcheckOracleRef {
     poly: MsgRoundRef,
+}
+
+impl SumcheckOracleRef {
+    pub fn new(poly: MsgRoundRef) -> Self {
+        SumcheckOracleRef { poly }
+    }
 }
 ```
 
@@ -337,6 +354,8 @@ fn query_and_decide<O: RoundOracle<F>>(
 ) -> Result<Self::VerifierOutput, Error> {
 ```
 
+*Technical Note*: When `query_and_decide` is called by BCS prover, round oracle is a wrapper to the entire message and records the verifier's query. When `query_and_decide` is called by BCS verifier, round oracle is a pointer to one message in a succinct proof with a mutable state storing read position, and will panic if verifier queries more positions than expected. 
+
 First, let define some useful variable here: 
 
 ```rust
@@ -404,8 +423,309 @@ return Ok(expected == actual);
 
 ## Build Main Protocol
 
-TODO
+Now you learned how to write univariate sumcheck using `ark-bcs` backend, so you should be able to write most part for the main protocol! In this section, we will guide you to write the main protocol through some blank-filling style exercises. A working solution can be found in [`examples/sumcheck/main.rs`](./main.rs).
+
+First, as usual, think about what goes to parameter, public input and private input.  Go back to check [Example Protocol Spec](#example-protocol-spec) in case you forgot. 
+
+```rust
+#[derive(Clone, Debug)]
+pub struct Parameter<F: ___________________> {
+    _____________________: Radix2EvaluationDomain<F>,
+    _____________________: Radix2EvaluationDomain<F>
+    degrees: (usize, usize)
+}
+
+impl<F: ___________________> ProverParam for Parameter<F> {
+    // hint: is verifier parameter different from prover parameter?
+    type VerifierParameter = _________________________________;
+
+    fn to_verifier_param(&self) -> Self::VerifierParameter {
+        _________________________________
+    }
+}
+
+pub struct PublicInput<F: ___________________> {
+    _________________________________
+}
+
+pub struct PrivateInput<F: ___________________b>(
+    _________________________________
+    _________________________________
+);
+```
+
+Before going to next part, check out solution to make sure those parameters are correct!
+
+#### `prove`
+
+As usual, let's start writing `SumcheckExample<F>::prove` .
+
+```rust
+pub struct SumcheckExample<F: PrimeField + Absorb> {
+    _field: PhantomData<F>,
+}
+
+impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
+    type ProverParameter = Parameter<F>;
+    type RoundOracleRefs = ();
+    type PublicInput = PublicInput<F>;
+    type PrivateInput = PrivateInput<F>;
+
+    fn prove<MT: Config<Leaf = [F]>, S: CryptographicSponge>(
+        namespace: &NameSpace,
+        _oracle_refs: &Self::RoundOracleRefs,
+        public_input: &Self::PublicInput,
+        private_input: &Self::PrivateInput,
+        transcript: &mut Transcript<MT, S, F>,
+        prover_parameter: &Self::ProverParameter,
+    ) -> Result<(), Error>
+    where
+        MT::InnerDigest: Absorb,
+    {
+```
+
+Write code to let verifier send two random field elements `r0` and `r1`. 
+
+```rust
+// receive two random combination
+// hint: check out `Transcript::squeeze_verifier_field_elements` and `Transcript::submit_verifier_current_round`
+
+let random_coeffs = ____________________;
+________________________________________;
+```
+
+Prover will then multiply `poly0` by `r0`, and `poly1` by `r1`. The asserted sum also needs to be multiplied correspondingly. 
+
+```rust
+// multiply each polynomial in private input by the coefficient
+let poly0 = DensePolynomial::from_coefficients_vec(
+    private_input
+        .0
+        .coeffs
+        .iter()
+        .map(|coeff| *coeff * &random_coeffs[0])
+        .into_iter()
+        .collect::<Vec<_>>(),
+);
+let asserted_sum0 = _________________ * _________________;
+let poly1 = DensePolynomial::from_coefficients_vec(
+    private_input
+        .1
+        .coeffs
+        .iter()
+        .map(|coeff| *coeff * &random_coeffs[1])
+        .into_iter()
+        .collect::<Vec<_>>(),
+);
+let asserted_sum1 = _________________ * _________________;
+```
+
+ Write code to let send evaluations of `poly0`, `poly1` over evaluation domain, and store a reference to the round submitted to `round_ref`.  
+
+```rust
+// Hint: check out univariate sumcheck example 
+______________________________________;
+______________________________________;
+let round_ref: MsgRoundRef = 
+    _____________.______________________(namespace, iop_trace!("two polynomials for sumcheck"))?;
+```
+
+Next invoke univariate sumcheck to prove sum of `r0*poly0`. 
+
+```rust
+// invoke sumcheck polynomial on first polynomial
+let ns0 = create_subprotocol_namespace(namespace, 0 /*subprotocol_id*/);
+transcript.new_namespace(ns0.clone(), iop_trace!("first sumcheck protocol"));
+SimpleSumcheck::prove(
+    __________________, // namespace
+    &SumcheckOracleRef::new(__________), //oracle_refs: reference to `poly0`
+    &SumcheckPublicInput::new(asserted_sum0, 0 /*which oracle in round*/),
+    &(), // pricate input is not needed for simple univariate sumcheck 
+    transcript,
+    &SumcheckProverParameter {
+        coeffs: _______,
+        summation_domain: prover_parameter.summation_domain,
+        evaluation_domain: prover_parameter.evaluation_domain,
+        degree: prover_parameter.degrees.0,
+    },
+)?;
+```
+
+Finally, invoke univariate sumcheck to prover sum of `r1*poly1`. It should be quite similar to last code block. 
+
+```rust
+// invoke sumcheck polynomial on first polynomial
+let ns0 = _________________________________
+___________________________________________
+SimpleSumcheck::prove(
+    __________________, // namespace
+    __________________, //oracle_refs: reference to `poly01`
+    &SumcheckPublicInput::new(asserted_sum0, 1 /*which oracle in round*/),
+    &(), // pricate input is not needed for simple univariate sumcheck 
+    __________________,
+    __________________ {
+        __________________
+        __________________
+        __________________
+        __________________
+    },
+)?;
+```
+
+Finally, we can end the function by returning
+
+```rust
+Ok(())
+```
+
+
+
+#### `restore_from_commit_phase`
+
+Now it's your turn! Try to write `restore_from_commit_phase` according the the `prove` function you just wrote. Then, compare what you wrote with the [solution](./main.rs).
+
+```rust
+impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for SumcheckExample<F> {
+    type VerifierOutput = bool;
+    type VerifierParameter = Parameter<F>;
+    type OracleRefs = ();
+    type PublicInput = PublicInput<F>;
+
+    fn restore_from_commit_phase<MT: Config<Leaf = [F]>>(
+        namespace: &NameSpace,
+        transcript: &mut SimulationTranscript<MT, S, F>,
+        verifier_parameter: &Self::VerifierParameter,
+    ) where
+        MT::InnerDigest: Absorb,
+    {
+        // verifier send two random combination
+        transcript.___________________________________________;
+        transcript.___________________________________________;
+        
+        // receive two prover oracles in one round.
+        transcript.receive_prover_current_round(
+            _______________________,
+            ProverRoundMessageInfo::new(
+                _______________________, // degree bound
+                __, // number of message oracles without degree bound
+                __, // number of short messages
+                __, // oracle length
+                0, // localization parameter is managed by LDT
+            ),
+            iop_trace!("two polynomials for sumcheck"),
+        );
+
+        // invoke sumcheck protocol on first protocol
+        let ns0 = _______________________;
+        transcript._______________________(ns0.clone(), iop_trace!("first sumcheck protocol"));
+
+        SimpleSumcheck::restore_from_commit_phase(
+            _______________________,
+            _______________________,
+            &SumcheckVerifierParameter {
+                degree: _______________________,
+                evaluation_domain: _______________________,
+                summation_domain: _______________________,
+            },
+        );
+
+        // invoke sumcheck protocol on first protocol
+        let ns1 = _______________________;
+        transcript._______________________(ns1.clone(), iop_trace!("second sumcheck protocol"));
+
+        SimpleSumcheck::restore_from_commit_phase(
+            _______________________,
+            _______________________,
+            &SumcheckVerifierParameter {
+                degree: _______________________,
+                evaluation_domain: _______________________,
+                summation_domain: _______________________,
+            },
+        );
+    }
+```
+
+#### `query_and_decide`
+
+Finally, let's write verifier's `query_and_decide` phase. 
+
+```rust
+fn query_and_decide<O: RoundOracle<F>>(
+    namespace: &NameSpace,
+    verifier_parameter: &Self::VerifierParameter,
+    public_input: &Self::PublicInput,
+    _oracle_refs: &Self::OracleRefs,
+    sponge: &mut S,
+    messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+) -> Result<Self::VerifierOutput, Error> {
+```
+
+First, let's get a reference to the oracle that prover just sent in this protocol. 
+
+```rust
+let oracle_refs_sumcheck =
+    SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
+```
+
+Now get the random coefficients the verifier sampled in commit phase, and compute the asserted sums of `r0*poly[0]`, `r1*poly[1]` using those coefficients. 
+
+```rust
+// Hint: verifier message returns a vector of `VerifierMessage` sent in requested round, 
+let random_coeffs = messages_in_commit_phase.verifier_message(________, __)[__]
+    .clone()
+    .___________________()
+    .expect("invalid verifier message type");
+let asserted_sums = (
+    _________________ * _________________,
+    _________________ * _________________,
+);
+```
+
+Finally, let's invoke sumcheck subprotocols!
+
+```rust
+// invoke first sumcheck protocol
+let ns0 = _________________;
+let mut result = SimpleSumcheck::query_and_decide(
+    &ns0,
+    &SumcheckVerifierParameter {
+        degree: _________________,
+        evaluation_domain: _________________,
+        summation_domain: _________________,
+    },
+    &SumcheckPublicInput::new(_________________, 0),
+    &oracle_refs_sumcheck,
+    sponge,
+    messages_in_commit_phase,
+)?;
+
+// invoke second sumcheck protocol
+let ns1 = create_subprotocol_namespace(namespace, 1);
+result &= SimpleSumcheck::query_and_decide(
+    &ns1,
+    &SumcheckVerifierParameter {
+        degree: _________________,
+        evaluation_domain: _________________,
+        summation_domain: _________________,
+    },
+    _________________,
+    _________________,
+    _________________,
+    _________________,
+)?;
+
+Ok(result)}
+```
+
+**Congratulations!** You now built your first RS-IOP using `ark-bcs` library. Next, we will show you how to transform this interactive protocol to a succinct non-interactive proof using BCS transform. 
 
 ## Put it together: Proof Generation
 
 TODO
+
+## Bonus: Debug Your IOP Code using `iop_trace!`
+
+TODO
+
+## Bonus: Write R1CS Constraints for the Verifier
+

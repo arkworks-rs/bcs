@@ -165,7 +165,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     {
         let hx_degree_bound =
             verifier_parameter.degree - verifier_parameter.summation_domain.size as usize;
-        let px_degree_bound = verifier_parameter.summation_domain.size as usize - 1;
+        let px_degree_bound = verifier_parameter.summation_domain.size as usize - 2;
         let expected_round_info = ProverRoundMessageInfo {
             num_message_oracles: 0,
             reed_solomon_code_degree_bound: vec![hx_degree_bound, px_degree_bound],

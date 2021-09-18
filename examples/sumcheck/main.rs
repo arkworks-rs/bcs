@@ -34,12 +34,13 @@ use crate::{
     },
     test_utils::{poseidon_parameters, FieldMTConfig},
 };
+use ark_bcs::bcs::verifier::BCSVerifier;
 use ark_bcs::iop::ProverParam;
 
 mod simple_sumcheck;
 mod test_utils;
 
-/// This protocol takes 3 polynomial coefficients as private input (as well as
+/// This protocol takes 2 polynomial coefficients as private input (as well as
 /// its sum over summation domain). The protocol send those three oracles to
 /// verifier, and run simple sumcheck on each of them.
 pub struct SumcheckExample<F: PrimeField + Absorb> {
@@ -50,7 +51,7 @@ pub struct SumcheckExample<F: PrimeField + Absorb> {
 pub struct Parameter<F: PrimeField + Absorb> {
     evaluation_domain: Radix2EvaluationDomain<F>,
     summation_domain: Radix2EvaluationDomain<F>,
-    degrees: (usize, usize),
+    degrees: (usize, usize), // degree of `poly1` and `poly2`
 }
 
 impl<F: PrimeField + Absorb> ProverParam for Parameter<F> {
@@ -62,12 +63,12 @@ impl<F: PrimeField + Absorb> ProverParam for Parameter<F> {
 }
 
 pub struct PublicInput<F: PrimeField + Absorb> {
-    sums: (F, F),
+    sums: (F, F), // sum of `poly0` over summation domain, sum of `poly1` over summation domain
 }
 
 pub struct PrivateInput<F: PrimeField + Absorb>(
-    DensePolynomial<F>, // first polynomial to take sum
-    DensePolynomial<F>, // second polynomial to take sum
+    DensePolynomial<F>, // `poly0` coefficients
+    DensePolynomial<F>, // `poly1` coefficients
 );
 
 impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
@@ -314,7 +315,7 @@ fn main() {
         sums: (claimed_sum1, claimed_sum2),
     };
     let wp = PrivateInput(poly0, poly1);
-    let pp = Parameter {
+    let prover_param = Parameter {
         degrees,
         summation_domain,
         evaluation_domain,
@@ -329,12 +330,27 @@ fn main() {
         sponge,
         &vp,
         &wp,
-        &pp,
+        &prover_param,
         &ldt_parameter,
         mt_hash_parameters.clone(),
     )
     .expect("fail to generate proof");
     println!("Proof Size: {} bytes", proof.serialized_size());
 
-    // TODO: write examples to verify this proof
+    // Now let's verify if the proof is correct!
+
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
+
+    let verifier_param = prover_param.to_verifier_param();
+    let result = BCSVerifier::verify::<SumcheckExample<Fr>, LinearCombinationLDT<Fr>, _>(
+        sponge,
+        &proof,
+        &vp,
+        &verifier_param,
+        &ldt_parameter,
+        mt_hash_parameters.clone(),
+    )
+    .expect("fail to verify");
+    assert!(result);
+    println!("verify result: ok!")
 }
