@@ -107,7 +107,6 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheck<F> {
     where
         MT::InnerDigest: Absorb,
     {
-        // TODO explain this more thoroughly
         // sanity check: `coeffs` in prover parameter matches the referenced oracle
         let actual_eval = &transcript
             .get_previously_sent_prover_round(oracle_refs.poly)
@@ -137,7 +136,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheck<F> {
         let hx_degree_bound =
             prover_parameter.degree - prover_parameter.summation_domain.size as usize;
         println!("hx: degree {}, bound {}", hx.degree(), hx_degree_bound);
-        let px_degree_bound = prover_parameter.summation_domain.size as usize - 1;
+        let px_degree_bound = prover_parameter.summation_domain.size as usize - 2;
         println!("px: degree {}, bound {}", px.degree(), px_degree_bound);
 
         transcript.send_univariate_polynomial(hx_degree_bound, &hx)?;
