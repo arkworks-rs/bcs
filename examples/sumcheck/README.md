@@ -1,6 +1,6 @@
 <h1 align="center">ark-bcs tutorial</h1>
 
-In this tutorial, we are going to write a public coin RS-IOP for the sum of univariate polynomial.
+In this tutorial, we are going to write a public coin RS-IOP to verify the sum of univariate polynomial.
 
 ##### Table of Contents
 
