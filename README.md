@@ -16,15 +16,19 @@ This implementation is NOT ready for production use.
 ## Overview
 
 An RS-IOP is an interactive protocol where prover can send message oracles with degree bound. 
-This library provides an interface of public coin RS-IOP protocol, an efficient implementation of LDT to enforce degree bound, and a BCS transformation algorithm to convert RS-IOP to non-interactive proof. 
+This library provides an interface of public coin RS-IOP protocol,
+an efficient implementation of LDT to enforce degree bound,
+and a BCS transformation algorithm to convert RS-IOP to non-interactive succinct proof. 
 
-Also, this implementation uses public-coin IOP assumption that all verifier messages are sampled uniformly at random, and all verification logic can be delayed to query and decision phase. 
+This implementation uses public-coin IOP assumption that all verifier messages are sampled uniformly at random, and all verification logic can be delayed to query and decision phase. 
 
-This implementation differs from [BCS Paper](https://eprint.iacr.org/2016/116) in several aspects: 
+`ark-bcs` differs from [BCS Paper](https://eprint.iacr.org/2016/116) in several aspects: 
 - Instead of explicitly using a hash chain, this implementation uses `CryptographicSponge` in [`ark-sponge`](https://github.com/arkworks-rs/sponge/) as random oracle.
 - This implementation has low-degree test built-in, and can handle RS-IOP.  
 - Multiple oracles with same evaluation domain share a merkle tree and be submitted in one round, which greatly reduces verification overhead and number of constraints. 
 - Each leaf of an low-degree oracle is a coset instead of an individual field element, which significantly reduces merkle tree overhead on FRI query. 
+
+Check out the [tutorial](./examples/sumcheck/README.md) to learn how to write (RS-)IOP using this library. 
 
 ## Build Guide
 
