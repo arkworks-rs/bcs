@@ -398,7 +398,7 @@ return Ok(expected == actual);
 }
 ```
 
-**Well done! ** You got it! You now learned how to construct a univariate sumcheck protocol using `ark-bcs`. Now let's start implementing out main protocol using sumcheck as a subroutine. 
+**Well done!** You got it! You now learned how to construct a univariate sumcheck protocol using `ark-bcs`. Now let's start implementing out main protocol using sumcheck as a subroutine. 
 
 *Notice that univariate sumcheck is, indeed, a public coin PCP. But our main toy example will become an IOP.*
 
