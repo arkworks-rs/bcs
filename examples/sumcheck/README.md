@@ -579,7 +579,7 @@ Ok(())
 
 #### `restore_from_commit_phase`
 
-Now it's your turn! Try to write `restore_from_commit_phase` according the the `prove` function you just wrote. Then, compare what you wrote with the [solution](./main.rs).
+Writing `restore_from_commit_phase` is easy. Just copy the `prove` function, and keeps only the interaction with transcript. All prover computation can be removed. 
 
 ```rust
 impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for SumcheckExample<F> {
