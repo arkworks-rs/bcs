@@ -282,13 +282,13 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
 /// < size of evaluation domain
 fn main() {
     let mut rng = test_rng();
-    let degrees = (69, 72);
+    let degrees = (155, 197);
     let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);
     let poly1 = DensePolynomial::<Fr>::rand(degrees.1, &mut rng);
     let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
-    let evaluation_domain = Radix2EvaluationDomain::new(256).unwrap();
+    let evaluation_domain = Radix2EvaluationDomain::new(512).unwrap();
     let fri_parameters = FRIParameters::new(
-        128,
+        256,
         vec![1, 3, 1],
         Radix2CosetDomain::new(evaluation_domain, Fr::one()),
     );
