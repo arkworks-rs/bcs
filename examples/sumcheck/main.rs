@@ -6,39 +6,41 @@ use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
 use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
 use ark_poly::{
-    univariate::DensePolynomial, EvaluationDomain, Radix2EvaluationDomain, UVPolynomial,
+    EvaluationDomain, Radix2EvaluationDomain, univariate::DensePolynomial, UVPolynomial,
 };
 use ark_serialize::CanonicalSerialize;
-use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge, FieldElementSize};
-use ark_std::{marker::PhantomData, test_rng, One};
+use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize, poseidon::PoseidonSponge};
+use ark_std::{marker::PhantomData, One, test_rng};
 
 use ark_bcs::{
     bcs::{
+        MTHashParameters,
         prover::BCSProof,
         transcript::{create_subprotocol_namespace, NameSpace, SimulationTranscript, Transcript},
-        MTHashParameters,
     },
+    Error,
     iop::{
         message::{MessagesCollection, ProverRoundMessageInfo, RoundOracle, VerifierMessage},
         prover::IOPProver,
         verifier::IOPVerifier,
     },
     ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
-    Error,
 };
+use ark_bcs::bcs::verifier::BCSVerifier;
+use ark_bcs::iop::ProverParam;
 
 use crate::{
     simple_sumcheck::{
         SimpleSumcheck, SumcheckOracleRef, SumcheckProverParameter, SumcheckPublicInput,
         SumcheckVerifierParameter,
     },
-    test_utils::{poseidon_parameters, FieldMTConfig},
+    test_utils::{FieldMTConfig, poseidon_parameters},
 };
-use ark_bcs::bcs::verifier::BCSVerifier;
-use ark_bcs::iop::ProverParam;
 
 mod simple_sumcheck;
 mod test_utils;
+#[cfg(feature = "r1cs")]
+mod constraints;
 
 /// This protocol takes 2 polynomial coefficients as private input (as well as
 /// its sum over summation domain). The protocol send those three oracles to
@@ -62,6 +64,7 @@ impl<F: PrimeField + Absorb> ProverParam for Parameter<F> {
     }
 }
 
+#[derive(Clone)]
 pub struct PublicInput<F: PrimeField + Absorb> {
     sums: (F, F), // sum of `poly0` over summation domain, sum of `poly1` over summation domain
 }

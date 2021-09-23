@@ -92,7 +92,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         _public_input_var: &Self::PublicInputVar,
         _oracle_refs: &Self::OracleRefs,
         _sponge: &mut S::Var,
-        mut messages_in_commit_phase: MessagesCollection<
+        messages_in_commit_phase: &mut MessagesCollection<
             &mut SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,

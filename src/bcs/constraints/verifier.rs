@@ -130,7 +130,7 @@ where
             public_input,
             &(), // protocol used for BCS should not contain any oracle refs
             &mut sponge,
-            MessagesCollection::new(
+            &mut MessagesCollection::new(
                 prover_messages_view.iter_mut().collect(),
                 &verifier_messages,
                 &bookkeeper,
