@@ -1,3 +1,4 @@
+#![allow(unused)] // for this example only
 use std::borrow::Borrow;
 
 use ark_bls12_381::Fr;
