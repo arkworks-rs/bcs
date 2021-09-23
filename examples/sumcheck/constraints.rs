@@ -274,6 +274,7 @@ impl ConstraintSynthesizer<Fr> for SumcheckExampleVerification
             proof
         };
 
+        // some debugging tools for constraints
         let mut layer = ConstraintLayer::default();
         layer.mode = TracingMode::OnlyConstraints;
         let subscriber = tracing_subscriber::Registry::default().with(layer);
@@ -288,6 +289,9 @@ impl ConstraintSynthesizer<Fr> for SumcheckExampleVerification
             println!("{:?}", cs.which_is_unsatisfied());
         }
         assert!(is_satisfied);
+
+        // show number of constraints
+        println!("number of constraints: {}", cs.num_constraints());
 
     }
 

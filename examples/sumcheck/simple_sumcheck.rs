@@ -248,6 +248,7 @@ pub mod constraints {
     use ark_bcs::iop::message::{MessagesCollection, ProverRoundMessageInfo};
 
     use crate::simple_sumcheck::SimpleSumcheck;
+    use ark_r1cs_std::R1CSVar;
 
     pub struct SumcheckPublicInputVar<CF: PrimeField + Absorb> {
         claimed_sum: FpVar<CF>,
@@ -299,12 +300,13 @@ pub mod constraints {
                 .pop().unwrap();
             let h_point = query_responses[0].clone();
             let p_point = query_responses[1].clone();
-            let vh_point = query_point.pow_le(&UInt64::constant(summation_domain.size).to_bits_le())?;
+            let vh_point = query_point.pow_le(&UInt64::constant(summation_domain.size).to_bits_le())? - FpVar::constant(CF::one());
 
             // f(s)
             let expected = messages_in_commit_phase.prover_message_using_ref(oracle_refs.poly).query(&[query.clone()], iop_trace!("oracle access to poly in sumcheck"))?.remove(0).remove(public_input.which);
             let actual = &h_point * &vh_point + &(&query_point * &p_point + &claimed_sum * &FpVar::constant(CF::from(summation_domain.size as u128)).inverse()?);
 
+            assert_eq!(expected.value().unwrap(), actual.value().unwrap());
             return expected.is_eq(&actual)
         }
 
