@@ -4,7 +4,7 @@ use ark_crypto_primitives::{
     merkle_tree::{Config, IdentityDigestConverter},
 };
 use ark_sponge::poseidon::PoseidonParameters;
-use ark_std::{One, str::FromStr, Zero};
+use ark_std::{str::FromStr, One, Zero};
 
 type F = ark_bls12_381::Fr;
 pub type H = poseidon::CRH<Fr>;

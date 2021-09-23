@@ -6,41 +6,41 @@ use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
 use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
 use ark_poly::{
-    EvaluationDomain, Radix2EvaluationDomain, univariate::DensePolynomial, UVPolynomial,
+    univariate::DensePolynomial, EvaluationDomain, Radix2EvaluationDomain, UVPolynomial,
 };
 use ark_serialize::CanonicalSerialize;
-use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize, poseidon::PoseidonSponge};
-use ark_std::{marker::PhantomData, One, test_rng};
+use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge, FieldElementSize};
+use ark_std::{marker::PhantomData, test_rng, One};
 
 use ark_bcs::{
     bcs::{
-        MTHashParameters,
         prover::BCSProof,
         transcript::{create_subprotocol_namespace, NameSpace, SimulationTranscript, Transcript},
+        verifier::BCSVerifier,
+        MTHashParameters,
     },
-    Error,
     iop::{
         message::{MessagesCollection, ProverRoundMessageInfo, RoundOracle, VerifierMessage},
         prover::IOPProver,
         verifier::IOPVerifier,
+        ProverParam,
     },
     ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+    Error,
 };
-use ark_bcs::bcs::verifier::BCSVerifier;
-use ark_bcs::iop::ProverParam;
 
 use crate::{
     simple_sumcheck::{
         SimpleSumcheck, SumcheckOracleRef, SumcheckProverParameter, SumcheckPublicInput,
         SumcheckVerifierParameter,
     },
-    test_utils::{FieldMTConfig, poseidon_parameters},
+    test_utils::{poseidon_parameters, FieldMTConfig},
 };
 
-mod simple_sumcheck;
-mod test_utils;
 #[cfg(feature = "r1cs")]
 mod constraints;
+mod simple_sumcheck;
+mod test_utils;
 
 /// This protocol takes 2 polynomial coefficients as private input (as well as
 /// its sum over summation domain). The protocol send those three oracles to

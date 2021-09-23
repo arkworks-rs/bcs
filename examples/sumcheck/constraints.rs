@@ -1,63 +1,100 @@
 use std::borrow::Borrow;
 
 use ark_bls12_381::Fr;
-use ark_crypto_primitives::crh::poseidon;
-use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
+use ark_crypto_primitives::{
+    crh::poseidon,
+    merkle_tree::{constraints::ConfigGadget, Config, IdentityDigestConverter},
+};
 use ark_ff::PrimeField;
-use ark_ldt::domain::Radix2CosetDomain;
-use ark_ldt::fri::FRIParameters;
+use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
 use ark_poly::{EvaluationDomain, UVPolynomial};
-use ark_r1cs_std::alloc::{AllocationMode, AllocVar};
-use ark_r1cs_std::boolean::Boolean;
-use ark_r1cs_std::eq::EqGadget;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, Namespace, SynthesisError, TracingMode, ConstraintLayer};
-use ark_sponge::{Absorb, CryptographicSponge};
-use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
-use ark_sponge::poseidon::{PoseidonParameters, PoseidonSponge};
-use ark_sponge::poseidon::constraints::PoseidonSpongeVar;
-use ark_std::{One, test_rng};
+use ark_r1cs_std::{
+    alloc::{AllocVar, AllocationMode},
+    boolean::Boolean,
+    eq::EqGadget,
+    fields::fp::FpVar,
+};
+use ark_relations::r1cs::{
+    ConstraintLayer, ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, Namespace,
+    SynthesisError, TracingMode,
+};
+use ark_sponge::{
+    constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
+    poseidon::{constraints::PoseidonSpongeVar, PoseidonParameters, PoseidonSponge},
+    Absorb, CryptographicSponge,
+};
+use ark_std::{test_rng, One};
 
-use ark_bcs::bcs::constraints::MTHashParametersVar;
-use ark_bcs::bcs::constraints::proof::BCSProofVar;
-use ark_bcs::bcs::constraints::transcript::SimulationTranscriptVar;
-use ark_bcs::bcs::constraints::verifier::BCSVerifierGadget;
-use ark_bcs::bcs::prover::BCSProof;
-use ark_bcs::bcs::transcript::{create_subprotocol_namespace, NameSpace};
-use ark_bcs::iop::constraints::IOPVerifierWithGadget;
-use ark_bcs::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
-use ark_bcs::iop::message::{MessagesCollection, ProverRoundMessageInfo};
-use ark_bcs::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
+use ark_bcs::{
+    bcs::{
+        constraints::{
+            proof::BCSProofVar, transcript::SimulationTranscriptVar, verifier::BCSVerifierGadget,
+            MTHashParametersVar,
+        },
+        prover::BCSProof,
+        transcript::{create_subprotocol_namespace, NameSpace},
+    },
+    iop::{
+        constraints::{
+            message::{SuccinctRoundOracleVarView, VerifierMessageVar},
+            IOPVerifierWithGadget,
+        },
+        message::{MessagesCollection, ProverRoundMessageInfo},
+    },
+    ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+};
 
-use crate::{Parameter, PrivateInput, PublicInput, SumcheckExample};
-use crate::simple_sumcheck::{SimpleSumcheck, SumcheckOracleRef, SumcheckVerifierParameter};
-use crate::simple_sumcheck::constraints::SumcheckPublicInputVar;
-use crate::test_utils::poseidon_parameters;
+use crate::{
+    simple_sumcheck::{
+        constraints::SumcheckPublicInputVar, SimpleSumcheck, SumcheckOracleRef,
+        SumcheckVerifierParameter,
+    },
+    test_utils::poseidon_parameters,
+    Parameter, PrivateInput, PublicInput, SumcheckExample,
+};
 use ark_bcs::bcs::MTHashParameters;
 use tracing_subscriber::layer::SubscriberExt;
 
 pub struct PublicInputVar<CF: PrimeField + Absorb> {
-    sums: (FpVar<CF>, FpVar<CF>)
+    sums: (FpVar<CF>, FpVar<CF>),
 }
 
 impl<CF: PrimeField + Absorb> AllocVar<PublicInput<CF>, CF> for PublicInputVar<CF> {
-    fn new_variable<T: Borrow<PublicInput<CF>>>(cs: impl Into<Namespace<CF>>, f: impl FnOnce() -> Result<T, SynthesisError>, mode: AllocationMode) -> Result<Self, SynthesisError> {
+    fn new_variable<T: Borrow<PublicInput<CF>>>(
+        cs: impl Into<Namespace<CF>>,
+        f: impl FnOnce() -> Result<T, SynthesisError>,
+        mode: AllocationMode,
+    ) -> Result<Self, SynthesisError> {
         let cs = cs.into().cs();
         let f = f()?;
         let val = f.borrow();
-        Ok(Self{sums: (FpVar::new_variable(cs.clone(), ||Ok(val.sums.0), mode)?, FpVar::new_variable(cs.clone(), ||Ok(val.sums.1), mode)?)})
-
+        Ok(Self {
+            sums: (
+                FpVar::new_variable(cs.clone(), || Ok(val.sums.0), mode)?,
+                FpVar::new_variable(cs.clone(), || Ok(val.sums.1), mode)?,
+            ),
+        })
     }
 }
 
-impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, CF> for SumcheckExample<CF> {
+impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, CF>
+    for SumcheckExample<CF>
+{
     type VerifierOutputVar = Boolean<CF>;
     type PublicInputVar = PublicInputVar<CF>;
 
-    fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf=[FpVar<CF>]>>(namespace: &NameSpace, transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>, verifier_parameter: &Self::VerifierParameter) -> Result<(), SynthesisError> where MT::InnerDigest: Absorb, MTG::InnerDigest: AbsorbGadget<CF> {
+    fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
+        namespace: &NameSpace,
+        transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
+        verifier_parameter: &Self::VerifierParameter,
+    ) -> Result<(), SynthesisError>
+    where
+        MT::InnerDigest: Absorb,
+        MTG::InnerDigest: AbsorbGadget<CF>,
+    {
         transcript.squeeze_verifier_field_elements(2)?;
-        transcript.submit_verifier_current_round(namespace, iop_trace!("Verifier Random Coefficients"));
+        transcript
+            .submit_verifier_current_round(namespace, iop_trace!("Verifier Random Coefficients"));
 
         transcript.receive_prover_current_round(
             namespace,
@@ -95,10 +132,20 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
             },
         )?;
         Ok(())
-
     }
 
-    fn query_and_decide_var(cs: ConstraintSystemRef<CF>, namespace: &NameSpace, verifier_parameter: &Self::VerifierParameter, public_input: &Self::PublicInputVar, _oracle_refs: &Self::OracleRefs, sponge: &mut S::Var, messages_in_commit_phase: &mut MessagesCollection<&mut SuccinctRoundOracleVarView<CF>, VerifierMessageVar<CF>>) -> Result<Self::VerifierOutputVar, SynthesisError> {
+    fn query_and_decide_var(
+        cs: ConstraintSystemRef<CF>,
+        namespace: &NameSpace,
+        verifier_parameter: &Self::VerifierParameter,
+        public_input: &Self::PublicInputVar,
+        _oracle_refs: &Self::OracleRefs,
+        sponge: &mut S::Var,
+        messages_in_commit_phase: &mut MessagesCollection<
+            &mut SuccinctRoundOracleVarView<CF>,
+            VerifierMessageVar<CF>,
+        >,
+    ) -> Result<Self::VerifierOutputVar, SynthesisError> {
         // which oracle we are using to sumcheck
         let oracle_refs_sumcheck =
             SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
@@ -115,8 +162,8 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
         // invoke first sumcheck protocol
         let ns0 = create_subprotocol_namespace(namespace, 0);
         let result1 = <SimpleSumcheck<_> as IOPVerifierWithGadget<S, _>>::query_and_decide_var(
-            ark_relations::ns!(cs, "first sumcheck").cs()
-            ,&ns0,
+            ark_relations::ns!(cs, "first sumcheck").cs(),
+            &ns0,
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -130,8 +177,8 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
 
         let ns1 = create_subprotocol_namespace(namespace, 1);
         let result2 = <SimpleSumcheck<_> as IOPVerifierWithGadget<S, _>>::query_and_decide_var(
-            ark_relations::ns!(cs, "first sumcheck").cs()
-            ,&ns1,
+            ark_relations::ns!(cs, "first sumcheck").cs(),
+            &ns1,
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -147,11 +194,11 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
     }
 }
 
-struct SumcheckExampleVerification
-{
+struct SumcheckExampleVerification {
     // Constants embedded into the circuit: some parameters, for example
     param: Parameter<Fr>,
-    poseidon_param: PoseidonParameters<Fr>, // for simplicity, same poseidon parameter is used for both merkle tree, and sponge
+    poseidon_param: PoseidonParameters<Fr>, /* for simplicity, same poseidon parameter is used
+                                             * for both merkle tree, and sponge */
     ldt_param: LinearCombinationLDTParameters<Fr>,
 
     // public input is the public input known by the verifier
@@ -181,118 +228,129 @@ impl ConfigGadget<FieldMTConfig, Fr> for FieldMTConfigGadget {
     type TwoToOneHash = poseidon::constraints::TwoToOneCRHGadget<Fr>;
 }
 
-impl ConstraintSynthesizer<Fr> for SumcheckExampleVerification
-{
+impl ConstraintSynthesizer<Fr> for SumcheckExampleVerification {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
         // allocate some constants for parameters
-        let poseidon_param_var = poseidon::constraints::CRHParametersVar::new_constant(cs.clone(), &self.poseidon_param)?;
-        let mt_hash_param_var = MTHashParametersVar::<Fr, FieldMTConfig, FieldMTConfigGadget>{
+        let poseidon_param_var = poseidon::constraints::CRHParametersVar::new_constant(
+            cs.clone(),
+            &self.poseidon_param,
+        )?;
+        let mt_hash_param_var = MTHashParametersVar::<Fr, FieldMTConfig, FieldMTConfigGadget> {
             leaf_params: poseidon_param_var.clone(),
             inner_params: poseidon_param_var.clone(),
         };
 
         // first, allocate public inputs
-        let vp_var = PublicInputVar::new_input(ark_relations::ns!(cs, "public input"),||Ok(self.vp.clone()))?;
+        let vp_var = PublicInputVar::new_input(ark_relations::ns!(cs, "public input"), || {
+            Ok(self.vp.clone())
+        })?;
 
         // allocate proof
-        let proof_var = BCSProofVar::new_witness(ark_relations::ns!(cs, "proof"), ||Ok(self.proof.clone()))?;
+        let proof_var =
+            BCSProofVar::new_witness(ark_relations::ns!(cs, "proof"), || Ok(self.proof.clone()))?;
 
         // write constraints to enforce the proof correctness
-        let result = BCSVerifierGadget::verify::<SumcheckExample<Fr>, LinearCombinationLDT<Fr>, PoseidonSponge<Fr>>(ark_relations::ns!(cs, "proof verification").cs(),
-                                  PoseidonSpongeVar::new(cs.clone(), &self.poseidon_param), &proof_var, &vp_var, &self.param, &self.ldt_param, &mt_hash_param_var)?;
+        let result = BCSVerifierGadget::verify::<
+            SumcheckExample<Fr>,
+            LinearCombinationLDT<Fr>,
+            PoseidonSponge<Fr>,
+        >(
+            ark_relations::ns!(cs, "proof verification").cs(),
+            PoseidonSpongeVar::new(cs.clone(), &self.poseidon_param),
+            &proof_var,
+            &vp_var,
+            &self.param,
+            &self.ldt_param,
+            &mt_hash_param_var,
+        )?;
 
         result.enforce_equal(&Boolean::TRUE)?;
         Ok(())
-
     }
 }
 
-    #[test]
-    fn sumcheck_example_correctness() {
-        use ark_poly::univariate::DensePolynomial;
-        use ark_poly::Radix2EvaluationDomain;
-        let mut rng = test_rng();
-        let degrees = (155, 197);
-        let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);
-        let poly1 = DensePolynomial::<Fr>::rand(degrees.1, &mut rng);
-        let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
-        let evaluation_domain = Radix2EvaluationDomain::new(512).unwrap();
-        let fri_parameters = FRIParameters::new(
-            256,
-            vec![1, 3, 1],
-            Radix2CosetDomain::new(evaluation_domain, Fr::one()),
-        );
-        let ldt_parameter = LinearCombinationLDTParameters {
-            fri_parameters,
-            num_queries: 3,
-        };
-        let claimed_sum1 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
-            .evaluate(&poly0)
-            .into_iter()
-            .sum::<Fr>();
-        let claimed_sum2 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
-            .evaluate(&poly1)
-            .into_iter()
-            .sum::<Fr>();
+#[test]
+fn sumcheck_example_correctness() {
+    use ark_poly::{univariate::DensePolynomial, Radix2EvaluationDomain};
+    let mut rng = test_rng();
+    let degrees = (155, 197);
+    let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);
+    let poly1 = DensePolynomial::<Fr>::rand(degrees.1, &mut rng);
+    let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
+    let evaluation_domain = Radix2EvaluationDomain::new(512).unwrap();
+    let fri_parameters = FRIParameters::new(
+        256,
+        vec![1, 3, 1],
+        Radix2CosetDomain::new(evaluation_domain, Fr::one()),
+    );
+    let ldt_parameter = LinearCombinationLDTParameters {
+        fri_parameters,
+        num_queries: 3,
+    };
+    let claimed_sum1 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
+        .evaluate(&poly0)
+        .into_iter()
+        .sum::<Fr>();
+    let claimed_sum2 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
+        .evaluate(&poly1)
+        .into_iter()
+        .sum::<Fr>();
 
-        let sponge = PoseidonSponge::new(&poseidon_parameters());
-        let mt_hash_parameters = MTHashParameters::<FieldMTConfig> {
-            leaf_hash_param: poseidon_parameters(),
-            inner_hash_param: poseidon_parameters(),
-        };
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
+    let mt_hash_parameters = MTHashParameters::<FieldMTConfig> {
+        leaf_hash_param: poseidon_parameters(),
+        inner_hash_param: poseidon_parameters(),
+    };
 
-        let vp = PublicInput {
-            sums: (claimed_sum1, claimed_sum2),
-        };
-        let wp = PrivateInput(poly0, poly1);
-        let prover_param = Parameter {
-            degrees,
-            summation_domain,
-            evaluation_domain,
-        };
+    let vp = PublicInput {
+        sums: (claimed_sum1, claimed_sum2),
+    };
+    let wp = PrivateInput(poly0, poly1);
+    let prover_param = Parameter {
+        degrees,
+        summation_domain,
+        evaluation_domain,
+    };
 
-        let proof = BCSProof::generate::<
-            SumcheckExample<Fr>,
-            SumcheckExample<Fr>,
-            LinearCombinationLDT<Fr>,
-            _,
-        >(
-            sponge,
-            &vp,
-            &wp,
-            &prover_param,
-            &ldt_parameter,
-            mt_hash_parameters.clone(),
-        )
-            .expect("fail to generate proof");
+    let proof = BCSProof::generate::<
+        SumcheckExample<Fr>,
+        SumcheckExample<Fr>,
+        LinearCombinationLDT<Fr>,
+        _,
+    >(
+        sponge,
+        &vp,
+        &wp,
+        &prover_param,
+        &ldt_parameter,
+        mt_hash_parameters.clone(),
+    )
+    .expect("fail to generate proof");
 
-        let circuit = SumcheckExampleVerification{
-            param: prover_param,
-            poseidon_param: poseidon_parameters(),
-            ldt_param: ldt_parameter.clone(),
-            vp,
-            proof
-        };
+    let circuit = SumcheckExampleVerification {
+        param: prover_param,
+        poseidon_param: poseidon_parameters(),
+        ldt_param: ldt_parameter.clone(),
+        vp,
+        proof,
+    };
 
-        // some debugging tools for constraints
-        let mut layer = ConstraintLayer::default();
-        layer.mode = TracingMode::OnlyConstraints;
-        let subscriber = tracing_subscriber::Registry::default().with(layer);
-        let _guard = tracing::subscriber::set_default(subscriber);
-        // Next, let's make the circuit!
-        let cs = ConstraintSystem::new_ref();
-        circuit.generate_constraints(cs.clone()).unwrap();
-        // Let's check whether the constraint system is satisfied
-        let is_satisfied = cs.is_satisfied().unwrap();
-        if !is_satisfied {
-            // If it isn't, find out the offending constraint.
-            println!("{:?}", cs.which_is_unsatisfied());
-        }
-        assert!(is_satisfied);
-
-        // show number of constraints
-        println!("number of constraints: {}", cs.num_constraints());
-
+    // some debugging tools for constraints
+    let mut layer = ConstraintLayer::default();
+    layer.mode = TracingMode::OnlyConstraints;
+    let subscriber = tracing_subscriber::Registry::default().with(layer);
+    let _guard = tracing::subscriber::set_default(subscriber);
+    // Next, let's make the circuit!
+    let cs = ConstraintSystem::new_ref();
+    circuit.generate_constraints(cs.clone()).unwrap();
+    // Let's check whether the constraint system is satisfied
+    let is_satisfied = cs.is_satisfied().unwrap();
+    if !is_satisfied {
+        // If it isn't, find out the offending constraint.
+        println!("{:?}", cs.which_is_unsatisfied());
     }
+    assert!(is_satisfied);
 
-
+    // show number of constraints
+    println!("number of constraints: {}", cs.num_constraints());
+}

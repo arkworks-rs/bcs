@@ -1,23 +1,23 @@
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
 use ark_poly::{
-    EvaluationDomain, Polynomial, polynomial::univariate::DensePolynomial,
-    Radix2EvaluationDomain, univariate::DenseOrSparsePolynomial, UVPolynomial,
+    polynomial::univariate::DensePolynomial, univariate::DenseOrSparsePolynomial, EvaluationDomain,
+    Polynomial, Radix2EvaluationDomain, UVPolynomial,
 };
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::{marker::PhantomData, Zero};
 
 use ark_bcs::{
     bcs::transcript::{NameSpace, SimulationTranscript, Transcript},
-    Error,
     iop::{
         message::{
             MessagesCollection, MsgRoundRef, ProverRoundMessageInfo, RoundOracle, VerifierMessage,
         },
         prover::IOPProver,
-        ProverOracleRefs,
-        ProverParam, verifier::IOPVerifier,
+        verifier::IOPVerifier,
+        ProverOracleRefs, ProverParam,
     },
+    Error,
 };
 
 pub struct SimpleSumcheck<F: PrimeField + Absorb> {
@@ -226,33 +226,37 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     }
 }
 
-#[cfg(feature="r1cs")]
+#[cfg(feature = "r1cs")]
 pub mod constraints {
-    use ark_crypto_primitives::merkle_tree::Config;
-    use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
+    use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
     use ark_ff::PrimeField;
     use ark_poly::EvaluationDomain;
-    use ark_r1cs_std::boolean::Boolean;
-    use ark_r1cs_std::eq::EqGadget;
-    use ark_r1cs_std::fields::fp::FpVar;
-    use ark_r1cs_std::prelude::FieldVar;
-    use ark_r1cs_std::uint64::UInt64;
+    use ark_r1cs_std::{
+        boolean::Boolean, eq::EqGadget, fields::fp::FpVar, prelude::FieldVar, uint64::UInt64,
+    };
     use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-    use ark_sponge::Absorb;
-    use ark_sponge::constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget};
+    use ark_sponge::{
+        constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
+        Absorb,
+    };
 
-    use ark_bcs::bcs::constraints::transcript::SimulationTranscriptVar;
-    use ark_bcs::bcs::transcript::NameSpace;
-    use ark_bcs::iop::constraints::IOPVerifierWithGadget;
-    use ark_bcs::iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar};
-    use ark_bcs::iop::message::{MessagesCollection, ProverRoundMessageInfo};
+    use ark_bcs::{
+        bcs::{constraints::transcript::SimulationTranscriptVar, transcript::NameSpace},
+        iop::{
+            constraints::{
+                message::{SuccinctRoundOracleVarView, VerifierMessageVar},
+                IOPVerifierWithGadget,
+            },
+            message::{MessagesCollection, ProverRoundMessageInfo},
+        },
+    };
 
     use crate::simple_sumcheck::SimpleSumcheck;
     use ark_r1cs_std::R1CSVar;
 
     pub struct SumcheckPublicInputVar<CF: PrimeField + Absorb> {
         claimed_sum: FpVar<CF>,
-        which: usize
+        which: usize,
     }
 
     impl<CF: PrimeField + Absorb> SumcheckPublicInputVar<CF> {
@@ -261,11 +265,24 @@ pub mod constraints {
         }
     }
 
-    impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, CF> for SimpleSumcheck<CF> {
+    impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, CF>
+        for SimpleSumcheck<CF>
+    {
         type VerifierOutputVar = Boolean<CF>;
         type PublicInputVar = SumcheckPublicInputVar<CF>;
 
-        fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf=[FpVar<CF>]>>(namespace: &NameSpace, transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>, verifier_parameter: &Self::VerifierParameter) -> Result<(), SynthesisError> where MT::InnerDigest: Absorb, MTG::InnerDigest: AbsorbGadget<CF> {
+        fn restore_from_commit_phase_var<
+            MT: Config,
+            MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>,
+        >(
+            namespace: &NameSpace,
+            transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
+            verifier_parameter: &Self::VerifierParameter,
+        ) -> Result<(), SynthesisError>
+        where
+            MT::InnerDigest: Absorb,
+            MTG::InnerDigest: AbsorbGadget<CF>,
+        {
             let hx_degree_bound =
                 verifier_parameter.degree - verifier_parameter.summation_domain.size as usize;
             let px_degree_bound = verifier_parameter.summation_domain.size as usize - 2;
@@ -284,31 +301,57 @@ pub mod constraints {
             Ok(())
         }
 
-        fn query_and_decide_var(_cs: ConstraintSystemRef<CF>, namespace: &NameSpace, verifier_parameter: &Self::VerifierParameter, public_input: &Self::PublicInputVar, oracle_refs: &Self::OracleRefs, sponge: &mut S::Var, messages_in_commit_phase: &mut MessagesCollection<&mut SuccinctRoundOracleVarView<CF>, VerifierMessageVar<CF>>) -> Result<Self::VerifierOutputVar, SynthesisError> {
+        fn query_and_decide_var(
+            _cs: ConstraintSystemRef<CF>,
+            namespace: &NameSpace,
+            verifier_parameter: &Self::VerifierParameter,
+            public_input: &Self::PublicInputVar,
+            oracle_refs: &Self::OracleRefs,
+            sponge: &mut S::Var,
+            messages_in_commit_phase: &mut MessagesCollection<
+                &mut SuccinctRoundOracleVarView<CF>,
+                VerifierMessageVar<CF>,
+            >,
+        ) -> Result<Self::VerifierOutputVar, SynthesisError> {
             // // query a random point in evaluation domain
             let evaluation_domain = verifier_parameter.evaluation_domain;
             let summation_domain = verifier_parameter.summation_domain;
             let claimed_sum = public_input.claimed_sum.clone();
             let evaluation_domain_log_size = evaluation_domain.log_size_of_group;
             //
-            let query = sponge.squeeze_bits(evaluation_domain_log_size as usize)?
-                .into_iter().collect::<Vec<_>>();
+            let query = sponge
+                .squeeze_bits(evaluation_domain_log_size as usize)?
+                .into_iter()
+                .collect::<Vec<_>>();
             let query_point = FpVar::constant(evaluation_domain.group_gen).pow_le(&query)?;
 
-            let query_responses = messages_in_commit_phase.prover_message(namespace, 0)
+            let query_responses = messages_in_commit_phase
+                .prover_message(namespace, 0)
                 .query(&[query.clone()], iop_trace!("sumcheck query"))?
-                .pop().unwrap();
+                .pop()
+                .unwrap();
             let h_point = query_responses[0].clone();
             let p_point = query_responses[1].clone();
-            let vh_point = query_point.pow_le(&UInt64::constant(summation_domain.size).to_bits_le())? - FpVar::constant(CF::one());
+            let vh_point = query_point
+                .pow_le(&UInt64::constant(summation_domain.size).to_bits_le())?
+                - FpVar::constant(CF::one());
 
             // f(s)
-            let expected = messages_in_commit_phase.prover_message_using_ref(oracle_refs.poly).query(&[query.clone()], iop_trace!("oracle access to poly in sumcheck"))?.remove(0).remove(public_input.which);
-            let actual = &h_point * &vh_point + &(&query_point * &p_point + &claimed_sum * &FpVar::constant(CF::from(summation_domain.size as u128)).inverse()?);
+            let expected = messages_in_commit_phase
+                .prover_message_using_ref(oracle_refs.poly)
+                .query(
+                    &[query.clone()],
+                    iop_trace!("oracle access to poly in sumcheck"),
+                )?
+                .remove(0)
+                .remove(public_input.which);
+            let actual = &h_point * &vh_point
+                + &(&query_point * &p_point
+                    + &claimed_sum
+                        * &FpVar::constant(CF::from(summation_domain.size as u128)).inverse()?);
 
             assert_eq!(expected.value().unwrap(), actual.value().unwrap());
-            return expected.is_eq(&actual)
+            return expected.is_eq(&actual);
         }
-
     }
 }

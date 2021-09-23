@@ -87,7 +87,7 @@ where
             ldt_info: Box::new(ldt_info),
         }
     }
-    
+
     /// Create a new namespace in this transcript
     pub fn new_namespace(&mut self, ns: NameSpace, tracer: TraceInfo) {
         self.bookkeeper.new_namespace(ns, tracer)
