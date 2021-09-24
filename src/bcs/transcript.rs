@@ -752,7 +752,7 @@ where
     ///
     /// **Note**: In original IOP paper, verifier do not use sampled element in
     /// commit phase. However, this implementation allows verifier to have
-    /// access to sampled elements in `restore_from_commit_phase` to
+    /// access to sampled elements in `register_iop_structure` to
     /// add flexibility.
     /// User may need to check if this flexibility will affect soundness
     /// analysis in a case-to-case basis. TODO: enable this flexibility in
@@ -772,7 +772,7 @@ where
     ///
     /// **Note**: In original IOP paper, verifier do not use sampled element in
     /// commit phase. However, this implementation allows verifier to have
-    /// access to sampled elements in `restore_from_commit_phase` to
+    /// access to sampled elements in `register_iop_structure` to
     /// add flexibility.
     /// User may need to check if this flexibility will affect soundness
     /// analysis in a case-to-case basis.
@@ -791,7 +791,7 @@ where
     ///
     /// **Note**: In original IOP paper, verifier do not use sampled element in
     /// commit phase. However, this implementation allows verifier to have
-    /// access to sampled elements in `restore_from_commit_phase` to
+    /// access to sampled elements in `register_iop_structure` to
     /// add flexibility.
     /// User may need to check if this flexibility will affect soundness
     /// analysis in a case-to-case basis.
@@ -837,7 +837,7 @@ where
 }
 
 #[cfg(any(feature = "test_utils", test))]
-/// Utilities for testing if `restore_from_commit_phase` is correct
+/// Utilities for testing if `register_iop_structure` is correct
 pub mod test_utils {
     use crate::{
         bcs::{
@@ -939,7 +939,7 @@ pub mod test_utils {
         }
     }
 
-    /// Check if verifier's `restore_from_commit_phase` is consistent with
+    /// Check if verifier's `register_iop_structure` is consistent with
     /// prover's code For now this method only supports protocols that can
     /// start with empty transcript. To unit test subprotocol with oracle
     /// references, you need to write a wrapper.
@@ -987,7 +987,7 @@ pub mod test_utils {
             &mut sponge_vt,
             |degree| L::ldt_info(ldt_params, degree),
         );
-        V::restore_from_commit_phase(
+        V::register_iop_structure(
             &ROOT_NAMESPACE,
             &mut transcript_vt,
             &prover_parameter.to_verifier_param(),

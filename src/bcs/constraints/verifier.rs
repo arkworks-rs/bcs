@@ -64,7 +64,7 @@ where
                 SimulationTranscriptVar::new_transcript(proof, &mut sponge, |degree| {
                     L::ldt_info(ldt_params, degree)
                 });
-            V::restore_from_commit_phase_var(&ROOT_NAMESPACE, &mut transcript, verifier_parameter)?;
+            V::register_iop_structure_var(&ROOT_NAMESPACE, &mut transcript, verifier_parameter)?;
             assert!(
                 !transcript.is_pending_message_available(),
                 "Sanity check failed: pending verifier message not submitted"
@@ -97,7 +97,7 @@ where
                 &mut sponge,
                 |_| panic!("LDT transcript cannot send LDT oracle."),
             );
-            L::restore_from_commit_phase_var::<_, _, S>(
+            L::register_iop_structure_var::<_, _, S>(
                 ldt_params,
                 prover_messages_view.iter_mut().collect(),
                 &mut ldt_transcript,

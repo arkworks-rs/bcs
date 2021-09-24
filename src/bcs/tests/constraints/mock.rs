@@ -34,7 +34,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
     type VerifierOutputVar = Boolean<CF>;
     type PublicInputVar = ();
 
-    fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
+    fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         _verifier_parameter: &Self::VerifierParameter,

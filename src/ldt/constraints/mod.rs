@@ -24,7 +24,7 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
     /// messages and verifier state using the sponge provided in the
     /// simulation transcript. Returns the verifier state for query and decision
     /// phase.
-    fn restore_from_commit_phase_var<MT, MTG, S>(
+    fn register_iop_structure_var<MT, MTG, S>(
         param: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
@@ -49,7 +49,7 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
 }
 
 impl<CF: PrimeField + Absorb> LDTWithGadget<CF> for NoLDT<CF> {
-    fn restore_from_commit_phase_var<MT, MTG, S>(
+    fn register_iop_structure_var<MT, MTG, S>(
         _param: &Self::LDTParameters,
         _codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
         _transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,

@@ -46,7 +46,7 @@ where
     ///
     /// When writing test, use `transcript.check_correctness` after calling this
     /// method to verify the correctness of this method.
-    fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
+    fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,

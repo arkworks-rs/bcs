@@ -45,7 +45,7 @@ pub trait LDT<F: PrimeField + Absorb> {
     /// messages and verifier state using the sponge provided in the
     /// simulation transcript. Returns the verifier state for query and decision
     /// phase.
-    fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+    fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>, /* FRI only gets degree bound information from this phase */
         transcript: &mut SimulationTranscript<MT, S, F>,
@@ -106,7 +106,7 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
         Ok(())
     }
 
-    fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+    fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         _param: &Self::LDTParameters,
         _codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>,
         _transcript: &mut SimulationTranscript<MT, S, F>,

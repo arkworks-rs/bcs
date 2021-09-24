@@ -24,14 +24,14 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// Verifier Output
     type VerifierOutput: Clone;
     /// Verifier Parameter. Verifier parameter can be accessed in
-    /// `restore_from_commit_phase`, and can affect transcript structure
+    /// `register_iop_structure`, and can affect transcript structure
     /// (e.g. number of rounds and degree bound).
     type VerifierParameter: VerifierParam;
     /// A collection of oracle references from other protocols
     /// used by current verifier.
     type OracleRefs: VerifierOracleRefs;
     /// Public input. Public input cannot be accessed in
-    /// `restore_from_commit_phase`, and thus cannot affect transcript
+    /// `register_iop_structure`, and thus cannot affect transcript
     /// structure (e.g. number of rounds).
     type PublicInput: ?Sized;
 
@@ -42,11 +42,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     ///
     /// When writing test, use `transcript.check_correctness` after calling this
     /// method to verify the correctness of this method.
-    ///
-    /// TODO: do we really need `public_input` in `restore_from_commit_phase`?
-    /// We can put any argument that affects the circuit (e.g. number of
-    /// rounds) in `verifier_parameter`.
-    fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>>(
+    fn register_iop_structure<MT: MTConfig<Leaf = [F]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -57,10 +53,6 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// return verifier output that is valid if prover claim is true.
     /// Verifier will return an error if prover message is obviously false,
     /// or oracle cannot answer the query.
-    ///
-    /// To access prover message oracle and previous verifier messages of
-    /// current namespace, use bookkeeper. TODO: find a good way to access
-    /// prover message oracles from OracleRefs.
     fn query_and_decide<O: RoundOracle<F>>(
         namespace: &NameSpace,
         verifier_parameter: &Self::VerifierParameter,

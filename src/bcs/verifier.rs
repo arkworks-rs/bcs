@@ -56,7 +56,7 @@ where
                 SimulationTranscript::new_transcript(proof, &mut sponge, |degree| {
                     L::ldt_info(ldt_params, degree)
                 });
-            let verifier_oracle_refs = V::restore_from_commit_phase::<MT>(
+            let verifier_oracle_refs = V::register_iop_structure::<MT>(
                 &ROOT_NAMESPACE,
                 &mut transcript,
                 verifier_parameter,
@@ -96,7 +96,7 @@ where
                 &mut sponge,
                 |_| panic!("LDT transcript cannot send LDT oracle."),
             );
-            L::restore_from_commit_phase(
+            L::register_iop_structure(
                 ldt_params,
                 prover_messages_view.iter_mut().collect(),
                 &mut ldt_transcript,

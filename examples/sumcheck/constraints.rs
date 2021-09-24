@@ -84,7 +84,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
     type VerifierOutputVar = Boolean<CF>;
     type PublicInputVar = PublicInputVar<CF>;
 
-    fn restore_from_commit_phase_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
+    fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
@@ -111,7 +111,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
 
         let ns0 = create_subprotocol_namespace(namespace, 0);
         transcript.new_namespace(ns0.clone(), iop_trace!("first sumcheck protocol"));
-        SimpleSumcheck::restore_from_commit_phase_var(
+        SimpleSumcheck::register_iop_structure_var(
             &ns0,
             transcript,
             &SumcheckVerifierParameter {
@@ -123,7 +123,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
 
         let ns1 = create_subprotocol_namespace(namespace, 1);
         transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol"));
-        SimpleSumcheck::restore_from_commit_phase_var(
+        SimpleSumcheck::register_iop_structure_var(
             &ns1,
             transcript,
             &SumcheckVerifierParameter {

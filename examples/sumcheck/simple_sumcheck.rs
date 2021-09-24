@@ -157,7 +157,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     type OracleRefs = SumcheckOracleRef;
     type PublicInput = SumcheckPublicInput<F>;
 
-    fn restore_from_commit_phase<MT: Config<Leaf = [F]>>(
+    fn register_iop_structure<MT: Config<Leaf = [F]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -271,7 +271,7 @@ pub mod constraints {
         type VerifierOutputVar = Boolean<CF>;
         type PublicInputVar = SumcheckPublicInputVar<CF>;
 
-        fn restore_from_commit_phase_var<
+        fn register_iop_structure_var<
             MT: Config,
             MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>,
         >(

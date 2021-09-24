@@ -170,7 +170,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         Ok(())
     }
 
-    fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+    fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         params: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>,
         ldt_transcript: &mut SimulationTranscript<MT, S, F>,
@@ -551,7 +551,7 @@ mod tests {
                 .map(|oracle| oracle.get_view())
                 .collect::<Vec<_>>();
 
-            LinearCombinationLDT::restore_from_commit_phase(
+            LinearCombinationLDT::register_iop_structure(
                 &ldt_params,
                 codewords_oracle_view.iter_mut().collect(),
                 &mut simulation_transcript,

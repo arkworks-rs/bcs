@@ -170,7 +170,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
     type OracleRefs = ();
     type PublicInput = PublicInput<F>;
 
-    fn restore_from_commit_phase<MT: Config<Leaf = [F]>>(
+    fn register_iop_structure<MT: Config<Leaf = [F]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -200,7 +200,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         let ns0 = create_subprotocol_namespace(namespace, 0);
         transcript.new_namespace(ns0.clone(), iop_trace!("first sumcheck protocol"));
 
-        SimpleSumcheck::restore_from_commit_phase(
+        SimpleSumcheck::register_iop_structure(
             &ns0,
             transcript,
             &SumcheckVerifierParameter {
@@ -214,7 +214,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         let ns1 = create_subprotocol_namespace(namespace, 1);
         transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol"));
 
-        SimpleSumcheck::restore_from_commit_phase(
+        SimpleSumcheck::register_iop_structure(
             &ns1,
             transcript,
             &SumcheckVerifierParameter {

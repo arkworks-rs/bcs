@@ -23,7 +23,7 @@ use ark_sponge::{
 use ark_std::vec::Vec;
 
 impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
-    fn restore_from_commit_phase_var<MT, MTG, S>(
+    fn register_iop_structure_var<MT, MTG, S>(
         param: &Self::LDTParameters,
         codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<F>>,
         ldt_transcript: &mut SimulationTranscriptVar<F, MT, MTG, S>,

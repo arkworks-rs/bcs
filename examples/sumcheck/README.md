@@ -23,7 +23,7 @@ Here is a table summarizing what prover/verifier can do in each phase.
 
 |                                   | Commit Phase (Prover)         | Commit Phase (Verifier)                                      | Query Phase (Verifier)                               |
 | --------------------------------- | ----------------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
-|                                   | `prove`: send prover messages | `restore_from_commit_phase`: simulate the interaction from a SNARK | `query_and_decide`: query prover messages and decide |
+|                                   | `prove`: send prover messages | `register_iop_structure`: simulate the interaction for an (RS-)IOP | `query_and_decide`: query prover messages and decide |
 | Previously Sent Prover Messages   | Yes                           | No                                                           | Oracle Access Only                                   |
 | Previously Sent Verifier Messages | Yes                           | Yes*                                                         | Yes                                                  |
 | Parameter                         | Yes                           | Yes                                                          | Yes                                                  |
@@ -138,7 +138,7 @@ impl ProverOracleRefs for SumcheckOracleRef {
 }
 ```
 
-The protocol reads **claimed sum** in public input. It is sometimes tricky to determine what puts to verifier parameter and what puts to public input. `ark-bcs` implementation requires that public-input should not change the structure of transcript, including number of rounds, type of message at each round, or degree bound. Therefore, verifier do not have access to public input in `restore_from_commit_phase` function, which simulates interaction with prover in commit phase using succinct proof. 
+The protocol reads **claimed sum** in public input. It is sometimes tricky to determine what puts to verifier parameter and what puts to public input. `ark-bcs` implementation requires that public-input should not change the structure of transcript, including number of rounds, type of message at each round, or degree bound. Therefore, verifier do not have access to public input in `register_iop_structure` function, which simulates interaction with prover in commit phase using succinct proof. 
 
 Also, one `MsgRoundRef` represents one round, and one round can have multiple oracles with same length sharing one merkle tree, sumcheck protocol also needs to know which oracle in that round is the oracle we want. In code, we need this as public input: 
 
@@ -184,7 +184,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     type OracleRefs = SumcheckOracleRef;
     type PublicInput = SumcheckPublicInput<F>;
 
-    fn restore_from_commit_phase<MT: Config<Leaf = [F]>>(
+    fn register_iop_structure<MT: Config<Leaf = [F]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -289,12 +289,12 @@ transcript.submit_prover_current_round(namespace, iop_trace!("sumcheck hx, px"))
 }
 ```
 
-#### `restore_from_commit_phase`
+#### `register_iop_structure`
 
-Verifier needs to implement two functions, and one of them is `restore_from_commit_phase`. `restore_from_commit_phase` simulates interaction with prover, using the succinct proof. You can think this as the "`prove` code", but all prover message is already given for you.  All you need to do, is to replay the interaction and sample verifier message in commit phase as needed. For simple sumcheck example, let's start with function signature: 
+Verifier needs to implement two functions, and one of them is `register_iop_structure`. `register_iop_structure` simulates interaction with prover, using the succinct proof. You can think this as the "`prove` code", but all prover message is already given for you.  All you need to do, is to replay the interaction and sample verifier message in commit phase as needed. For simple sumcheck example, let's start with function signature: 
 
 ```rust
-fn restore_from_commit_phase<MT: Config<Leaf = [F]>>(
+fn register_iop_structure<MT: Config<Leaf = [F]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -577,9 +577,9 @@ Ok(())
 
 
 
-#### `restore_from_commit_phase`
+#### `register_iop_structure`
 
-Writing `restore_from_commit_phase` is easy. Just copy the `prove` function, and keeps only the interaction with transcript. All prover computation can be removed. 
+Writing `register_iop_structure` is easy. Just copy the `prove` function, and keeps only the interaction with transcript. All prover computation can be removed. 
 
 ```rust
 impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for SumcheckExample<F> {
@@ -588,7 +588,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
     type OracleRefs = ();
     type PublicInput = PublicInput<F>;
 
-    fn restore_from_commit_phase<MT: Config<Leaf = [F]>>(
+    fn register_iop_structure<MT: Config<Leaf = [F]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -616,7 +616,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         let ns0 = create_subprotocol_namespace(namespace, 0);
         transcript._____________(ns0.clone(), iop_trace!("first sumcheck protocol"));
 
-        SimpleSumcheck::restore_from_commit_phase(
+        SimpleSumcheck::register_iop_structure(
             &ns0,
             transcript,
             &SumcheckVerifierParameter {
@@ -630,7 +630,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         let ns1 = create_subprotocol_namespace(namespace, 1);
         transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol"));
 
-        SimpleSumcheck::restore_from_commit_phase(
+        SimpleSumcheck::register_iop_structure(
             &ns1,
             transcript,
             &SumcheckVerifierParameter {
@@ -916,7 +916,7 @@ You can check what `BCSVerifier::verify` does in a similar way.
 
 ## Bonus: Debug Your IOP Code using `iop_trace!`
 
-TODO: This part will be ready once some test examples are added to show how to use `iop_trace!` to check if `restore_from_commit_phase` is consistent with `prove`. 
+TODO: This part will be ready once some test examples are added to show how to use `iop_trace!` to check if `register_iop_structure` is consistent with `prove`. 
 
 ## Bonus: Write R1CS Constraints for the Verifier
 

@@ -116,7 +116,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
     type OracleRefs = ();
     type PublicInput = ();
 
-    fn restore_from_commit_phase<MT: MTConfig<Leaf = [F]>>(
+    fn register_iop_structure<MT: MTConfig<Leaf = [F]>>(
         namespace: &NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         _verifier_parameter: &Self::VerifierParameter,

@@ -53,8 +53,8 @@ impl ConfigGadget<Self, Fr> for FieldMTConfig {
 }
 
 #[test]
-/// Test restore_from_commit_phase_var
-fn test_restore() {
+/// Test register_iop_structure_var
+fn test_register() {
     let fri_parameters = FRIParameters::new(
         64,
         vec![1, 2, 1],
@@ -138,7 +138,7 @@ fn test_bcs() {
             &mut sponge,
             |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
         );
-    MockTest1Verifier::restore_from_commit_phase_var(
+    MockTest1Verifier::register_iop_structure_var(
         &ROOT_NAMESPACE,
         &mut simulation_transcript,
         &(),
