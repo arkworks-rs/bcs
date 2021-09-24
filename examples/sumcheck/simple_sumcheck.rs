@@ -271,10 +271,7 @@ pub mod constraints {
         type VerifierOutputVar = Boolean<CF>;
         type PublicInputVar = SumcheckPublicInputVar<CF>;
 
-        fn register_iop_structure_var<
-            MT: Config,
-            MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>,
-        >(
+        fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
             namespace: &NameSpace,
             transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
             verifier_parameter: &Self::VerifierParameter,

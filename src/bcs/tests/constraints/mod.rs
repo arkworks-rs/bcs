@@ -138,12 +138,8 @@ fn test_bcs() {
             &mut sponge,
             |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
         );
-    MockTest1Verifier::register_iop_structure_var(
-        &ROOT_NAMESPACE,
-        &mut simulation_transcript,
-        &(),
-    )
-    .unwrap();
+    MockTest1Verifier::register_iop_structure_var(&ROOT_NAMESPACE, &mut simulation_transcript, &())
+        .unwrap();
 
     // verify should have all enforced constraints satisfied
     let sponge = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());
