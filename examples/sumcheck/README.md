@@ -49,9 +49,9 @@ Here is the spec for the example protocol we will build!
 | Prover*                                                      | Verifier                                  |
 | ------------------------------------------------------------ | ----------------------------------------- |
 |                                                              | Send two random field elements `r0`, `r1` |
-| Send evaluations`r1*poly0`, `r2*poly1`over evaluation domain in one round.** |                                           |
-| Invoke univariate sumcheck on `r1*poly0`                     | Invoke univariate sumcheck on `r1*poly0`  |
-| Invoke univariate sumcheck on `r2*poly1`                     | Invoke univariate sumcheck on `r2*poly1`  |
+| Send evaluations`r0*poly0`, `r1*poly1`over evaluation domain in one round.** |                                           |
+| Invoke univariate sumcheck on `r0*poly0`                     | Invoke univariate sumcheck on `r0*poly0`  |
+| Invoke univariate sumcheck on `r1*poly1`                     | Invoke univariate sumcheck on `r1*poly1`  |
 
 **: Disclaimer: This protocol is solely for an example and is not an implementation of any real-world protocol. However, we believe user can easily extend the example to a much more complex one.*
 
@@ -79,7 +79,7 @@ pub struct SumcheckVerifierParameter<F: PrimeField> {
 }
 ```
 
-Prover's parameter in this protocol also needs the coefficients of the polynomial that we take the sum, so we define the prover parameter is below:
+Prover's parameter in this protocol also needs the coefficients of the polynomial that we take the sum, and we define the prover parameter is below. In this example, we use `Radix2EvaluationDomain` defined in [`ark-poly`](https://crates.io/crates/ark-poly) library. 
 
 ```rust
 #[derive(Clone, Debug)]
