@@ -921,3 +921,21 @@ TODO: This part will be ready once some test examples are added to show how to u
 ## Bonus: Write R1CS Constraints for the Verifier
 
 TODO: This part will be ready once the example contains an constraint synthesizer for verifier gadget. 
+
+### Further Reading: Multi-round example
+
+There's an alternative implementation of the example protocol, which contains multiple prover and verifier rounds in the root namespace. The specification of this alternative protocol is like this: 
+
+| Prover                                            | Verifier                                 |
+| ------------------------------------------------- | ---------------------------------------- |
+|                                                   | Send random field element `r0`           |
+| Send evaluations`r0*poly0`over evaluation domain. |                                          |
+| Invoke univariate sumcheck on `r0*poly0`          | Invoke univariate sumcheck on `r0*poly0` |
+|                                                   | Send random field element `r1`           |
+| Send evaluations`r1*poly1`over evaluation domain. |                                          |
+| Invoke univariate sumcheck on `r1*poly1`          | Invoke univariate sumcheck on `r1*poly1` |
+
+Note that if original protocol where we sent `r0*poly0`, `r1*poly1` in one round, each query for those two polynomials share one authentication path, which can reduces the proof size. The proof size for multi-round example `~1KB` larger than original example. 
+
+Code can be found in https://github.com/arkworks-rs/bcs/blob/work/examples/sumcheck/multiround_example.rs. If should look very similar to the protocol you just learned. 
+
