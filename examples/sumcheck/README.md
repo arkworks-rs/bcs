@@ -11,6 +11,7 @@ In this tutorial, we are going to write a public coin RS-IOP to verify the sum o
 * [Put it together: Proof Generation](#put-it-together-proof-generation)
 * [Bonus: Debug Your IOP Code using iop_trace!](#bonus-debug-your-iop-code-using-iop_trace)
 * [Bonus: Write R1CS Constraints for the Verifier](#bonus-write-r1cs-constraints-for-the-verifier)
+* [Further Reading: Multi-round example](#further-reading-multi-round-example)
 
 ## Background
 
@@ -920,9 +921,9 @@ TODO: This part will be ready once some test examples are added to show how to u
 
 ## Bonus: Write R1CS Constraints for the Verifier
 
-TODO: This part will be ready once the example contains an constraint synthesizer for verifier gadget. 
+TODO
 
-### Further Reading: Multi-round example
+## Further Reading: Multi-round example
 
 There's an alternative implementation of the example protocol, which contains multiple prover and verifier rounds in the root namespace. The specification of this alternative protocol is like this: 
 
