@@ -1,3 +1,4 @@
+#![allow(unused)] // for this example only
 #[macro_use]
 extern crate ark_bcs;
 
