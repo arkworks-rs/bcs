@@ -915,13 +915,173 @@ Finally, BCS will run `SumcheckExample::query_and_decide` to run the verifier an
 
 You can check what `BCSVerifier::verify` does in a similar way. 
 
+## Bonus: Write circuits for the Verifier
+
+`ark-bcs` also provides framework to write circuits for RS-IOP verifier. The circuits generated will be R1CS constraints, and can be fed to any SNARKs that implements `Snark` trait defined in [`ark-snark`](https://github.com/arkworks-rs/snark/tree/master/snark). Let's now write constraints of verifier of the example sumcheck protocol!
+
+First, let's define the variable for sumcheck public input: 
+
+```rust
+pub struct SumcheckPublicInputVar<CF: PrimeField + Absorb> {
+    claimed_sum: FpVar<CF>,
+    which: usize,
+}
+
+impl<CF: PrimeField + Absorb> SumcheckPublicInputVar<CF> {
+    pub fn new(claimed_sum: FpVar<CF>, which: usize) -> Self {
+        SumcheckPublicInputVar { claimed_sum, which }
+    }
+}
+```
+
+Next, we will implement `IOPVerifierWithGadget` trait for `SimpleSumcheck`. The output of verifier circuit will be a `Boolean` variable.
+
+```rust
+impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, CF>
+    for SimpleSumcheck<CF>
+{
+    type VerifierOutputVar = Boolean<CF>;
+    type PublicInputVar = SumcheckPublicInputVar<CF>;
+```
+
+Then, we will implement those two functions. 
+
+```rust
+fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
+    namespace: &NameSpace,
+    transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
+    verifier_parameter: &Self::VerifierParameter,
+) -> Result<(), SynthesisError>
+where
+    MT::InnerDigest: Absorb,
+    MTG::InnerDigest: AbsorbGadget<CF>;
+
+fn query_and_decide_var(
+    _cs: ConstraintSystemRef<CF>,
+    namespace: &NameSpace,
+    verifier_parameter: &Self::VerifierParameter,
+    public_input: &Self::PublicInputVar,
+    oracle_refs: &Self::OracleRefs,
+    sponge: &mut S::Var,
+    messages_in_commit_phase: &mut MessagesCollection<
+        &mut SuccinctRoundOracleVarView<CF>,
+        VerifierMessageVar<CF>,
+    >,
+) -> Result<Self::VerifierOutputVar, SynthesisError>
+```
+
+The code should be quite similar to native code. Try to implement them yourself! 
+
+*Hint: In native code, when we want to sample an integer (e.g`u32`), we first call `sponge.squeeze_bits`, and convert those bits to an integer in little endian order. In constraints, when calculate `query_point`, we use `pow_le` that directly takes the squeezed bits, interpreted in little endian order.*
+
+You can check our implementation at https://github.com/arkworks-rs/bcs/blob/work/examples/sumcheck/simple_sumcheck.rs. 
+
+Writing main code for the protocol is also quite similar to the native version, and you can out implementation at https://github.com/arkworks-rs/bcs/blob/work/examples/sumcheck/constraints.rs. 
+
+Now let's write a constraints synthesizer. We will need those info to generate our circuit: 
+
+```rust
+struct SumcheckExampleVerification {
+    // Constants embedded into the circuit: some parameters, for example
+    param: Parameter<Fr>,
+    poseidon_param: PoseidonParameters<Fr>, /* for simplicity, same poseidon parameter is used
+                                             * for both merkle tree, and sponge */
+    ldt_param: LinearCombinationLDTParameters<Fr>,
+
+    // public input is the public input known by the verifier
+    vp: PublicInput<Fr>,
+
+    // private witness: we want to show we know the proof for the sumcheck example
+    proof: BCSProof<FieldMTConfig, Fr>,
+}
+```
+
+Additionally, let's define the merkle tree config used in our circuit. For now we need to have two separate struct (one for native code, and one for constraints). The code will be simpler in the future (see https://github.com/arkworks-rs/crypto-primitives/pull/68). 
+
+```rust
+pub(crate) struct FieldMTConfig;
+impl Config for FieldMTConfig {
+    type Leaf = [Fr];
+    type LeafDigest = Fr;
+    type LeafInnerDigestConverter = IdentityDigestConverter<Fr>;
+    type InnerDigest = Fr;
+    type LeafHash = poseidon::CRH<Fr>;
+    type TwoToOneHash = poseidon::TwoToOneCRH<Fr>;
+}
+
+pub(crate) struct FieldMTConfigGadget;
+impl ConfigGadget<FieldMTConfig, Fr> for FieldMTConfigGadget {
+    type Leaf = [FpVar<Fr>];
+    type LeafDigest = FpVar<Fr>;
+    type LeafInnerConverter = IdentityDigestConverter<FpVar<Fr>>;
+    type InnerDigest = FpVar<Fr>;
+    type LeafHash = poseidon::constraints::CRHGadget<Fr>;
+    type TwoToOneHash = poseidon::constraints::TwoToOneCRHGadget<Fr>;
+}
+```
+
+Next, let's generate the constraints, first we allocate some parameters as constant. 
+
+```rust
+impl ConstraintSynthesizer<Fr> for SumcheckExampleVerification {
+    fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
+        // allocate some constants for parameters
+        let poseidon_param_var = poseidon::constraints::CRHParametersVar::new_constant(
+            cs.clone(),
+            &self.poseidon_param,
+        )?;
+        let mt_hash_param_var = MTHashParametersVar::<Fr, FieldMTConfig, FieldMTConfigGadget> {
+            leaf_params: poseidon_param_var.clone(),
+            inner_params: poseidon_param_var.clone(),
+        };
+```
+
+Then, we allocate public inputs, which is the public inputs variable for the main protocol. 
+
+```rust
+        // first, allocate public inputs
+        let vp_var = PublicInputVar::new_input(ark_relations::ns!(cs, "public input"), || {
+            Ok(self.vp.clone())
+        })?;
+```
+
+Then, we allocate proof as a private input. 
+
+```rust
+        // allocate proof
+        let proof_var =
+            BCSProofVar::new_witness(ark_relations::ns!(cs, "proof"), || Ok(self.proof.clone()))?;
+```
+
+Finally, let's constrain the `proof_var` using the verifier gadget we just wrote.
+
+```rust
+        // write constraints to enforce the proof correctness
+        let result = BCSVerifierGadget::verify::<
+            SumcheckExample<Fr>,
+            LinearCombinationLDT<Fr>,
+            PoseidonSponge<Fr>,
+        >(
+            ark_relations::ns!(cs, "proof verification").cs(),
+            PoseidonSpongeVar::new(cs.clone(), &self.poseidon_param),
+            &proof_var,
+            &vp_var,
+            &self.param,
+            &self.ldt_param,
+            &mt_hash_param_var,
+        )?;
+
+        result.enforce_equal(&Boolean::TRUE)?;
+        Ok(())
+    }
+}
+```
+
+And that's it! 
+
 ## Bonus: Debug Your IOP Code using `iop_trace!`
 
 TODO: This part will be ready once some test examples are added to show how to use `iop_trace!` to check if `register_iop_structure` is consistent with `prove`. 
-
-## Bonus: Write R1CS Constraints for the Verifier
-
-TODO
 
 ## Further Reading: Multi-round example
 

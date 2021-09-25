@@ -15,7 +15,10 @@ use ark_std::{marker::PhantomData, test_rng, One};
 use ark_bcs::{
     bcs::{
         prover::BCSProof,
-        transcript::{create_subprotocol_namespace, NameSpace, SimulationTranscript, Transcript},
+        transcript::{
+            create_subprotocol_namespace, test_utils::check_commit_phase_correctness, NameSpace,
+            SimulationTranscript, Transcript,
+        },
         verifier::BCSVerifier,
         MTHashParameters,
     },
@@ -357,4 +360,64 @@ fn main() {
     .expect("fail to verify");
     assert!(result);
     println!("verify result: ok!")
+}
+
+/// Test verifier's `register_iop_structure` is consistent with prover
+#[test]
+fn test_register() {
+    let mut rng = test_rng();
+    let degrees = (155, 197);
+    let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);
+    let poly1 = DensePolynomial::<Fr>::rand(degrees.1, &mut rng);
+    let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
+    let evaluation_domain = Radix2EvaluationDomain::new(512).unwrap();
+    let fri_parameters = FRIParameters::new(
+        256,
+        vec![1, 3, 1],
+        Radix2CosetDomain::new(evaluation_domain, Fr::one()),
+    );
+    let ldt_parameter = LinearCombinationLDTParameters {
+        fri_parameters,
+        num_queries: 3,
+    };
+    let claimed_sum1 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
+        .evaluate(&poly0)
+        .into_iter()
+        .sum::<Fr>();
+    let claimed_sum2 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
+        .evaluate(&poly1)
+        .into_iter()
+        .sum::<Fr>();
+
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
+    let mt_hash_parameters = MTHashParameters::<FieldMTConfig> {
+        leaf_hash_param: poseidon_parameters(),
+        inner_hash_param: poseidon_parameters(),
+    };
+
+    let vp = PublicInput {
+        sums: (claimed_sum1, claimed_sum2),
+    };
+    let wp = PrivateInput(poly0, poly1);
+    let prover_param = Parameter {
+        degrees,
+        summation_domain,
+        evaluation_domain,
+    };
+
+    check_commit_phase_correctness::<
+        _,
+        _,
+        _,
+        SumcheckExample<_>,
+        SumcheckExample<_>,
+        LinearCombinationLDT<_>,
+    >(
+        sponge,
+        &vp,
+        &wp,
+        &prover_param,
+        &ldt_parameter,
+        mt_hash_parameters.clone(),
+    );
 }
