@@ -1,5 +1,5 @@
 use crate::{
-    bcs::transcript::{SimulationTranscript, Transcript, ROOT_NAMESPACE},
+    bcs::transcript::{NameSpace, SimulationTranscript, Transcript},
     iop::message::{ProverRoundMessageInfo, RoundOracle, SuccinctRoundOracleView, VerifierMessage},
     ldt::LDT,
     Error,
@@ -57,8 +57,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         MT::InnerDigest: Absorb,
     {
         let param = &param.fri_parameters;
-        let namespace = &ROOT_NAMESPACE; // TODO: fix this
-                                         // first, get random linear combination of the codewords
+        let namespace = NameSpace::root(iop_trace!("LDT Prove")); // TODO: fix this
+                                                                  // first, get random linear combination of the codewords
         let codewords = codewords.into_iter().collect::<Vec<_>>();
         // get number of coefficients needed
         let num_oracles: usize = codewords.iter().map(|round| round.len()).sum();
@@ -68,7 +68,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 .collect::<Vec<_>>(),
         );
         ldt_transcript
-            .submit_verifier_current_round(&ROOT_NAMESPACE, iop_trace!("ldt random coefficeints"));
+            .submit_verifier_current_round(namespace, iop_trace!("ldt random coefficeints"));
 
         let mut result_codewords = (0..param.domain.size())
             .map(|_| F::zero())
@@ -177,7 +177,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
     ) where
         MT::InnerDigest: Absorb,
     {
-        let namespace = &ROOT_NAMESPACE;
+        let namespace = NameSpace::root(iop_trace!("LDT register iop structure"));
         let num_oracles = codewords_oracles
             .iter()
             .map(|round| round.oracle.info.num_reed_solomon_codes_oracles())
@@ -187,10 +187,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 .map(|_| FieldElementSize::Full)
                 .collect::<Vec<_>>(),
         );
-        ldt_transcript.submit_verifier_current_round(
-            &ROOT_NAMESPACE,
-            iop_trace!("LDT random linear combination"),
-        );
+        ldt_transcript
+            .submit_verifier_current_round(namespace, iop_trace!("LDT random linear combination"));
         // prover generate result codewords
         let mut current_domain = params.fri_parameters.domain;
 
@@ -418,8 +416,8 @@ mod tests {
         bcs::{
             tests::FieldMTConfig,
             transcript::{
-                test_utils::check_transcript_consistency, SimulationTranscript, Transcript,
-                ROOT_NAMESPACE,
+                test_utils::check_transcript_consistency, NameSpace, SimulationTranscript,
+                Transcript,
             },
             MTHashParameters,
         },
@@ -485,9 +483,12 @@ mod tests {
                 inner_hash_param: poseidon_parameters(),
                 leaf_hash_param: poseidon_parameters(),
             };
-            let mut transcript = Transcript::new(sponge, hash_params.clone(), |usize| {
-                LinearCombinationLDT::ldt_info(&ldt_params, usize)
-            });
+            let mut transcript = Transcript::new(
+                sponge,
+                hash_params.clone(),
+                |usize| LinearCombinationLDT::ldt_info(&ldt_params, usize),
+                iop_trace!("ldt test"),
+            );
             transcript
                 .send_oracle_evaluations(
                     poly.evaluate_over_domain(evaluation_domain).evals,
@@ -496,15 +497,17 @@ mod tests {
                 )
                 .unwrap();
             transcript
-                .submit_prover_current_round(&ROOT_NAMESPACE, iop_trace!())
+                .submit_prover_current_round(NameSpace::root(iop_trace!("ldt test")), iop_trace!())
                 .unwrap();
 
             // check LDT Prove
             let sponge_before_ldt = transcript.sponge;
-            let mut ldt_transcript =
-                Transcript::new(sponge_before_ldt.clone(), hash_params.clone(), |_| {
-                    panic!("ldt not allowed")
-                });
+            let mut ldt_transcript = Transcript::new(
+                sponge_before_ldt.clone(),
+                hash_params.clone(),
+                |_| panic!("ldt not allowed"),
+                iop_trace!("ldt test"),
+            );
             LinearCombinationLDT::prove(
                 &ldt_params,
                 transcript
@@ -533,6 +536,7 @@ mod tests {
                 &ldt_message_mt_roots,
                 &mut sponge_vt,
                 |_| panic!(),
+                iop_trace!("ldt test"),
             );
 
             let codewords_oracle = transcript

@@ -1,6 +1,6 @@
 use crate::{
     bcs::{
-        transcript::{Transcript, ROOT_NAMESPACE},
+        transcript::{NameSpace, Transcript},
         MTHashParameters,
     },
     iop::{
@@ -75,15 +75,18 @@ where
 
         // create a BCS transcript
         let mut transcript = {
-            Transcript::new(sponge, hash_params.clone(), move |degree| {
-                L::ldt_info(&ldt_params, degree)
-            })
+            Transcript::new(
+                sponge,
+                hash_params.clone(),
+                move |degree| L::ldt_info(&ldt_params, degree),
+                iop_trace!("BCS Proof Generation"),
+            )
         };
 
         // run prover code, using transcript to sample verifier message
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(
-            &ROOT_NAMESPACE,
+            NameSpace::root(iop_trace!("BCS Proof Generation: Commit Phase")),
             &(),
             public_input,
             private_input,
@@ -99,9 +102,12 @@ where
 
         // perform LDT to enforce degree bound on low-degree oracles
 
-        let mut ldt_transcript = Transcript::new(transcript.sponge, hash_params, move |_| {
-            panic!("LDT transcript cannot send LDT oracle.")
-        });
+        let mut ldt_transcript = Transcript::new(
+            transcript.sponge,
+            hash_params,
+            move |_| panic!("LDT transcript cannot send LDT oracle."),
+            iop_trace!("BCS Proof Generation for LDT: Commit Phase"),
+        );
         {
             let codeword_oracles_ref = transcript
                 .prover_message_oracles
@@ -145,7 +151,7 @@ where
         // run main verifier code to obtain all queries
         {
             V::query_and_decide(
-                &ROOT_NAMESPACE,
+                NameSpace::root(iop_trace!("BCS Proof Generation: Query and Decision Phase")),
                 &verifier_parameter,
                 public_input,
                 &(),

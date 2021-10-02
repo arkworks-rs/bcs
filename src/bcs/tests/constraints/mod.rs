@@ -17,7 +17,7 @@ use crate::{
             mock::{MockTest1Verifier, MockTestProver},
             FieldMTConfig, Fr,
         },
-        transcript::ROOT_NAMESPACE,
+        transcript::NameSpace,
         MTHashParameters,
     },
     iop::constraints::IOPVerifierWithGadget,
@@ -137,9 +137,14 @@ fn test_bcs() {
             &bcs_proof_var,
             &mut sponge,
             |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
+            iop_trace!("bcs test"),
         );
-    MockTest1Verifier::register_iop_structure_var(&ROOT_NAMESPACE, &mut simulation_transcript, &())
-        .unwrap();
+    MockTest1Verifier::register_iop_structure_var(
+        NameSpace::root(iop_trace!("BCS test")),
+        &mut simulation_transcript,
+        &(),
+    )
+    .unwrap();
 
     // verify should have all enforced constraints satisfied
     let sponge = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());

@@ -35,7 +35,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
     type PublicInputVar = ();
 
     fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         _verifier_parameter: &Self::VerifierParameter,
     ) -> Result<(), SynthesisError>
@@ -87,7 +87,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
     fn query_and_decide_var(
         cs: ConstraintSystemRef<CF>,
-        namespace: &NameSpace,
+        namespace: NameSpace,
         _verifier_parameter: &Self::VerifierParameter,
         _public_input_var: &Self::PublicInputVar,
         _oracle_refs: &Self::OracleRefs,

@@ -1,5 +1,5 @@
 use crate::{
-    bcs::{constraints::transcript::SimulationTranscriptVar, transcript::ROOT_NAMESPACE},
+    bcs::{constraints::transcript::SimulationTranscriptVar, transcript::NameSpace},
     iop::{
         constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar},
         message::ProverRoundMessageInfo,
@@ -35,13 +35,13 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
         MT::InnerDigest: Absorb,
         MTG::InnerDigest: AbsorbGadget<F>,
     {
-        let namespace = &ROOT_NAMESPACE;
+        let namespace = NameSpace::root(iop_trace!("ldt root"));
         let num_oracles = codewords_oracles
             .iter()
             .map(|round| round.oracle.info.num_reed_solomon_codes_oracles())
             .sum::<usize>();
         ldt_transcript.squeeze_verifier_field_elements(num_oracles)?;
-        ldt_transcript.submit_verifier_current_round(&ROOT_NAMESPACE, iop_trace!());
+        ldt_transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         let mut current_domain = param.fri_parameters.domain;
 

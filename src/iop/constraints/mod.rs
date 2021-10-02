@@ -47,7 +47,7 @@ where
     /// When writing test, use `transcript.check_correctness` after calling this
     /// method to verify the correctness of this method.
     fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
     ) -> Result<(), SynthesisError>
@@ -64,7 +64,7 @@ where
     /// current namespace, use bookkeeper.
     fn query_and_decide_var(
         cs: ConstraintSystemRef<CF>,
-        namespace: &NameSpace,
+        namespace: NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         public_input_var: &Self::PublicInputVar,
         oracle_refs: &Self::OracleRefs,

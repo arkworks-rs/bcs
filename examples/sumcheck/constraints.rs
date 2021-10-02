@@ -33,7 +33,7 @@ use ark_bcs::{
             MTHashParametersVar,
         },
         prover::BCSProof,
-        transcript::{create_subprotocol_namespace, NameSpace},
+        transcript::NameSpace,
     },
     iop::{
         constraints::{
@@ -85,7 +85,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
     type PublicInputVar = PublicInputVar<CF>;
 
     fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
     ) -> Result<(), SynthesisError>
@@ -109,10 +109,9 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
             iop_trace!("two polynomials for sumcheck"),
         )?;
 
-        let ns0 = create_subprotocol_namespace(namespace, 0);
-        transcript.new_namespace(ns0.clone(), iop_trace!("first sumcheck protocol"));
+        let ns0 = transcript.new_namespace(namespace, iop_trace!("first sumcheck protocol"));
         SimpleSumcheck::register_iop_structure_var(
-            &ns0,
+            ns0,
             transcript,
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
@@ -121,10 +120,9 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
             },
         )?;
 
-        let ns1 = create_subprotocol_namespace(namespace, 1);
-        transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol"));
+        let ns1 = transcript.new_namespace(namespace, iop_trace!("second sumcheck protocol"));
         SimpleSumcheck::register_iop_structure_var(
-            &ns1,
+            ns1,
             transcript,
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
@@ -137,7 +135,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
 
     fn query_and_decide_var(
         cs: ConstraintSystemRef<CF>,
-        namespace: &NameSpace,
+        namespace: NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         public_input: &Self::PublicInputVar,
         _oracle_refs: &Self::OracleRefs,
@@ -161,10 +159,9 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
         );
 
         // invoke first sumcheck protocol
-        let ns0 = create_subprotocol_namespace(namespace, 0);
         let result1 = <SimpleSumcheck<_> as IOPVerifierWithGadget<S, _>>::query_and_decide_var(
             ark_relations::ns!(cs, "first sumcheck").cs(),
-            &ns0,
+            messages_in_commit_phase.get_subprotocol_namespace(namespace, 0),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -176,10 +173,9 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
             messages_in_commit_phase,
         )?;
 
-        let ns1 = create_subprotocol_namespace(namespace, 1);
         let result2 = <SimpleSumcheck<_> as IOPVerifierWithGadget<S, _>>::query_and_decide_var(
             ark_relations::ns!(cs, "first sumcheck").cs(),
-            &ns1,
+            messages_in_commit_phase.get_subprotocol_namespace(namespace, 1),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
                 evaluation_domain: verifier_parameter.evaluation_domain,

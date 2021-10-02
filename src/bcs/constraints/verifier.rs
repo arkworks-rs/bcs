@@ -3,7 +3,7 @@ use crate::{
         constraints::{
             proof::BCSProofVar, transcript::SimulationTranscriptVar, MTHashParametersVar,
         },
-        transcript::ROOT_NAMESPACE,
+        transcript::NameSpace,
     },
     iop::{
         constraints::IOPVerifierWithGadget, message::MessagesCollection,
@@ -60,11 +60,17 @@ where
     {
         // simulate main prove
         let (verifier_messages, bookkeeper, num_rounds_submitted) = {
-            let mut transcript =
-                SimulationTranscriptVar::new_transcript(proof, &mut sponge, |degree| {
-                    L::ldt_info(ldt_params, degree)
-                });
-            V::register_iop_structure_var(&ROOT_NAMESPACE, &mut transcript, verifier_parameter)?;
+            let mut transcript = SimulationTranscriptVar::new_transcript(
+                proof,
+                &mut sponge,
+                |degree| L::ldt_info(ldt_params, degree),
+                iop_trace!("BCS root"),
+            );
+            V::register_iop_structure_var(
+                NameSpace::root(iop_trace!("BCS Verify")),
+                &mut transcript,
+                verifier_parameter,
+            )?;
             assert!(
                 !transcript.is_pending_message_available(),
                 "Sanity check failed: pending verifier message not submitted"
@@ -96,6 +102,7 @@ where
                 num_rounds_submitted,
                 &mut sponge,
                 |_| panic!("LDT transcript cannot send LDT oracle."),
+                iop_trace!("BCS LDT root"),
             );
             L::register_iop_structure_var::<_, _, S>(
                 ldt_params,
@@ -125,7 +132,7 @@ where
         // verify the protocol
         let verifier_result_var = V::query_and_decide_var(
             cs.clone(),
-            &ROOT_NAMESPACE,
+            NameSpace::root(iop_trace!("BCS Verify")),
             verifier_parameter,
             public_input,
             &(), // protocol used for BCS should not contain any oracle refs

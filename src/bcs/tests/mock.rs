@@ -35,7 +35,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
     type PrivateInput = ();
 
     fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         _oracle_refs: &Self::RoundOracleRefs,
         _public_input: &Self::PublicInput,
         _private_input: &Self::PrivateInput,
@@ -117,7 +117,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
     type PublicInput = ();
 
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         _verifier_parameter: &Self::VerifierParameter,
     ) where
@@ -168,7 +168,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
     }
 
     fn query_and_decide<O: RoundOracle<F>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         _verifier_parameter: &Self::VerifierParameter,
         _public_input: &Self::PublicInput,
         _verifier_state: &Self::OracleRefs,

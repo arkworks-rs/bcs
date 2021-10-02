@@ -1,7 +1,7 @@
 use crate::{
     bcs::{
         prover::BCSProof,
-        transcript::{SimulationTranscript, ROOT_NAMESPACE},
+        transcript::{NameSpace, SimulationTranscript},
         MTHashParameters,
     },
     iop::{
@@ -52,12 +52,14 @@ where
     {
         // simulate main prove: reconstruct verifier messages to restore verifier state
         let (verifier_messages, bookkeeper, num_rounds_submitted, verifier_oracle_refs) = {
-            let mut transcript =
-                SimulationTranscript::new_transcript(proof, &mut sponge, |degree| {
-                    L::ldt_info(ldt_params, degree)
-                });
+            let mut transcript = SimulationTranscript::new_transcript(
+                proof,
+                &mut sponge,
+                |degree| L::ldt_info(ldt_params, degree),
+                iop_trace!("IOP Root: BCS proof verify"),
+            );
             let verifier_oracle_refs = V::register_iop_structure::<MT>(
-                &ROOT_NAMESPACE,
+                NameSpace::root(iop_trace!("BCS Verify: commit phase")),
                 &mut transcript,
                 verifier_parameter,
             );
@@ -95,6 +97,7 @@ where
                 num_rounds_submitted,
                 &mut sponge,
                 |_| panic!("LDT transcript cannot send LDT oracle."),
+                iop_trace!("BCS verify LDT part"),
             );
             L::register_iop_structure(
                 ldt_params,
@@ -127,7 +130,7 @@ where
 
         // verify the protocol (we can use a new view)
         let verifier_result = V::query_and_decide(
-            &ROOT_NAMESPACE,
+            NameSpace::root(iop_trace!("bcs verify")),
             verifier_parameter,
             public_input,
             &verifier_oracle_refs,

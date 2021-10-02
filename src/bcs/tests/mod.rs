@@ -8,7 +8,7 @@ use crate::{
     bcs::{
         prover::BCSProof,
         tests::mock::{MockTest1Verifier, MockTestProver},
-        transcript::{SimulationTranscript, ROOT_NAMESPACE},
+        transcript::{NameSpace, SimulationTranscript},
         verifier::BCSVerifier,
         MTHashParameters,
     },
@@ -76,11 +76,17 @@ fn test_bcs() {
 
     // verify if simulation transcript reconstructs correctly
     let mut sponge = PoseidonSponge::new(&poseidon_parameters());
-    let mut simulation_transcript =
-        SimulationTranscript::new_transcript(&bcs_proof, &mut sponge, |degree| {
-            LinearCombinationLDT::ldt_info(&ldt_parameters, degree)
-        });
-    MockTest1Verifier::register_iop_structure(&ROOT_NAMESPACE, &mut simulation_transcript, &());
+    let mut simulation_transcript = SimulationTranscript::new_transcript(
+        &bcs_proof,
+        &mut sponge,
+        |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
+        iop_trace!("test bcs"),
+    );
+    MockTest1Verifier::register_iop_structure(
+        NameSpace::root(iop_trace!("BCS Test")),
+        &mut simulation_transcript,
+        &(),
+    );
     // verify should return no error
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     assert!(

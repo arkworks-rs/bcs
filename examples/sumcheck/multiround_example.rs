@@ -13,7 +13,7 @@ use ark_std::{marker::PhantomData, test_rng, One};
 use ark_bcs::{
     bcs::{
         prover::BCSProof,
-        transcript::{create_subprotocol_namespace, NameSpace, SimulationTranscript, Transcript},
+        transcript::{NameSpace, SimulationTranscript, Transcript},
         verifier::BCSVerifier,
         MTHashParameters,
     },
@@ -74,7 +74,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckMultiroundExample<F> {
     type PrivateInput = PrivateInput<F>;
 
     fn prove<MT: Config<Leaf = [F]>, S: CryptographicSponge>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         _oracle_refs: &Self::RoundOracleRefs,
         public_input: &Self::PublicInput,
         private_input: &Self::PrivateInput,
@@ -106,10 +106,9 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckMultiroundExample<F> {
         transcript.send_univariate_polynomial(prover_parameter.degrees.0, &poly0)?;
         let poly0_ref = transcript.submit_prover_current_round(namespace, iop_trace!("poly0"))?;
         // invoke sumcheck polynomial on first polynomial
-        let ns0 = create_subprotocol_namespace(namespace, 0);
-        transcript.new_namespace(ns0.clone(), iop_trace!("first sumcheck protocol"));
+        let ns0 = transcript.new_namespace(namespace, iop_trace!("first sumcheck protocol"));
         SimpleSumcheck::prove(
-            &ns0,
+            ns0,
             &SumcheckOracleRef::new(poly0_ref),
             &SumcheckPublicInput::new(asserted_sum0, 0),
             &(),
@@ -144,10 +143,9 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckMultiroundExample<F> {
         let poly1_ref = transcript.submit_prover_current_round(namespace, iop_trace!("poly1"))?;
 
         // invoke sumcheck polynomial on second polynomial
-        let ns1 = create_subprotocol_namespace(namespace, 1);
-        transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol"));
+        let ns1 = transcript.new_namespace(namespace, iop_trace!("second sumcheck protocol"));
         SimpleSumcheck::prove(
-            &ns1,
+            ns1,
             &SumcheckOracleRef::new(poly1_ref),
             &SumcheckPublicInput::new(asserted_sum1, 0),
             &(),
@@ -173,7 +171,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
     type PublicInput = PublicInput<F>;
 
     fn register_iop_structure<MT: Config<Leaf = [F]>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
     ) where
@@ -197,11 +195,10 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
         );
 
         // invoke sumcheck protocol on first protocol
-        let ns0 = create_subprotocol_namespace(namespace, 0);
-        transcript.new_namespace(ns0.clone(), iop_trace!("first sumcheck protocol"));
+        let ns0 = transcript.new_namespace(namespace, iop_trace!("first sumcheck protocol"));
 
         SimpleSumcheck::register_iop_structure(
-            &ns0,
+            ns0,
             transcript,
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
@@ -228,11 +225,10 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
         );
 
         // invoke sumcheck protocol on second protocol
-        let ns1 = create_subprotocol_namespace(namespace, 1);
-        transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol"));
+        let ns1 = transcript.new_namespace(namespace, iop_trace!("second sumcheck protocol"));
 
         SimpleSumcheck::register_iop_structure(
-            &ns1,
+            ns1,
             transcript,
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
@@ -243,7 +239,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
     }
 
     fn query_and_decide<O: RoundOracle<F>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         public_input: &Self::PublicInput,
         _oracle_refs: &Self::OracleRefs,
@@ -271,9 +267,8 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
         let asserted_sums = (public_input.sums.0 * r0, public_input.sums.1 * r1);
 
         // invoke first sumcheck protocol
-        let ns0 = create_subprotocol_namespace(namespace, 0);
         let mut result = SimpleSumcheck::query_and_decide(
-            &ns0,
+            messages_in_commit_phase.get_subprotocol_namespace(namespace, 0),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -286,9 +281,8 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
         )?;
 
         // invoke second sumcheck protocol
-        let ns1 = create_subprotocol_namespace(namespace, 1);
         result &= SimpleSumcheck::query_and_decide(
-            &ns1,
+            messages_in_commit_phase.get_subprotocol_namespace(namespace, 1),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
                 evaluation_domain: verifier_parameter.evaluation_domain,

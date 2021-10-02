@@ -54,14 +54,27 @@ impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
         }
     }
 
+    /// Given the current namespace, and the index of the namespace of
+    /// subprotocol namespace, return the subprotocol namespace. `index` is
+    /// the time where the subprotocol namespace is created in
+    /// `register_iop_structure`.
+    pub fn get_subprotocol_namespace(&self, namespace: NameSpace, index: usize) -> NameSpace {
+        self.bookkeeper.get_subspace(namespace, index)
+    }
+
+    /// Given a namespace global id, return the namespace if it exists.
+    pub fn get_namespace_from_id(&self, id: u64) -> Option<NameSpace> {
+        self.bookkeeper.get_namespace_details(id)
+    }
+
     /// Return the prover message sent at `round` in `namespace`.
-    pub fn prover_message(&mut self, namespace: &NameSpace, round: usize) -> &mut Oracle {
+    pub fn prover_message(&mut self, namespace: NameSpace, round: usize) -> &mut Oracle {
         let round_ref = self.prover_message_as_ref(namespace, round).clone();
         self.prover_message_using_ref(round_ref)
     }
 
     /// Return the reference to prover message
-    pub fn prover_message_as_ref(&self, namespace: &NameSpace, round: usize) -> &MsgRoundRef {
+    pub fn prover_message_as_ref(&self, namespace: NameSpace, round: usize) -> &MsgRoundRef {
         self.bookkeeper
             .get_message_indices(namespace)
             .prover_message_refs
@@ -77,13 +90,13 @@ impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
     }
 
     /// Return the verifier message sent at `round` in `namespace`.
-    pub fn verifier_message(&self, namespace: &NameSpace, round: usize) -> &'a Vec<VM> {
+    pub fn verifier_message(&self, namespace: NameSpace, round: usize) -> &'a Vec<VM> {
         let round_ref = self.verifier_message_as_ref(namespace, round);
         self.verifier_message_using_ref(*round_ref)
     }
 
     /// Return the reference to verifier message
-    pub fn verifier_message_as_ref(&self, namespace: &NameSpace, round: usize) -> &MsgRoundRef {
+    pub fn verifier_message_as_ref(&self, namespace: NameSpace, round: usize) -> &MsgRoundRef {
         self.bookkeeper
             .get_message_indices(namespace)
             .verifier_message_refs

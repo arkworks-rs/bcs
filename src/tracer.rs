@@ -35,7 +35,7 @@ impl Debug for TraceInfo {
 impl TraceInfo {
     /// Returns a new `TraceInfo`. Note that this function should not be
     /// directly called. Instead, use `iop_trace!` instead.
-    pub fn new(
+    pub const fn new(
         description: Option<&'static str>,
         file_name: &'static str,
         line: u32,
@@ -46,6 +46,14 @@ impl TraceInfo {
             file_name,
             line,
             column,
+        }
+    }
+
+    /// Return a reference to the description of the trace. If None, return "".
+    pub const fn description(&self) -> &str {
+        match self.description {
+            None => "",
+            Some(s) => s,
         }
     }
 }

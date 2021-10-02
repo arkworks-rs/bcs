@@ -43,7 +43,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// When writing test, use `transcript.check_correctness` after calling this
     /// method to verify the correctness of this method.
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
     ) where
@@ -54,7 +54,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// Verifier will return an error if prover message is obviously false,
     /// or oracle cannot answer the query.
     fn query_and_decide<O: RoundOracle<F>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         public_input: &Self::PublicInput,
         oracle_refs: &Self::OracleRefs,

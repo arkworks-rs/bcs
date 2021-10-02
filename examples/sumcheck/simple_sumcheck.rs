@@ -98,7 +98,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SimpleSumcheck<F> {
     type PrivateInput = ();
 
     fn prove<MT: Config<Leaf = [F]>, S: CryptographicSponge>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         oracle_refs: &Self::RoundOracleRefs,
         public_input: &Self::PublicInput,
         _private_input: &Self::PrivateInput,
@@ -158,7 +158,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     type PublicInput = SumcheckPublicInput<F>;
 
     fn register_iop_structure<MT: Config<Leaf = [F]>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
     ) where
@@ -182,7 +182,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     }
 
     fn query_and_decide<O: RoundOracle<F>>(
-        namespace: &NameSpace,
+        namespace: NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         public_input: &Self::PublicInput,
         oracle_refs: &Self::OracleRefs, /* in parent `query_and_decide`, parent can fill out
@@ -191,7 +191,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         random_oracle: &mut S,
         messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
-        // // query a random point in evaluation domain
+        // query a random point in evaluation domain
         let evaluation_domain = verifier_parameter.evaluation_domain;
         let summation_domain = verifier_parameter.summation_domain;
         let claimed_sum = public_input.claimed_sum;
@@ -272,7 +272,7 @@ pub mod constraints {
         type PublicInputVar = SumcheckPublicInputVar<CF>;
 
         fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
-            namespace: &NameSpace,
+            namespace: NameSpace,
             transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
             verifier_parameter: &Self::VerifierParameter,
         ) -> Result<(), SynthesisError>
@@ -300,7 +300,7 @@ pub mod constraints {
 
         fn query_and_decide_var(
             _cs: ConstraintSystemRef<CF>,
-            namespace: &NameSpace,
+            namespace: NameSpace,
             verifier_parameter: &Self::VerifierParameter,
             public_input: &Self::PublicInputVar,
             oracle_refs: &Self::OracleRefs,
