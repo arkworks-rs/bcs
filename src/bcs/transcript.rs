@@ -23,13 +23,14 @@ use ark_std::{boxed::Box, collections::BTreeMap, mem::take};
 #[derive(Copy, Clone, Debug, Derivative)]
 #[derivative(PartialEq, PartialOrd, Ord, Eq)]
 pub struct NameSpace {
-    pub(crate) id: u64,
+    /// The global id of current namespace in the transcript.
+    pub id: u64,
     #[derivative(PartialEq = "ignore", PartialOrd = "ignore", Ord = "ignore")]
     pub(crate) trace: TraceInfo,
     /// The protocol id of the parent protocol in current transcript.
     /// if `self.id==0`, then this field should be 0.
     #[derivative(PartialEq = "ignore", PartialOrd = "ignore", Ord = "ignore")]
-    pub(crate) parent_id: u64,
+    pub parent_id: u64,
 }
 
 impl NameSpace {
