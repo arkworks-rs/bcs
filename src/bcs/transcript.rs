@@ -127,7 +127,7 @@ impl MessageBookkeeper {
         *self
             .ns_details
             .get(&subspace_id)
-            .expect(&format!("Invalid Subspace ID: {}", subspace_id).clone())
+            .expect(&ark_std::format!("Invalid Subspace ID: {}", subspace_id).clone())
     }
 
     pub(crate) fn attach_prover_round_to_namespace(
