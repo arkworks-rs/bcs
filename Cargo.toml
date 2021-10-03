@@ -24,9 +24,9 @@ ark-ldt = {git = "https://github.com/arkworks-rs/ldt", branch="main", default-fe
 
 ark-relations = { version = "^0.3.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.3.1", default-features = false, optional = true }
+tracing-subscriber = { version = "0.2", optional = true}
 
 tracing = { version = "0.1", default-features = false, features = [ "attributes" ]} 
-
 derivative = { version = "2.0", features = ["use_core"] }
 hashbrown = "0.11.2"
 
@@ -52,7 +52,7 @@ debug = true
 default = [ "std", "parallel" ]
 std = ["ark-serialize/std", "ark-ff/std", "ark-poly/std", "ark-sponge/std", "ark-crypto-primitives/std",
     "ark-std/std", "ark-relations/std", "ark-r1cs-std/std", "ark-ldt/std"]
-r1cs = ["ark-relations", "ark-r1cs-std", "ark-sponge/r1cs", "ark-crypto-primitives/r1cs", "ark-ldt/r1cs"]
+r1cs = ["ark-relations", "ark-r1cs-std", "ark-sponge/r1cs", "ark-crypto-primitives/r1cs", "ark-ldt/r1cs", "tracing-subscriber"]
 parallel = ["std", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel"]
 test_utils = ["std"]
 
@@ -63,8 +63,7 @@ ark-sponge = {git = "https://github.com/arkworks-rs/sponge"}
 [[example]]
 name = "sumcheck"
 required-features = ["test_utils"]
-[[example.dependencies]]
-tracing-subscriber = { version = "0.2"} 
+
 
 
 
