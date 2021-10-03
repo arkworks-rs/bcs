@@ -34,7 +34,6 @@ hashbrown = "0.11.2"
 ark-ed-on-bls12-381 = { version = "^0.3.0", default-features = false }
 ark-bls12-381 = { version = "^0.3.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.3.0", default-features = false, features = [ "curve" ] } 
-tracing-subscriber = { version = "0.2"} 
 
 [profile.release]
 opt-level = 3
@@ -64,6 +63,8 @@ ark-sponge = {git = "https://github.com/arkworks-rs/sponge"}
 [[example]]
 name = "sumcheck"
 required-features = ["test_utils"]
+[[example.dependencies]]
+tracing-subscriber = { version = "0.2"} 
 
 
 
