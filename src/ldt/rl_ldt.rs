@@ -57,8 +57,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         MT::InnerDigest: Absorb,
     {
         let param = &param.fri_parameters;
-        let namespace = NameSpace::root(iop_trace!("LDT Prove")); // TODO: fix this
-                                                                  // first, get random linear combination of the codewords
+        let namespace = NameSpace::root(iop_trace!("LDT Prove"));
+        // first, get random linear combination of the codewords
         let codewords = codewords.into_iter().collect::<Vec<_>>();
         // get number of coefficients needed
         let num_oracles: usize = codewords.iter().map(|round| round.len()).sum();
@@ -356,7 +356,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     &final_polynomial,
                 );
 
-                // TODO: do not panic. Use error
+                // TODO: do not panic. Use customized error
                 assert!(result);
 
                 Ok(())

@@ -23,7 +23,6 @@ use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::{marker::PhantomData, test_rng, vec, vec::Vec, One};
 
-/// TODO: add a README here describing the dummy protocol
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }

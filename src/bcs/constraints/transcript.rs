@@ -404,7 +404,7 @@ pub mod test_utils {
         prover_parameter: &P::ProverParameter,
         verifier_parameter: &V::VerifierParameter,
         ldt_params: &L::LDTParameters,
-        hash_params: MTHashParameters<MT>, // TODO: too many arguments!
+        hash_params: MTHashParameters<MT>,
     ) where
         MT::InnerDigest: Absorb,
         MTG::InnerDigest: AbsorbGadget<F>,

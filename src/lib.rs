@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+//!This crate provides implementations of public coin RS-IOP and BCS Transform.
 
-//! A crate for interactive oracle proofs and BCS transform.
 #![deny(unused_import_braces, unused_qualifications, trivial_casts)]
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
 #![deny(stable_features, unreachable_pub, non_shorthand_field_patterns)]
@@ -28,7 +28,6 @@ pub mod iop;
 /// transform. Source: [BCS16](https://eprint.iacr.org/2016/116)
 pub mod bcs;
 /// Defines trait for performing LDT.
-/// TODO: move this to `ark-ldt`
 pub mod ldt;
 
 #[cfg(test)]
