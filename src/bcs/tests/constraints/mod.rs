@@ -36,7 +36,7 @@ use ark_sponge::{
     poseidon::{constraints::PoseidonSpongeVar, PoseidonSponge},
     CryptographicSponge,
 };
-use ark_std::One;
+use ark_std::{vec, One};
 
 mod mock;
 

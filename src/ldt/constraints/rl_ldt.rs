@@ -267,7 +267,7 @@ mod tests {
     use ark_poly::{polynomial::univariate::DensePolynomial, UVPolynomial};
     use ark_r1cs_std::{alloc::AllocVar, boolean::Boolean, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_std::{One, Zero};
+    use ark_std::{vec, vec::Vec, One, Zero};
 
     #[test]
     fn test_degree_raise_poly() {

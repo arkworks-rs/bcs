@@ -26,7 +26,7 @@ use ark_sponge::{
     constraints::{AbsorbGadget, SpongeWithGadget},
     Absorb,
 };
-use ark_std::test_rng;
+use ark_std::{test_rng, vec, vec::Vec};
 
 impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, CF>
     for MockTest1Verifier<CF>
