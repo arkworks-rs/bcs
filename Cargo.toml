@@ -52,9 +52,9 @@ debug = true
 default = [ "std", "parallel" ]
 std = ["ark-serialize/std", "ark-ff/std", "ark-poly/std", "ark-sponge/std", "ark-crypto-primitives/std",
     "ark-std/std", "ark-relations/std", "ark-r1cs-std/std", "ark-ldt/std"]
-r1cs = ["ark-relations", "ark-r1cs-std", "ark-sponge/r1cs", "ark-crypto-primitives/r1cs", "ark-ldt/r1cs", "tracing-subscriber"]
+r1cs = ["ark-relations", "ark-r1cs-std", "ark-sponge/r1cs", "ark-crypto-primitives/r1cs", "ark-ldt/r1cs"]
 parallel = ["std", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel"]
-test_utils = ["std"]
+test_utils = ["std", "tracing-subscriber"]
 
 [patch.crates-io]
 ark-crypto-primitives = {git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main"}

@@ -528,14 +528,17 @@ let round_ref: MsgRoundRef =
     transcript.submit_prover_current_round(namespace, iop_trace!("two polynomials for sumcheck"))?;
 ```
 
-Next invoke univariate sumcheck to prove sum of `r0*poly0`. 
+Next invoke univariate sumcheck to prove sum of `r0*poly0`. First, we need to give subprotocol a new namespace, so that the subprotocol interactions will not affect current namespace. We can do so by
 
 ```rust
-// invoke sumcheck polynomial on first polynomial
-let ns0 = create_subprotocol_namespace(namespace, 0 /*subprotocol_id*/);
-transcript.new_namespace(ns0.clone(), iop_trace!("first sumcheck protocol"));
+let ns0 = transcript.new_namespace(namespace, iop_trace!("first sumcheck protocol"));
+```
+
+Then, we can just call `prove`.
+
+```rust
 SimpleSumcheck::prove(
-    &ns0, // namespace
+    ns0, // namespace
     &SumcheckOracleRef::new(round_ref), //oracle_refs: reference to `poly0`
     &SumcheckPublicInput::new(asserted_sum0, 0 /*which oracle in round*/),
     &(), // pricate input is not needed for simple univariate sumcheck 
@@ -552,11 +555,9 @@ SimpleSumcheck::prove(
 Finally, invoke univariate sumcheck to prover sum of `r1*poly1`. It should be quite similar to last code block. 
 
 ```rust
-// invoke sumcheck polynomial on second polynomial
-let ns1 = create_subprotocol_namespace(namespace, 1);
 transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol 1"));
 SimpleSumcheck::prove(
-    &ns1,
+    ns1,
     &SumcheckOracleRef::new(round_ref),
     &SumcheckPublicInput::new(asserted_sum1, 1),
     &(),
@@ -614,8 +615,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         );
 
         // invoke sumcheck protocol on first protocol
-        let ns0 = create_subprotocol_namespace(namespace, 0);
-        transcript._____________(ns0.clone(), iop_trace!("first sumcheck protocol"));
+        let ns0 = transcript.new_namespace(namespace, iop_trace!("first sumcheck protocol"));
 
         SimpleSumcheck::register_iop_structure(
             &ns0,
@@ -628,8 +628,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         );
 
         // invoke sumcheck protocol on second protocol
-        let ns1 = create_subprotocol_namespace(namespace, 1);
-        transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol"));
+        let ns1 = transcript.new_namespace(namespace, iop_trace!("first sumcheck protocol"));
 
         SimpleSumcheck::register_iop_structure(
             &ns1,
@@ -678,13 +677,12 @@ let asserted_sums = (
 );
 ```
 
-Finally, let's invoke sumcheck subprotocols!
+Finally, let's invoke sumcheck subprotocols! In `query`, we will instead use `messages_in_commit_phase` struct to get subspace. `messages_in_commit_phase.get_subprotocol_namespace(namespace, 0)` will return the first subspace created during `register_iop_structure`. Similarly, `messages_in_commit_phase.get_subprotocol_namespace(namespace, 1)` will return the second subspace created during `register_iop_structure`. 
 
 ```rust
 // invoke first sumcheck protocol
-let ns0 = create_subprotocol_namespace(namespace, 0);
 let mut result = SimpleSumcheck::query_and_decide(
-    &ns0,
+    messages_in_commit_phase.get_subprotocol_namespace(namespace, 0),
     &SumcheckVerifierParameter {
         degree: verifier_parameter.degrees.0,
         evaluation_domain: verifier_parameter.evaluation_domain,
@@ -697,9 +695,8 @@ let mut result = SimpleSumcheck::query_and_decide(
 )?;
 
 // invoke second sumcheck protocol
-let ns1 = create_subprotocol_namespace(namespace, 1);
 result &= SimpleSumcheck::query_and_decide(
-    &ns1,
+    messages_in_commit_phase.get_subprotocol_namespace(namespace, 1),
     &SumcheckVerifierParameter {
         degree: verifier_parameter.degrees.1,
         evaluation_domain: verifier_parameter.evaluation_domain,
@@ -845,75 +842,57 @@ And that's it! You've learned how to write RS-IOP using this library!
 You might be curious on what exact does `BCSProver::prove` do. To see what goes under the hood, go to `ark-bcs` project path, and run the example with `print-trace` feature enabled: 
 
 ```shell
-cargo run --package ark-bcs --example sumcheck --features print-trace --features test_utils
+cargo run --package ark-bcs --example sumcheck --features test_utils
 ```
 
 At first few rounds, we can see `SumcheckExample::prove` is being run: 
 
-```
-[Prover Transcript] Verifier submitted round [Verifier Random Coefficients]
-     at examples\sumcheck\main.rs:95:55
-[Prover Transcript] Prover submitted round [two polynomials for sumcheck]
-     at examples\sumcheck\main.rs:124:53
-[Prover Transcript] Prover submitted round [sumcheck hx, px]
-     at examples\sumcheck\simple_sumcheck.rs:145:59
-[Prover Transcript] Prover submitted round [sumcheck hx, px]
-     at examples\sumcheck\simple_sumcheck.rs:145:59
+```log
+Oct 02 21:19:58.208  INFO submit_prover_current_round{namespace=[BCS Proof Generation: Commit Phase] at src\bcs\prover.rs:89:29}: ark_bcs::bcs::transcript: [two polynomials for sumcheck] at examples\sumcheck\main.rs:132:53
+Oct 02 21:19:58.518  INFO submit_prover_current_round{namespace=[first sumcheck protocol] at examples\sumcheck\main.rs:135:55}: ark_bcs::bcs::transcript: [sumcheck hx, px] at examples\sumcheck\simple_sumcheck.rs:144:59
+Oct 02 21:19:58.830  INFO submit_prover_current_round{namespace=[second sumcheck protocol 1] at examples\sumcheck\main.rs:151:55}: ark_bcs::bcs::transcript: 
+[sumcheck hx, px] at examples\sumcheck\simple_sumcheck.rs:144:59
 ```
 
 Then BCS, BCS will run LDT commit phase, and attach message oracle to a separate LDT transcript. 
 
 ```
-[Prover Transcript] Verifier submitted round [ldt random coefficeints]
-     at src\ldt\rl_ldt.rs:71:61
-[Prover Transcript] Verifier submitted round [ldt alpha]
-     at src\ldt\rl_ldt.rs:118:67
-[Prover Transcript] Prover submitted round [ldt fri oracle]
-     at src\ldt\rl_ldt.rs:133:65
-[Prover Transcript] Verifier submitted round [ldt alpha]
-     at src\ldt\rl_ldt.rs:118:67
-[Prover Transcript] Prover submitted round [ldt fri oracle]
-     at src\ldt\rl_ldt.rs:133:65
-[Prover Transcript] Verifier submitted round [ldt final alpha]
-     at src\ldt\rl_ldt.rs:142:65
-[Prover Transcript] Prover submitted round [ldt final poly coefficients]
-     at src\ldt\rl_ldt.rs:168:53
+Oct 02 21:19:59.134  INFO submit_verifier_current_round{namespace=[LDT Prove] at src\ldt\rl_ldt.rs:60:41}: ark_bcs::bcs::transcript: [ldt random coefficeints] at src\ldt\rl_ldt.rs:71:55
+Oct 02 21:19:59.154  INFO submit_verifier_current_round{namespace=[LDT Prove] at src\ldt\rl_ldt.rs:60:41}: ark_bcs::bcs::transcript: [ldt alpha] at src\ldt\rl_ldt.rs:118:67
+Oct 02 21:19:59.156  INFO submit_prover_current_round{namespace=[LDT Prove] at src\ldt\rl_ldt.rs:60:41}: ark_bcs::bcs::transcript: [ldt fri oracle] at src\ldt\rl_ldt.rs:133:65
+Oct 02 21:19:59.219  INFO submit_verifier_current_round{namespace=[LDT Prove] at src\ldt\rl_ldt.rs:60:41}: ark_bcs::bcs::transcript: [ldt alpha] at src\ldt\rl_ldt.rs:118:67
+Oct 02 21:19:59.221  INFO submit_prover_current_round{namespace=[LDT Prove] at src\ldt\rl_ldt.rs:60:41}: ark_bcs::bcs::transcript: [ldt fri oracle] at src\ldt\rl_ldt.rs:133:65
+Oct 02 21:19:59.234  INFO submit_verifier_current_round{namespace=[LDT Prove] at src\ldt\rl_ldt.rs:60:41}: ark_bcs::bcs::transcript: [ldt final alpha] at src\ldt\rl_ldt.rs:142:65
+Oct 02 21:19:59.236  INFO submit_prover_current_round{namespace=[LDT Prove] at src\ldt\rl_ldt.rs:60:41}: ark_bcs::bcs::transcript: [ldt final poly coefficients] at src\ldt\rl_ldt.rs:168:53
 ```
 
 Then, BCS will run LDT verifier's `query_and_decision` phase, to record query responses.
 
 ```
-[Recording Round Oracle] Query 1 cosets: [rl_ldt query codewords]
-     at src\ldt\rl_ldt.rs:285:63
-[Recording Round Oracle] Query 1 cosets: [rl_ldt query codewords]
-     at src\ldt\rl_ldt.rs:285:63
-[Recording Round Oracle] Query 1 cosets: [rl_ldt query codewords]
-     at src\ldt\rl_ldt.rs:285:63
-[Recording Round Oracle] Query 1 cosets: [rl_ldt query fri message]
-     at src\ldt\rl_ldt.rs:323:59
-[Recording Round Oracle] Query 1 cosets: [rl_ldt query fri message]
-     at src\ldt\rl_ldt.rs:323:59
-[Recording oracle] Get short message at index 0: [final poly coefficients]
-     at src\ldt\rl_ldt.rs:335:43
-[Recording Round Oracle] Query 1 cosets: [rl_ldt query codewords]
-     at src\ldt\rl_ldt.rs:285:63
-...
+Oct 04 20:29:33.547  INFO query_coset{coset_index=[49]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63Oct 04 20:29:33.547  INFO query_coset{coset_index=[49]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63Oct 04 20:29:33.548  INFO query_coset{coset_index=[49]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63Oct 04 20:29:33.548  INFO query_coset{coset_index=[17]}: ark_bcs::iop::message: [rl_ldt query fri message] at src\ldt\rl_ldt.rs:321:59
+Oct 04 20:29:33.548  INFO query_coset{coset_index=[1]}: ark_bcs::iop::message: [rl_ldt query fri message] at src\ldt\rl_ldt.rs:321:59
+Oct 04 20:29:33.550  INFO query_coset{coset_index=[243]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63
+Oct 04 20:29:33.551  INFO query_coset{coset_index=[243]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63
+Oct 04 20:29:33.551  INFO query_coset{coset_index=[243]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63
+Oct 04 20:29:33.552  INFO query_coset{coset_index=[19]}: ark_bcs::iop::message: [rl_ldt query fri message] at src\ldt\rl_ldt.rs:321:59
+Oct 04 20:29:33.552  INFO query_coset{coset_index=[3]}: ark_bcs::iop::message: [rl_ldt query fri message] at src\ldt\rl_ldt.rs:321:59
+Oct 04 20:29:33.555  INFO query_coset{coset_index=[241]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63
+Oct 04 20:29:33.556  INFO query_coset{coset_index=[241]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63
+Oct 04 20:29:33.556  INFO query_coset{coset_index=[241]}: ark_bcs::iop::message: [rl_ldt query codewords] at src\ldt\rl_ldt.rs:283:63
+Oct 04 20:29:33.557  INFO query_coset{coset_index=[17]}: ark_bcs::iop::message: [rl_ldt query fri message] at src\ldt\rl_ldt.rs:321:59
+Oct 04 20:29:33.557  INFO query_coset{coset_index=[1]}: ark_bcs::iop::message: [rl_ldt query fri message] at src\ldt\rl_ldt.rs:321:59
 ```
 
 Finally, BCS will run `SumcheckExample::query_and_decide` to run the verifier and record query responses. 
 
 ```
-[Recording Round Oracle] Query 1 leaves: [sumcheck query]
-     at examples\sumcheck\simple_sumcheck.rs:208:30
-[Recording Round Oracle] Query 1 leaves: [oracle access to poly in sumcheck]
-     at examples\sumcheck\simple_sumcheck.rs:218:108
-[Recording Round Oracle] Query 1 leaves: [sumcheck query]
-     at examples\sumcheck\simple_sumcheck.rs:208:30
-[Recording Round Oracle] Query 1 leaves: [oracle access to poly in sumcheck]
-     at examples\sumcheck\simple_sumcheck.rs:218:108
+Oct 04 20:29:33.558  INFO query{position=[429]}: ark_bcs::iop::message: [sumcheck query] at examples\sumcheck\simple_sumcheck.rs:207:30
+Oct 04 20:29:33.559  INFO query{position=[429]}: ark_bcs::iop::message: [oracle access to poly in sumcheck] at examples\sumcheck\simple_sumcheck.rs:215:108
+Oct 04 20:29:33.559  INFO query{position=[83]}: ark_bcs::iop::message: [sumcheck query] at examples\sumcheck\simple_sumcheck.rs:207:30
+Oct 04 20:29:33.560  INFO query{position=[83]}: ark_bcs::iop::message: [oracle access to poly in sumcheck] at examples\sumcheck\simple_sumcheck.rs:215:108
 ```
 
-You can check what `BCSVerifier::verify` does in a similar way. 
+You can check what `BCSVerifier::verify` did in a similar way. 
 
 ## Bonus: Write circuits for the Verifier
 
@@ -974,7 +953,7 @@ The code should be quite similar to native code. Try to implement them yourself!
 
 *Hint: In native code, when we want to sample an integer (e.g`u32`), we first call `sponge.squeeze_bits`, and convert those bits to an integer in little endian order. In constraints, when calculate `query_point`, we use `pow_le` that directly takes the squeezed bits, interpreted in little endian order.*
 
-You can check our implementation at https://github.com/arkworks-rs/bcs/blob/work/examples/sumcheck/simple_sumcheck.rs. 
+You can check our implementation at https://github.com/arkworks-rs/bcs/blob/main/examples/sumcheck/simple_sumcheck.rs. 
 
 Writing main code for the protocol is also quite similar to the native version, and you can out implementation at https://github.com/arkworks-rs/bcs/blob/work/examples/sumcheck/constraints.rs. 
 
@@ -1081,7 +1060,104 @@ And that's it!
 
 ## Bonus: Debug Your IOP Code using `iop_trace!`
 
-TODO: This part will be ready once some test examples are added to show how to use `iop_trace!` to check if `register_iop_structure` is consistent with `prove`. 
+You may recall that anytime we send message using the transcript, or query messages from the oracles, we use a macro called `iop_trace! `. It basically records the position where this macro is called, and when something goes wrong, it can output which one goes wrong. 
+
+One particularly useful application is to check if `register_iop_structure` is consistent with prover code. Now, let's first write a test called `test_register`. Same as `main` code, we generate all necessary parameters and inputs for prover and verifier. 
+
+```rust
+#[test]
+fn test_register() {
+    let mut rng = test_rng();
+    let degrees = (155, 197);
+    let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);
+    let poly1 = DensePolynomial::<Fr>::rand(degrees.1, &mut rng);
+    let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
+    let evaluation_domain = Radix2EvaluationDomain::new(512).unwrap();
+    let fri_parameters = FRIParameters::new(
+        256,
+        vec![1, 3, 1],
+        Radix2CosetDomain::new(evaluation_domain, Fr::one()),
+    );
+    let ldt_parameter = LinearCombinationLDTParameters {
+        fri_parameters,
+        num_queries: 3,
+    };
+    let claimed_sum1 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
+        .evaluate(&poly0)
+        .into_iter()
+        .sum::<Fr>();
+    let claimed_sum2 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
+        .evaluate(&poly1)
+        .into_iter()
+        .sum::<Fr>();
+
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
+    let mt_hash_parameters = MTHashParameters::<FieldMTConfig> {
+        leaf_hash_param: poseidon_parameters(),
+        inner_hash_param: poseidon_parameters(),
+    };
+
+    let vp = PublicInput {
+        sums: (claimed_sum1, claimed_sum2),
+    };
+    let wp = PrivateInput(poly0, poly1);
+    let prover_param = Parameter {
+        degrees,
+        summation_domain,
+        evaluation_domain,
+    };
+```
+
+Then, we can invoke call `ark_bcs::bcs::transcript::test_utils::check_commit_phase_correctness` helper function, which will panic if `register_iop_structure` is inconsistent with the prover code. 
+
+*Note: make sure `test_utils` feature is on.*
+
+```rust
+check_commit_phase_correctness::<
+        _,
+        _,
+        _,
+        SumcheckExample<_>,
+        SumcheckExample<_>,
+        LinearCombinationLDT<_>,
+    >(
+        sponge,
+        &vp,
+        &wp,
+        &prover_param,
+        &ldt_parameter,
+        mt_hash_parameters.clone(),
+    );
+}
+```
+
+The test is also provided in the `examples/sumcheck ` folder of the repo. When you run this test using the following command, you should find the test passes when running this command:
+
+```shell
+cargo test --package ark-bcs --example sumcheck --features r1cs --features test_utils -- test_register --exact
+```
+
+Now, let's manually introduce a bug in `register_iop_structure`. Suppose the verifier tries to send a wrong message. Say: 
+
+```rust
+// verifier should sample two random combination, but sampled three!
+        transcript
+            .squeeze_verifier_field_elements(&[FieldElementSize::Full, FieldElementSize::Full, FieldElementSize::Full]);
+```
+
+ Now let's run the test again! The test should fail, showing the following message: 
+
+```log
+thread 'test_register' panicked at 'assertion failed: `(left == right)`
+  left: `[FieldElements([Fp256(BigInteger256([15868405394323405676, 15996445718776549797, 6686138471952702797, 6934092815371758962])), Fp256(BigInteger256([5499267208319786770, 1299149589602166132, 2231165342563635412, 5630332791626216984]))])]`,
+ right: `[FieldElements([Fp256(BigInteger256([15868405394323405676, 15996445718776549797, 6686138471952702797, 6934092815371758962])), Fp256(BigInteger256([5499267208319786770, 1299149589602166132, 2231165342563635412, 5630332791626216984])), Fp256(BigInteger256([15777789622597396422, 11153390519922978925, 10843330044712850024, 3170697828371625695]))])]`: Inconsistent verifier round #0.
+Prover transcript message trace: [Verifier Random Coefficients] at examples\sumcheck\main.rs:103:55
+Verifier transcript message trace: [Verifier Random Coefficients] at examples\sumcheck\main.rs:190:55
+Prover transcript defines this namespace as [Check commit phase correctness] at src\bcs\transcript.rs:1039:17
+Verifier defines this namespace as [check commit phase correctness] at src\bcs\transcript.rs:1062:13
+```
+
+From this message, we can learn that at least one location of `examples\sumcheck\main.rs:103:55`, `examples\sumcheck\main.rs:190:55` goes wrong, which can greatly save us from detective works!
 
 ## Further Reading: Multi-round example
 
@@ -1098,5 +1174,5 @@ There's an alternative implementation of the example protocol, which contains mu
 
 Note that if original protocol where we sent `r0*poly0`, `r1*poly1` in one round, each query for those two polynomials share one authentication path, which can reduces the proof size. The proof size for multi-round example `~1KB` larger than original example. 
 
-Code can be found in https://github.com/arkworks-rs/bcs/blob/work/examples/sumcheck/multiround_example.rs. If should look very similar to the protocol you just learned. 
+Code can be found in https://github.com/arkworks-rs/bcs/blob/main/examples/sumcheck/multiround_example.rs. If should look very similar to the protocol you just learned. 
 

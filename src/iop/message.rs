@@ -10,6 +10,7 @@ use ark_crypto_primitives::{merkle_tree::Config as MTConfig, MerkleTree};
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::vec::Vec;
+use tracing::info;
 
 /// Contains location of round oracles in a transcript.
 #[derive(Clone, Copy, Debug)]
@@ -128,16 +129,10 @@ pub trait RoundOracle<F: PrimeField>: Sized {
 
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf
     /// `i` at oracle `j`.
-    fn query(&mut self, position: &[usize], _tracer: TraceInfo) -> Vec<Vec<F>> {
-        #[cfg(feature = "print-trace")]
-        {
-            println!(
-                "[{}] Query {} leaves: {}",
-                Self::TYPE,
-                position.len(),
-                _tracer
-            )
-        }
+    #[tracing::instrument(skip(self, tracer))]
+    fn query(&mut self, position: &[usize], tracer: TraceInfo) -> Vec<Vec<F>> {
+        info!("{}", tracer);
+
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
         let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
@@ -170,16 +165,9 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     /// Return the queried coset at `coset_index` of all oracles.
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
     /// in this coset.
-    fn query_coset(&mut self, coset_index: &[usize], _tracer: TraceInfo) -> Vec<Vec<Vec<F>>> {
-        #[cfg(feature = "print-trace")]
-        {
-            println!(
-                "[{}] Query {} cosets: {}",
-                Self::TYPE,
-                coset_index.len(),
-                _tracer
-            )
-        }
+    #[tracing::instrument(skip(self, tracer))]
+    fn query_coset(&mut self, coset_index: &[usize], tracer: TraceInfo) -> Vec<Vec<Vec<F>>> {
+        info!("{}", tracer);
         self.query_coset_without_tracer(coset_index)
     }
 

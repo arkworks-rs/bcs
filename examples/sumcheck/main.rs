@@ -31,6 +31,7 @@ use ark_bcs::{
     ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
     Error,
 };
+use tracing::Level;
 
 use crate::{
     simple_sumcheck::{
@@ -282,6 +283,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
 /// insecure). We assume that size of summation domain < degree of testing poly
 /// < size of evaluation domain
 fn main() {
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
     let mut rng = test_rng();
     let degrees = (155, 197);
     let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);

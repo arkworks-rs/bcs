@@ -21,7 +21,7 @@ use ark_ff::{PrimeField, ToConstraintField};
 use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
 use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge, FieldElementSize};
-use ark_std::{marker::PhantomData, test_rng, One};
+use ark_std::{marker::PhantomData, test_rng, vec, vec::Vec, One};
 
 /// TODO: add a README here describing the dummy protocol
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {

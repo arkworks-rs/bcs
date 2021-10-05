@@ -14,12 +14,12 @@ impl Display for TraceInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> ark_std::fmt::Result {
         if let Some(description) = self.description {
             f.write_fmt(format_args!(
-                "[{}]\n     at {}:{}:{}",
+                "[{}] at {}:{}:{}",
                 description, self.file_name, self.line, self.column
             ))
         } else {
             f.write_fmt(format_args!(
-                "[anonymous]\n     at {}:{}:{}",
+                "[anonymous] at {}:{}:{}",
                 self.file_name, self.line, self.column
             ))
         }
@@ -75,10 +75,13 @@ macro_rules! iop_trace {
 mod compile_tests {
     #[test]
     fn test_it_compiles() {
-        let tracer1 = iop_trace!();
+        let _tracer1 = iop_trace!();
 
-        let tracer2 = iop_trace!("some message title");
-        eprintln!("tracer1: {}", tracer1);
-        eprintln!("tracer2: {}", tracer2);
+        let _tracer2 = iop_trace!("some message title");
+        #[cfg(feature = "std")]
+        {
+            eprintln!("tracer1: {}", _tracer1);
+            eprintln!("tracer2: {}", _tracer2);
+        }
     }
 }

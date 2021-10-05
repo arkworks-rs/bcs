@@ -25,8 +25,9 @@ use ark_std::{boxed::Box, collections::BTreeMap, mem::take};
 pub struct NameSpace {
     /// The global id of current namespace in the transcript.
     pub id: u64,
+    /// Trace for the current namespace
     #[derivative(PartialEq = "ignore", PartialOrd = "ignore", Ord = "ignore")]
-    pub(crate) trace: TraceInfo,
+    pub trace: TraceInfo,
     /// The protocol id of the parent protocol in current transcript.
     /// if `self.id==0`, then this field should be 0.
     #[derivative(PartialEq = "ignore", PartialOrd = "ignore", Ord = "ignore")]
@@ -268,12 +269,16 @@ where
     /// Submit all prover oracles in this round, and set pending round message
     /// to `None` # Panic
     /// Panic if current prover round messages is `None` or `VerifierMessage`
+    #[tracing::instrument(
+        skip(self, namespace, trace),
+        fields(namespace = %namespace.trace)
+    )]
     pub fn submit_prover_current_round(
         &mut self,
         namespace: NameSpace,
         trace: TraceInfo,
     ) -> Result<MsgRoundRef, Error> {
-        info!("[Prover Transcript] Prover submitted round {}", trace);
+        info!("{}", trace);
 
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
@@ -320,12 +325,16 @@ where
     /// Submit all verifier messages in this round, and set pending round
     /// message to `None`. # Panic
     /// Panic if current verifier round messages is `None` or `ProverMessage`
+    #[tracing::instrument(
+        skip(self, namespace, trace),
+        fields(namespace = %namespace.trace)
+    )]
     pub fn submit_verifier_current_round(
         &mut self,
         namespace: NameSpace,
         trace: TraceInfo,
     ) -> MsgRoundRef {
-        info!("[Prover Transcript] Verifier submitted round {}", trace);
+        info!("{}", trace);
 
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::VerifierMessage(round_msg) = pending_message {
@@ -721,12 +730,18 @@ where
     /// parameter is managed by LDT. # Panic
     /// This function will panic is prover message structure contained in proof
     /// is not consistent with `expected_message_structure`.
+    #[tracing::instrument(
+        name="verifier: receive_prover_current_round",
+        skip(self, ns, trace, expected_message_info),
+        fields(namespace = %ns.trace)
+    )]
     pub fn receive_prover_current_round(
         &mut self,
         ns: NameSpace,
         mut expected_message_info: ProverRoundMessageInfo,
         trace: TraceInfo,
     ) -> MsgRoundRef {
+        info!("{}", trace);
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
             // LDT is used, so replace its localization parameter with the one given by LDT
             let localization_parameters_from_ldt = expected_message_info
@@ -779,11 +794,17 @@ where
     }
 
     /// Submit all verifier messages in this round.
+    #[tracing::instrument(
+        name="verifier: submit_verifier_current_round",
+        skip(self, namespace, trace),
+        fields(namespace = %namespace.trace)
+    )]
     pub fn submit_verifier_current_round(
         &mut self,
         namespace: NameSpace,
         trace: TraceInfo,
     ) -> MsgRoundRef {
+        info!("{}", trace);
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifier_messages.push(pending_message);
         self.attach_latest_verifier_round_to_namespace(namespace, trace)
@@ -928,7 +949,7 @@ pub mod test_utils {
             .messages_store
             .keys()
             .for_each(|key| {
-                let namespace_diag = format!(
+                let namespace_diag = ark_std::format!(
                     "Prover transcript defines this namespace as {}\n\
              Verifier defines this namespace as {}\n",
                     prover_transcript

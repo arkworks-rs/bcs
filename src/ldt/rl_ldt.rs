@@ -372,7 +372,6 @@ fn le_bits_to_usize(bits: &[bool]) -> usize {
 }
 
 // return evaluation of x^{degree_to_raise} at domain
-// TODO: we need one test for this function
 fn degree_raise_poly_eval<F: PrimeField>(
     domain: Radix2CosetDomain<F>,
     degree_to_raise: u64,
@@ -437,7 +436,7 @@ mod tests {
         UVPolynomial,
     };
     use ark_sponge::{poseidon::PoseidonSponge, CryptographicSponge};
-    use ark_std::{test_rng, One, Zero};
+    use ark_std::{test_rng, vec, vec::Vec, One, Zero};
 
     #[test]
     fn test_degree_raise_poly() {

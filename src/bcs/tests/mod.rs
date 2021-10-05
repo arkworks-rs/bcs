@@ -25,7 +25,7 @@ use ark_crypto_primitives::{
 };
 use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
 use ark_sponge::{poseidon::PoseidonSponge, CryptographicSponge};
-use ark_std::One;
+use ark_std::{vec, One};
 
 pub(crate) type Fr = ark_bls12_381::Fr;
 pub(crate) type H = poseidon::CRH<Fr>;
