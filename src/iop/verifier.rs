@@ -59,13 +59,18 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
         public_input: &Self::PublicInput,
         oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error>;
 }
 
-/// An extension for IOPVerifier, requiring that the verifier state type and
-/// parameter type is consistent with what is expected from the prover
-/// implementation. Any IOPVerifier that satisfies this requirement
+/// `IOPVerifierForProver` is an auto-implemented trait. User does not
+/// need to derive this trait manually.
+///
+/// This trait is an extension for `IOPVerifier`, requiring that the verifier
+/// state type and parameter type is consistent with what is expected from the
+/// prover implementation.
+///
+/// Any IOPVerifier that satisfies this requirement
 /// automatically implements this trait.
 pub trait IOPVerifierForProver<S: CryptographicSponge, F: PrimeField + Absorb, P: IOPProver<F>>:
     IOPVerifier<S, F>
@@ -92,11 +97,18 @@ where
 {
 }
 
-/// This trait is an extension for IOPProver, which requires that the prover and
-/// verifier do not need to access messages sent in other protocol under the
-/// same transcript. This essentially means that `OracleRefs` is `()`. Any
-/// protocol that satisfies this property will automatically implement this
-/// trait.
+/// `IOPVerifierWithNoOracleRefs` is an auto-implemented trait. User does not
+/// need to derive this trait manually.
+///
+/// This trait is an extension for `IOPVerifier`, which requires that the
+/// verifier do not need to have oracle access to messages sent in other
+/// namespaces in the same transcript. Most protocols that is not a subprotocol
+/// satisfy this property.
+///
+/// Protocols that implements this trait can be used for BCS transform.
+///
+/// Any prover that `RoundOracleRefs = ()` will implement this trait
+/// automatically.
 pub trait IOPVerifierWithNoOracleRefs<S: CryptographicSponge, F: PrimeField + Absorb>:
     IOPVerifier<S, F, OracleRefs = ()>
 {

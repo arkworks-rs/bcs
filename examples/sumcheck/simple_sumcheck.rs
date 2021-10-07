@@ -187,7 +187,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
                                          * this `oracle_refs` using the message in current
                                          * protocol */
         random_oracle: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        tramscript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // query a random point in evaluation domain
         let evaluation_domain = verifier_parameter.evaluation_domain;
@@ -202,7 +202,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
             .sum::<usize>();
         let query_point = evaluation_domain.element(query);
 
-        let query_responses = messages_in_commit_phase
+        let query_responses = tramscript_messages
             .prover_message(namespace, 0)
             .query(&[query], iop_trace!("sumcheck query"))
             .pop()
@@ -212,7 +212,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         let vh_point = query_point.pow(&[summation_domain.size]) - F::one(); // evaluate over vanishing poly
 
         // f(s)
-        let expected = messages_in_commit_phase.prover_message_using_ref(oracle_refs.poly).query(&[query], iop_trace!("oracle access to poly in sumcheck"))
+        let expected = tramscript_messages.prover_message_using_ref(oracle_refs.poly).query(&[query], iop_trace!("oracle access to poly in sumcheck"))
             .remove(0)// there's only one query, so always zero
             .remove(public_input.which); // we want to get `which` oracle in this round
                                          // h(s) * v_h(s) + (s * p(s) + claimed_sum/summation_domain.size)
@@ -303,7 +303,7 @@ pub mod constraints {
             public_input: &Self::PublicInputVar,
             oracle_refs: &Self::OracleRefs,
             sponge: &mut S::Var,
-            messages_in_commit_phase: &mut MessagesCollection<
+            tramscript_messages: &mut MessagesCollection<
                 &mut SuccinctRoundOracleVarView<CF>,
                 VerifierMessageVar<CF>,
             >,
@@ -320,7 +320,7 @@ pub mod constraints {
                 .collect::<Vec<_>>();
             let query_point = FpVar::constant(evaluation_domain.group_gen).pow_le(&query)?;
 
-            let query_responses = messages_in_commit_phase
+            let query_responses = tramscript_messages
                 .prover_message(namespace, 0)
                 .query(&[query.clone()], iop_trace!("sumcheck query"))?
                 .pop()
@@ -332,7 +332,7 @@ pub mod constraints {
                 - FpVar::constant(CF::one());
 
             // f(s)
-            let expected = messages_in_commit_phase
+            let expected = tramscript_messages
                 .prover_message_using_ref(oracle_refs.poly)
                 .query(
                     &[query.clone()],
