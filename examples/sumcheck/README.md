@@ -201,7 +201,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         public_input: &Self::PublicInput,
         oracle_refs: &Self::OracleRefs, 
         random_oracle: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        tramscript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         todo!();
     }
@@ -344,7 +344,7 @@ fn query_and_decide<O: RoundOracle<F>>(
                                      * this `oracle_refs` using the message in current
                                      * protocol */
     random_oracle: &mut S,
-    messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+    tramscript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
 ) -> Result<Self::VerifierOutput, Error> {
 ```
 
@@ -374,7 +374,7 @@ let query_point: F = evaluation_domain.element(query);
 Next, let query `h(s)`and`p(s)`. Adding `iop_trace!` here can help us debugging in case something does wrong. 
 
 ```rust
-let queried_points = messages_in_commit_phase
+let queried_points = tramscript_messages
     .prover_message(namespace, 0)
     .query(&[query], iop_trace!("sumcheck query"))
     .pop()
@@ -391,10 +391,10 @@ let vh_point = summation_domain
     .evaluate(&query_point);
 ```
 
-Then, we can query `f(s)`. We can pass `oracle_refs.poly` to `messages_in_commit_phase` to get a reference to the oracle of `f`. 
+Then, we can query `f(s)`. We can pass `oracle_refs.poly` to `tramscript_messages` to get a reference to the oracle of `f`. 
 
 ```rust
-let expected = messages_in_commit_phase.prover_message_using_ref(oracle_refs.poly).query(&[query], iop_trace!("oracle access to poly in sumcheck"))
+let expected = tramscript_messages.prover_message_using_ref(oracle_refs.poly).query(&[query], iop_trace!("oracle access to poly in sumcheck"))
     .remove(0)// there's only one query, so always zero
     .remove(public_input.which); // we want to get `which` oracle in this round
                                  // h(s) * v_h(s) + (s * p(s) + claimed_sum/summation_domain.size)
@@ -653,7 +653,7 @@ fn query_and_decide<O: RoundOracle<F>>(
     public_input: &Self::PublicInput,
     _oracle_refs: &Self::OracleRefs,
     sponge: &mut S,
-    messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+    tramscript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
 ) -> Result<Self::VerifierOutput, Error> {
 ```
 
@@ -661,13 +661,13 @@ First, let's get a reference to the oracle that prover just sent in this protoco
 
 ```rust
 let oracle_refs_sumcheck =
-    SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
+    SumcheckOracleRef::new(*tramscript_messages.prover_message_as_ref(namespace, 0));
 ```
 
 Now get the random coefficients the verifier sampled in commit phase, and compute the asserted sums of `r0*poly[0]`, `r1*poly[1]` using those coefficients. 
 
 ```rust
-let random_coeffs = messages_in_commit_phase.verifier_message(namespace, 0)[0]
+let random_coeffs = tramscript_messages.verifier_message(namespace, 0)[0]
     .clone()
     .try_into_field_elements()
     .expect("invalid verifier message type");
@@ -677,12 +677,12 @@ let asserted_sums = (
 );
 ```
 
-Finally, let's invoke sumcheck subprotocols! In `query`, we will instead use `messages_in_commit_phase` struct to get subspace. `messages_in_commit_phase.get_subprotocol_namespace(namespace, 0)` will return the first subspace created during `register_iop_structure`. Similarly, `messages_in_commit_phase.get_subprotocol_namespace(namespace, 1)` will return the second subspace created during `register_iop_structure`. 
+Finally, let's invoke sumcheck subprotocols! In `query`, we will instead use `tramscript_messages` struct to get subspace. `tramscript_messages.get_subprotocol_namespace(namespace, 0)` will return the first subspace created during `register_iop_structure`. Similarly, `tramscript_messages.get_subprotocol_namespace(namespace, 1)` will return the second subspace created during `register_iop_structure`. 
 
 ```rust
 // invoke first sumcheck protocol
 let mut result = SimpleSumcheck::query_and_decide(
-    messages_in_commit_phase.get_subprotocol_namespace(namespace, 0),
+    tramscript_messages.get_subprotocol_namespace(namespace, 0),
     &SumcheckVerifierParameter {
         degree: verifier_parameter.degrees.0,
         evaluation_domain: verifier_parameter.evaluation_domain,
@@ -691,12 +691,12 @@ let mut result = SimpleSumcheck::query_and_decide(
     &SumcheckPublicInput::new(asserted_sums.0, 0),
     &oracle_refs_sumcheck,
     sponge,
-    messages_in_commit_phase,
+    tramscript_messages,
 )?;
 
 // invoke second sumcheck protocol
 result &= SimpleSumcheck::query_and_decide(
-    messages_in_commit_phase.get_subprotocol_namespace(namespace, 1),
+    tramscript_messages.get_subprotocol_namespace(namespace, 1),
     &SumcheckVerifierParameter {
         degree: verifier_parameter.degrees.1,
         evaluation_domain: verifier_parameter.evaluation_domain,
@@ -705,7 +705,7 @@ result &= SimpleSumcheck::query_and_decide(
     &SumcheckPublicInput::new(asserted_sums.1, 1),
     &oracle_refs_sumcheck,
     sponge,
-    messages_in_commit_phase,
+    tramscript_messages,
 )?;
 
 Ok(result)
@@ -942,7 +942,7 @@ fn query_and_decide_var(
     public_input: &Self::PublicInputVar,
     oracle_refs: &Self::OracleRefs,
     sponge: &mut S::Var,
-    messages_in_commit_phase: &mut MessagesCollection<
+    tramscript_messages: &mut MessagesCollection<
         &mut SuccinctRoundOracleVarView<CF>,
         VerifierMessageVar<CF>,
     >,

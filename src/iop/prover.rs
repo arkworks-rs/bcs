@@ -35,11 +35,18 @@ pub trait IOPProver<F: PrimeField + Absorb> {
         MT::InnerDigest: Absorb;
 }
 
-/// This trait is an extension for IOPProver, which requires that the prover and
-/// verifier do not need to access messages sent in other protocol under the
-/// same transcript. This essentially means that `OracleRefs` is `()`. Any
-/// protocol that satisfies this property will automatically implement this
-/// trait.
+/// `IOPProverWithNoOracleRefs` is an auto-implemented trait. User does not need
+/// to derive this trait manually.
+///
+/// This trait is an extension for IOPProver, which requires that the prover do
+/// not need to have access to messages sent in other namespaces in the
+/// same transcript. Most protocols that is not a subprotocol satisfy this
+/// property.
+///
+/// Protocols that implements this trait can be used for BCS transform.
+///
+/// Any prover that `RoundOracleRefs = ()` will implement this trait
+/// automatically.
 pub trait IOPProverWithNoOracleRefs<F: PrimeField + Absorb>:
     IOPProver<F, RoundOracleRefs = ()>
 {

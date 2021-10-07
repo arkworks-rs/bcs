@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-//!This crate provides implementations of public coin RS-IOP and BCS Transform.
+//! This crate provides implementations of public coin RS-IOP and BCS Transform.
 
 #![deny(unused_import_braces, unused_qualifications, trivial_casts)]
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
