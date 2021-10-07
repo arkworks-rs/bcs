@@ -22,6 +22,10 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 ///   message oracle.
 pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// Verifier Output
+    ///
+    /// TODO: Consider if we need to make sure `success` state is in
+    /// `VerifierOutput` by using a trait. If verification failed, set `success`
+    /// to false instead of panicking or returning `Err` result.
     type VerifierOutput: Clone;
     /// Verifier Parameter. Verifier parameter can be accessed in
     /// `register_iop_structure`, and can affect transcript structure
