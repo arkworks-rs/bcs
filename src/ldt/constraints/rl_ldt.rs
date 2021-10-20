@@ -25,7 +25,7 @@ use ark_std::vec::Vec;
 impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
     fn register_iop_structure_var<MT, MTG, S>(
         param: &Self::LDTParameters,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<F>>,
+        num_codewords_oracles: usize,
         ldt_transcript: &mut SimulationTranscriptVar<F, MT, MTG, S>,
     ) -> Result<(), SynthesisError>
     where
@@ -36,11 +36,7 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
         MTG::InnerDigest: AbsorbGadget<F>,
     {
         let namespace = NameSpace::root(iop_trace!("ldt root"));
-        let num_oracles = codewords_oracles
-            .iter()
-            .map(|round| round.oracle.info.num_reed_solomon_codes_oracles())
-            .sum::<usize>();
-        ldt_transcript.squeeze_verifier_field_elements(num_oracles)?;
+        ldt_transcript.squeeze_verifier_field_elements(num_codewords_oracles)?;
         ldt_transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         let mut current_domain = param.fri_parameters.domain;

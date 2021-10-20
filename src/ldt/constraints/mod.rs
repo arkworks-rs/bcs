@@ -24,9 +24,12 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
     /// messages and verifier state using the sponge provided in the
     /// simulation transcript. Returns the verifier state for query and decision
     /// phase.
+    /// * `num_codewords_oracles`: sum of number of codeword oracles in each
+    ///   round.
     fn register_iop_structure_var<MT, MTG, S>(
         param: &Self::LDTParameters,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
+        num_codewords_oracles: usize,
+        // TODO: add virtual oracle here
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
     ) -> Result<(), SynthesisError>
     where
@@ -43,6 +46,7 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
         param: &Self::LDTParameters,
         random_oracle: &mut S::Var,
         codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
+        // TODO: add virtual oracle here
         ldt_prover_message_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
         ldt_verifier_messages: &[Vec<VerifierMessageVar<CF>>],
     ) -> Result<(), SynthesisError>;
@@ -51,7 +55,7 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
 impl<CF: PrimeField + Absorb> LDTWithGadget<CF> for NoLDT<CF> {
     fn register_iop_structure_var<MT, MTG, S>(
         _param: &Self::LDTParameters,
-        _codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
+        _num_codewords_oracles: usize,
         _transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
     ) -> Result<(), SynthesisError>
     where

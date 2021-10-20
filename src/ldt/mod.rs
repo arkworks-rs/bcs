@@ -7,7 +7,7 @@ use ark_sponge::{Absorb, CryptographicSponge};
 
 use crate::{
     bcs::transcript::{SimulationTranscript, Transcript},
-    iop::message::{RoundOracle, SuccinctRoundOracleView, VerifierMessage},
+    iop::message::{RoundOracle, VerifierMessage},
     Error,
 };
 use ark_std::vec::Vec;
@@ -47,7 +47,7 @@ pub trait LDT<F: PrimeField + Absorb> {
     /// phase.
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         param: &Self::LDTParameters,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>, /* FRI only gets degree bound information from this phase */
+        num_codewords_oracles: usize,
         transcript: &mut SimulationTranscript<MT, S, F>,
     ) where
         MT::InnerDigest: Absorb;
@@ -108,7 +108,7 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
 
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         _param: &Self::LDTParameters,
-        _codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>,
+        _num_codewords_oracles: usize,
         _transcript: &mut SimulationTranscript<MT, S, F>,
     ) where
         MT::InnerDigest: Absorb,

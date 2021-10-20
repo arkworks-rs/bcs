@@ -1,6 +1,6 @@
 use crate::{
     bcs::transcript::{NameSpace, SimulationTranscript, Transcript},
-    iop::message::{ProverRoundMessageInfo, RoundOracle, SuccinctRoundOracleView, VerifierMessage},
+    iop::message::{ProverRoundMessageInfo, RoundOracle, VerifierMessage},
     ldt::LDT,
     Error,
 };
@@ -172,18 +172,14 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
 
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         params: &Self::LDTParameters,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleView<F>>,
+        num_codewords_oracles: usize,
         ldt_transcript: &mut SimulationTranscript<MT, S, F>,
     ) where
         MT::InnerDigest: Absorb,
     {
         let namespace = NameSpace::root(iop_trace!("LDT register iop structure"));
-        let num_oracles = codewords_oracles
-            .iter()
-            .map(|round| round.oracle.info.num_reed_solomon_codes_oracles())
-            .sum::<usize>();
         ldt_transcript.squeeze_verifier_field_elements(
-            &(0..num_oracles)
+            &(0..num_codewords_oracles)
                 .map(|_| FieldElementSize::Full)
                 .collect::<Vec<_>>(),
         );
@@ -420,6 +416,7 @@ mod tests {
             },
             MTHashParameters,
         },
+        iop::message::RoundOracle,
         ldt::{
             rl_ldt::{
                 degree_raise_poly_eval, degree_raise_poly_query, LinearCombinationLDT,
@@ -556,7 +553,10 @@ mod tests {
 
             LinearCombinationLDT::register_iop_structure(
                 &ldt_params,
-                codewords_oracle_view.iter_mut().collect(),
+                codewords_oracle_view
+                    .iter()
+                    .map(|oracle| oracle.num_reed_solomon_codes_oracles())
+                    .sum::<usize>(),
                 &mut simulation_transcript,
             );
 

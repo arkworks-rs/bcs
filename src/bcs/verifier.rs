@@ -5,7 +5,7 @@ use crate::{
         MTHashParameters,
     },
     iop::{
-        message::MessagesCollection,
+        message::{MessagesCollection, RoundOracle},
         verifier::{IOPVerifier, IOPVerifierWithNoOracleRefs},
     },
     ldt::{NoLDT, LDT},
@@ -101,7 +101,10 @@ where
             );
             L::register_iop_structure(
                 ldt_params,
-                prover_messages_view.iter_mut().collect(),
+                prover_messages_view
+                    .iter()
+                    .map(|oracle| oracle.num_reed_solomon_codes_oracles())
+                    .sum::<usize>(),
                 &mut ldt_transcript,
             );
 

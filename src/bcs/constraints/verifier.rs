@@ -106,7 +106,10 @@ where
             );
             L::register_iop_structure_var::<_, _, S>(
                 ldt_params,
-                prover_messages_view.iter_mut().collect(),
+                prover_messages_view
+                    .iter()
+                    .map(|oracle| oracle.num_reed_solomon_codes_oracles())
+                    .sum::<usize>(),
                 &mut ldt_transcript,
             )?;
             debug_assert!(
