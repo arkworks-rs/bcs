@@ -1,10 +1,14 @@
 <h1 align="center">arkworks::bcs</h1>
 
 <p align="center">
-    <a href="https://github.com/arkworks-rs/sponge/blob/master/LICENSE-APACHE">
+    <a href="https://github.com/arkworks-rs/bcs/actions/workflows/ci.yml">
+        <img src="https://github.com/arkworks-rs/bcs/actions/workflows/ci.yml/badge.svg?branch=main">
+    </a>
+    <a href="https://github.com/arkworks-rs/bcs/blob/main/LICENSE-APACHE">
         <img src="https://img.shields.io/badge/license-APACHE-blue.svg"></a>
-    <a href="https://github.com/arkworks-rs/sponge/blob/master/LICENSE-MIT">
+    <a href="https://github.com/arkworks-rs/bcs/blob/main/LICENSE-MIT">
         <img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+    <a href="https://deps.rs/repo/github/arkworks-rs/bcs"><img src="https://deps.rs/repo/github/arkworks-rs/bcs/status.svg"></a>
 </p>
 
 `ark-bcs` is a Rust library that provides implementations of public coin RS-IOP and BCS Transform. This library is released under the MIT License

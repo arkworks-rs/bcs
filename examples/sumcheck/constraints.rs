@@ -140,7 +140,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
         public_input: &Self::PublicInputVar,
         _oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
-        messages_in_commit_phase: &mut MessagesCollection<
+        tramscript_messages: &mut MessagesCollection<
             &mut SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,
@@ -161,7 +161,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
         // invoke first sumcheck protocol
         let result1 = <SimpleSumcheck<_> as IOPVerifierWithGadget<S, _>>::query_and_decide_var(
             ark_relations::ns!(cs, "first sumcheck").cs(),
-            messages_in_commit_phase.get_subprotocol_namespace(namespace, 0),
+            tramscript_messages.get_subprotocol_namespace(namespace, 0),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -170,12 +170,12 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
             &SumcheckPublicInputVar::new(asserted_sums.0, 0),
             &oracle_refs_sumcheck,
             sponge,
-            messages_in_commit_phase,
+            tramscript_messages,
         )?;
 
         let result2 = <SimpleSumcheck<_> as IOPVerifierWithGadget<S, _>>::query_and_decide_var(
             ark_relations::ns!(cs, "first sumcheck").cs(),
-            messages_in_commit_phase.get_subprotocol_namespace(namespace, 1),
+            tramscript_messages.get_subprotocol_namespace(namespace, 1),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -184,7 +184,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
             &SumcheckPublicInputVar::new(asserted_sums.1, 1),
             &oracle_refs_sumcheck,
             sponge,
-            messages_in_commit_phase,
+            tramscript_messages,
         )?;
 
         result1.and(&result2)
