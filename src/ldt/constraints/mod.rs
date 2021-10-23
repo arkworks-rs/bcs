@@ -51,7 +51,7 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
         sponge: &mut S::Var,
         codewords: &[MsgRoundRef],
         // TODO: add virtual oracle here
-        messages_in_commit_phase: &mut MessagesCollection<
+        transcript_messages: &mut MessagesCollection<
             SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,
@@ -81,14 +81,14 @@ impl<CF: PrimeField + Absorb> LDTWithGadget<CF> for NoLDT<CF> {
         _sponge: &mut S::Var,
         codewords: &[MsgRoundRef],
         // TODO: add virtual oracle here
-        messages_in_commit_phase: &mut MessagesCollection<
+        transcript_messages: &mut MessagesCollection<
             SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,
     ) -> Result<(), SynthesisError> {
         // nop, but we need to check that all codewords have no RS codes
         let no_rs_code = codewords.iter().all(|round| {
-            messages_in_commit_phase
+            transcript_messages
                 .prover_message_using_ref(*round)
                 .num_reed_solomon_codes_oracles()
                 == 0

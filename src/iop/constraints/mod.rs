@@ -69,7 +69,7 @@ where
         public_input_var: &Self::PublicInputVar,
         oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
-        messages_in_commit_phase: &mut MessagesCollection<
+        transcript_messages: &mut MessagesCollection<
             SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,

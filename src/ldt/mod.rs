@@ -64,7 +64,7 @@ pub trait LDT<F: PrimeField + Absorb> {
         param: &Self::LDTParameters,
         sponge: &mut S,
         codewords: &[MsgRoundRef],
-        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<(), Error>;
 }
 
@@ -128,11 +128,11 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
         _param: &Self::LDTParameters,
         _sponge: &mut S,
         codewords: &[MsgRoundRef],
-        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<(), Error> {
         // nop, but we need to check that all codewords have no RS codes
         let no_rs_code = codewords.iter().all(|round| {
-            messages_in_commit_phase
+            transcript_messages
                 .prover_message_using_ref(*round)
                 .num_reed_solomon_codes_oracles()
                 == 0

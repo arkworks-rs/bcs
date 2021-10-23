@@ -100,7 +100,7 @@ where
             .map(|m| m.get_view())
             .collect::<Vec<_>>();
 
-        let mut messages_in_commit_phase = MessagesCollection::new(
+        let mut transcript_messages = MessagesCollection::new(
             prover_message_view,
             transcript.reconstructed_verifier_messages,
             transcript.bookkeeper,
@@ -114,7 +114,7 @@ where
             ldt_params,
             &mut sponge,
             &codewords,
-            &mut messages_in_commit_phase,
+            &mut transcript_messages,
         )?;
 
         // verify the protocol (we can use a new view)
@@ -124,7 +124,7 @@ where
             public_input,
             &(),
             &mut sponge,
-            &mut messages_in_commit_phase,
+            &mut transcript_messages,
         )?;
 
         // verify all authentication paths
@@ -134,16 +134,13 @@ where
         let all_paths = proof.prover_oracles_mt_path.clone();
         let all_mt_roots = &proof.prover_messages_mt_root;
 
+        assert_eq!(transcript_messages.prover_messages.len(), all_paths.len());
         assert_eq!(
-            messages_in_commit_phase.prover_messages.len(),
-            all_paths.len()
-        );
-        assert_eq!(
-            messages_in_commit_phase.prover_messages.len(),
+            transcript_messages.prover_messages.len(),
             all_mt_roots.len()
         );
 
-        messages_in_commit_phase
+        transcript_messages
             .prover_messages
             .iter()
             .zip(all_paths)

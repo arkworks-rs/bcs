@@ -242,7 +242,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         param: &Self::LDTParameters,
         sponge: &mut S,
         codewords: &[MsgRoundRef],
-        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<(), Error> {
         // calculate random coset indices for each query
         let codeword_log_num_cosets = param.fri_parameters.domain.dim()
@@ -250,7 +250,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         let query_indices = (0..param.num_queries)
             .map(|_| le_bits_to_usize(&sponge.squeeze_bits(codeword_log_num_cosets)));
         // restore random coefficients and alphas
-        let random_coefficients = messages_in_commit_phase.verifier_message(namespace, 0)[0]
+        let random_coefficients = transcript_messages.verifier_message(namespace, 0)[0]
             .clone()
             .try_into_field_elements()
             .unwrap();
@@ -258,7 +258,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         // verifier message from index 1 to num_alphas are alphas
         let alphas = (1..param.fri_parameters.localization_parameters.len() + 1).map(| i|  
             // TODO: prover and verifier mismatches on this message
-             messages_in_commit_phase.verifier_message(namespace, i))
+             transcript_messages.verifier_message(namespace, i))
             .map(|vm| {
                 assert_eq!(vm.len(), 1);
                 let vm_curr = vm[0] // each round have one message 
@@ -285,7 +285,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 codewords
                     .iter()
                     .map(|oracle| {
-                        let oracle = messages_in_commit_phase.prover_message_using_ref(*oracle);
+                        let oracle = transcript_messages.prover_message_using_ref(*oracle);
                         let query_responses = oracle
                             .query_coset(&[query_indices[0]], iop_trace!("rl_ldt query codewords"))
                             .pop()
@@ -319,12 +319,12 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     });
 
                 // get query responses in ldt prover messages oracles
-                assert_eq!(messages_in_commit_phase.num_prover_rounds(namespace), query_indices.len());
+                assert_eq!(transcript_messages.num_prover_rounds(namespace), query_indices.len());
                 let round_oracle_responses = query_indices[1..]
                     .iter()
-                    .zip(messages_in_commit_phase.prover_messages(namespace).clone().into_iter())
+                    .zip(transcript_messages.prover_messages(namespace).clone().into_iter())
                     .map(|(query_index, msg)| {
-                        let msg = messages_in_commit_phase.prover_message_using_ref(msg); 
+                        let msg = transcript_messages.prover_message_using_ref(msg); 
                         let mut response = msg
                             .query_coset(&[*query_index], iop_trace!("rl_ldt query fri message"))
                             .pop()
@@ -335,10 +335,10 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     .collect::<Vec<_>>();
 
                 // get final polynomial coefficients
-                let final_polynomial_coeffs = {let &oracle_ref = messages_in_commit_phase.prover_messages(namespace)
+                let final_polynomial_coeffs = {let &oracle_ref = transcript_messages.prover_messages(namespace)
                     .last()
                     .unwrap();
-                messages_in_commit_phase.prover_message_using_ref(oracle_ref)} 
+                transcript_messages.prover_message_using_ref(oracle_ref)} 
                     .get_short_message(0, iop_trace!("final poly coefficients"))
                     .to_vec();
                 let total_shrink_factor = param

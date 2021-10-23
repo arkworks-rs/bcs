@@ -117,7 +117,7 @@ where
         // extract things from main transcript
         let mut sponge = transcript.sponge;
 
-        let mut messages_in_commit_phase = MessagesCollection::new(
+        let mut transcript_messages = MessagesCollection::new(
             transcript.prover_message_oracles,
             transcript.verifier_messages,
             transcript.bookkeeper,
@@ -131,7 +131,7 @@ where
             &ldt_params,
             &mut sponge,
             &codewords,
-            &mut messages_in_commit_phase,
+            &mut transcript_messages,
         )?;
 
         // run main verifier code to obtain all queries
@@ -142,17 +142,17 @@ where
             public_input,
             &(),
             &mut sponge,
-            &mut messages_in_commit_phase,
+            &mut transcript_messages,
         )?;
 
         // convert oracles to succinct oracle
-        let all_succinct_oracles: Vec<_> = messages_in_commit_phase
+        let all_succinct_oracles: Vec<_> = transcript_messages
             .prover_messages
             .iter()
             .map(|x| x.get_succinct_oracle())
             .collect();
 
-        let all_queries: Vec<_> = messages_in_commit_phase
+        let all_queries: Vec<_> = transcript_messages
             .prover_messages
             .iter()
             .map(|msg| msg.queried_coset_index.clone())

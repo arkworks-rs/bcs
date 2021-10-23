@@ -244,21 +244,19 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
         public_input: &Self::PublicInput,
         _oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // which oracle we are using to sumcheck
-        let poly0_ref =
-            SumcheckOracleRef::new(messages_in_commit_phase.prover_messages(namespace)[0]);
-        let poly1_ref =
-            SumcheckOracleRef::new(messages_in_commit_phase.prover_messages(namespace)[1]);
+        let poly0_ref = SumcheckOracleRef::new(transcript_messages.prover_messages(namespace)[0]);
+        let poly1_ref = SumcheckOracleRef::new(transcript_messages.prover_messages(namespace)[1]);
 
         // get the r0, r1 we squeezed in commit phase
-        let r0 = messages_in_commit_phase.verifier_message(namespace, 0)[0]
+        let r0 = transcript_messages.verifier_message(namespace, 0)[0]
             .clone()
             .try_into_field_elements()
             .expect("invalid verifier message type")
             .remove(0);
-        let r1 = messages_in_commit_phase.verifier_message(namespace, 1)[0]
+        let r1 = transcript_messages.verifier_message(namespace, 1)[0]
             .clone()
             .try_into_field_elements()
             .expect("invalid verifier message type")
@@ -268,7 +266,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
 
         // invoke first sumcheck protocol
         let mut result = SimpleSumcheck::query_and_decide(
-            messages_in_commit_phase.get_subprotocol_namespace(namespace, 0),
+            transcript_messages.get_subprotocol_namespace(namespace, 0),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -277,12 +275,12 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
             &SumcheckPublicInput::new(asserted_sums.0, 0),
             &poly0_ref,
             sponge,
-            messages_in_commit_phase,
+            transcript_messages,
         )?;
 
         // invoke second sumcheck protocol
         result &= SimpleSumcheck::query_and_decide(
-            messages_in_commit_phase.get_subprotocol_namespace(namespace, 1),
+            transcript_messages.get_subprotocol_namespace(namespace, 1),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -291,7 +289,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
             &SumcheckPublicInput::new(asserted_sums.1, 0),
             &poly1_ref,
             sponge,
-            messages_in_commit_phase,
+            transcript_messages,
         )?;
 
         Ok(result)
