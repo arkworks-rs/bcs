@@ -70,7 +70,7 @@ where
         oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
         messages_in_commit_phase: &mut MessagesCollection<
-            &mut SuccinctRoundOracleVarView<CF>,
+            SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,
     ) -> Result<Self::VerifierOutputVar, SynthesisError>;

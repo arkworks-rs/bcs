@@ -172,7 +172,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         _public_input: &Self::PublicInput,
         _verifier_state: &Self::OracleRefs,
         _sponge: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // verify if message is indeed correct
         let mut rng = test_rng();

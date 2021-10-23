@@ -59,7 +59,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
         public_input: &Self::PublicInput,
         oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error>;
 }
 

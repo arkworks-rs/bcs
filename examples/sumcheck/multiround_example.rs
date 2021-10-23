@@ -244,13 +244,13 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F>
         public_input: &Self::PublicInput,
         _oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // which oracle we are using to sumcheck
         let poly0_ref =
-            SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
+            SumcheckOracleRef::new(messages_in_commit_phase.prover_messages(namespace)[0]);
         let poly1_ref =
-            SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 1));
+            SumcheckOracleRef::new(messages_in_commit_phase.prover_messages(namespace)[1]);
 
         // get the r0, r1 we squeezed in commit phase
         let r0 = messages_in_commit_phase.verifier_message(namespace, 0)[0]

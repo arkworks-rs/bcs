@@ -83,10 +83,12 @@ where
             )
         };
 
+        let root_namespace = NameSpace::root(iop_trace!("BCS Proof Generation: Commit Phase"));
+
         // run prover code, using transcript to sample verifier message
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(
-            NameSpace::root(iop_trace!("BCS Proof Generation: Commit Phase")),
+            root_namespace,
             &(),
             public_input,
             private_input,
@@ -102,91 +104,67 @@ where
 
         // perform LDT to enforce degree bound on low-degree oracles
 
-        let mut ldt_transcript = Transcript::new(
-            transcript.sponge,
-            hash_params,
-            move |_| panic!("LDT transcript cannot send LDT oracle."),
-            iop_trace!("BCS Proof Generation for LDT: Commit Phase"),
-        );
-        {
-            let codeword_oracles_ref = transcript
-                .prover_message_oracles
-                .iter()
-                .map(|msg| &msg.reed_solomon_codes);
+        let ldt_namespace = transcript.new_namespace(root_namespace, iop_trace!("LDT"));
+        let codewords = transcript.bookkeeper.dump_all_prover_messages_in_order();
 
-            // Given the entire codewords of all low-degree messages in the protocol,
-            // run the ldt prover to generate LDT prover messages.
-            L::prove(ldt_params, codeword_oracles_ref, &mut ldt_transcript)?;
-        }
+        L::prove(ldt_namespace, ldt_params, &mut transcript, &codewords)?;
 
         debug_assert!(
-            !ldt_transcript.is_pending_message_available(),
+            !transcript.is_pending_message_available(),
             "Sanity check failed: pending message not submitted."
         );
 
         // extract things from main transcript
-        let mut sponge = ldt_transcript.sponge;
-        let mut prover_message_oracles = transcript.prover_message_oracles;
-        let merkle_trees = transcript.merkle_tree_for_each_round;
-        let verifier_messages = transcript.verifier_messages;
-        let bookkeeper = transcript.bookkeeper;
+        let mut sponge = transcript.sponge;
 
-        // extract things from LDT transcript
-        let mut ldt_prover_message_oracles = ldt_transcript.prover_message_oracles;
-        let ldt_merkle_trees = ldt_transcript.merkle_tree_for_each_round;
-        let ldt_verifier_messages = ldt_transcript.verifier_messages;
+        let mut messages_in_commit_phase = MessagesCollection::new(
+            transcript.prover_message_oracles,
+            transcript.verifier_messages,
+            transcript.bookkeeper,
+        );
 
         // run LDT verifier code to obtain all queries. We will use this query to
         // generate succinct oracles from message recording oracle.
-        {
-            L::query_and_decide(
-                ldt_params,
-                &mut sponge,
-                prover_message_oracles.iter_mut().collect(),
-                ldt_prover_message_oracles.iter_mut().collect(),
-                ldt_verifier_messages.as_slice(),
-            )?;
-        }
+
+        L::query_and_decide(
+            ldt_namespace,
+            &ldt_params,
+            &mut sponge,
+            &codewords,
+            &mut messages_in_commit_phase,
+        )?;
 
         // run main verifier code to obtain all queries
-        {
-            V::query_and_decide(
-                NameSpace::root(iop_trace!("BCS Proof Generation: Query and Decision Phase")),
-                &verifier_parameter,
-                public_input,
-                &(),
-                &mut sponge,
-                &mut MessagesCollection::new(
-                    prover_message_oracles.iter_mut().collect(),
-                    &verifier_messages,
-                    &bookkeeper,
-                ),
-            )?;
-        }
 
-        let all_message_oracles = || {
-            prover_message_oracles
-                .iter()
-                .chain(ldt_prover_message_oracles.iter())
-        };
+        V::query_and_decide(
+            NameSpace::root(iop_trace!("BCS Proof Generation: Query and Decision Phase")),
+            &verifier_parameter,
+            public_input,
+            &(),
+            &mut sponge,
+            &mut messages_in_commit_phase,
+        )?;
 
         // convert oracles to succinct oracle
-        let all_succinct_oracles: Vec<_> = all_message_oracles()
+        let all_succinct_oracles: Vec<_> = messages_in_commit_phase
+            .prover_messages
+            .iter()
             .map(|x| x.get_succinct_oracle())
             .collect();
 
-        let all_queries: Vec<_> = all_message_oracles()
+        let all_queries: Vec<_> = messages_in_commit_phase
+            .prover_messages
+            .iter()
             .map(|msg| msg.queried_coset_index.clone())
             .collect();
 
+        let merkle_trees = transcript.merkle_tree_for_each_round;
+
         // generate all merkle tree paths
-        debug_assert_eq!(
-            merkle_trees.len() + ldt_merkle_trees.len(),
-            all_queries.len()
-        );
+        debug_assert_eq!(merkle_trees.len(), all_queries.len());
         let all_mt_paths = all_queries
             .iter()
-            .zip(merkle_trees.iter().chain(ldt_merkle_trees.iter()))
+            .zip(merkle_trees.iter())
             .map(|(queries, mt)| {
                 queries
                     .iter()
@@ -202,7 +180,6 @@ where
 
         let all_mt_roots: Vec<_> = merkle_trees
             .iter()
-            .chain(ldt_merkle_trees.iter())
             .map(|x| x.as_ref().map(|tree| tree.root()))
             .collect();
 

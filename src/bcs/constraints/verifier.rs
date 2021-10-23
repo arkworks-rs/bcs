@@ -46,7 +46,7 @@ where
     /// `BCSProver::prove` function.
     pub fn verify<V, L, S>(
         cs: ConstraintSystemRef<CF>,
-        mut sponge: S::Var,
+        sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
         public_input: &V::PublicInputVar,
         verifier_parameter: &V::VerifierParameter,
@@ -58,78 +58,71 @@ where
         L: LDTWithGadget<CF>,
         S: SpongeWithGadget<CF>,
     {
-        // simulate main prove
-        let (verifier_messages, bookkeeper, num_rounds_submitted) = {
-            let mut transcript = SimulationTranscriptVar::new_transcript(
-                proof,
-                &mut sponge,
-                |degree| L::ldt_info(ldt_params, degree),
-                iop_trace!("BCS root"),
-            );
-            V::register_iop_structure_var(
-                NameSpace::root(iop_trace!("BCS Verify")),
-                &mut transcript,
-                verifier_parameter,
-            )?;
-            assert!(
-                !transcript.is_pending_message_available(),
-                "Sanity check failed: pending verifier message not submitted"
-            );
-            let num_rounds_submitted = transcript.num_prover_rounds_submitted();
-            (
-                transcript.reconstructed_verifier_messages,
-                transcript.bookkeeper,
-                num_rounds_submitted,
-            )
-        };
+        // simulate main prove: reconstruct verifier messages to restore verifier state
+        let mut transcript = SimulationTranscriptVar::new_transcript(
+            proof,
+            sponge,
+            |degree| L::ldt_info(ldt_params, degree),
+            iop_trace!("BCS root"),
+        );
+        let root_namespace = NameSpace::root(iop_trace!("IOP Root: BCS Proof Verify"));
 
-        // construct view of oracle
-        let mut prover_messages_view: Vec<_> = proof.prover_iop_messages_by_round
-            [..num_rounds_submitted]
+        V::register_iop_structure_var(
+            NameSpace::root(iop_trace!("BCS Verify")),
+            &mut transcript,
+            verifier_parameter,
+        )?;
+        assert!(
+            !transcript.is_pending_message_available(),
+            "Sanity check failed: pending verifier message not submitted"
+        );
+
+        let codewords = transcript.bookkeeper.dump_all_prover_messages_in_order();
+
+        let ldt_namespace = transcript.new_namespace(root_namespace, iop_trace!("LDT"));
+
+        let num_rs_oracles = codewords
+            .clone()
+            .into_iter()
+            .map(|x| {
+                transcript.prover_messages_info[x.index]
+                    .reed_solomon_code_degree_bound
+                    .len()
+            })
+            .sum::<usize>();
+
+        // simulate LDT prove: reconstruct LDT verifier messages to restore verifier
+        // state
+        L::register_iop_structure_var(ldt_namespace, ldt_params, num_rs_oracles, &mut transcript)?;
+        debug_assert!(
+            !transcript.is_pending_message_available(),
+            "Sanity check failed: pending verifier message not submitted"
+        );
+
+        // ends commit phase
+        // start query phase
+
+        let prover_message_view = proof
+            .prover_iop_messages_by_round
             .iter()
-            .map(|msg| msg.get_view())
-            .collect();
-        let mut ldt_prover_messages_view: Vec<_> = proof.prover_iop_messages_by_round
-            [num_rounds_submitted..]
-            .iter()
-            .map(|msg| msg.get_view())
-            .collect();
+            .map(|m| m.get_view())
+            .collect::<Vec<_>>();
 
-        // simulate LDT prove: reconstruct LDT verifier messages
-        let ldt_verifier_messages = {
-            let mut ldt_transcript = SimulationTranscriptVar::new_transcript_with_offset(
-                proof,
-                num_rounds_submitted,
-                &mut sponge,
-                |_| panic!("LDT transcript cannot send LDT oracle."),
-                iop_trace!("BCS LDT root"),
-            );
-            L::register_iop_structure_var::<_, _, S>(
-                ldt_params,
-                prover_messages_view
-                    .iter()
-                    .map(|oracle| oracle.num_reed_solomon_codes_oracles())
-                    .sum::<usize>(),
-                &mut ldt_transcript,
-            )?;
-            debug_assert!(
-                !ldt_transcript.is_pending_message_available(),
-                "Sanity check failed, pending verifier message not submitted"
-            );
-            // sanity check: transcript's all prover messages are absorbed
-            let expected_num_ldt_rounds =
-                proof.prover_iop_messages_by_round.len() - num_rounds_submitted;
-            debug_assert_eq!(ldt_transcript.current_prover_round, expected_num_ldt_rounds);
-            ldt_transcript.reconstructed_verifier_messages
-        };
+        let mut messages_in_commit_phase = MessagesCollection::new(
+            prover_message_view,
+            transcript.reconstructed_verifier_messages,
+            transcript.bookkeeper,
+        );
 
-        // LDT verify
+        let mut sponge = transcript.sponge;
+
+        // verify LDT
         L::query_and_decide_var::<S>(
+            ldt_namespace,
             ldt_params,
             &mut sponge,
-            prover_messages_view.iter_mut().collect(),
-            ldt_prover_messages_view.iter_mut().collect(),
-            &ldt_verifier_messages,
+            &codewords,
+            &mut messages_in_commit_phase,
         )?;
 
         // verify the protocol
@@ -140,33 +133,26 @@ where
             public_input,
             &(), // protocol used for BCS should not contain any oracle refs
             &mut sponge,
-            &mut MessagesCollection::new(
-                prover_messages_view.iter_mut().collect(),
-                &verifier_messages,
-                &bookkeeper,
-            ),
+            &mut messages_in_commit_phase,
         )?;
 
         // verify all authentication paths
 
-        let all_prover_oracles = prover_messages_view
-            .iter()
-            .chain(ldt_prover_messages_view.iter());
-        // we clone all the paths because we need to replace its leaf position with
-        // verifier calculated one
         let all_paths = &proof.prover_oracles_mt_path;
         let all_mt_roots = &proof.prover_messages_mt_root;
 
         assert_eq!(
-            prover_messages_view.len() + ldt_prover_messages_view.len(),
+            messages_in_commit_phase.prover_messages.len(),
             all_paths.len()
         );
         assert_eq!(
-            prover_messages_view.len() + ldt_prover_messages_view.len(),
+            messages_in_commit_phase.prover_messages.len(),
             all_mt_roots.len()
         );
 
-        all_prover_oracles
+        messages_in_commit_phase
+            .prover_messages
+            .iter()
             .zip(all_paths)
             .zip(all_mt_roots)
             .try_for_each(|((round_oracle, paths), mt_root)| {

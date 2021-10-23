@@ -93,7 +93,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         _oracle_refs: &Self::OracleRefs,
         _sponge: &mut S::Var,
         messages_in_commit_phase: &mut MessagesCollection<
-            &mut SuccinctRoundOracleVarView<CF>,
+            SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,
     ) -> Result<Self::VerifierOutputVar, SynthesisError> {

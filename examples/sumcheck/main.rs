@@ -232,11 +232,11 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         public_input: &Self::PublicInput,
         _oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // which oracle we are using to sumcheck
         let oracle_refs_sumcheck =
-            SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
+            SumcheckOracleRef::new(messages_in_commit_phase.prover_messages(namespace)[0]);
         // get the random coefficients we squeezed in commit phase
         let random_coeffs = messages_in_commit_phase.verifier_message(namespace, 0)[0]
             .clone()
@@ -283,7 +283,9 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
 /// insecure). We assume that size of summation domain < degree of testing poly
 /// < size of evaluation domain
 fn main() {
+    // subsring to trace with max level as INFO
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+
     let mut rng = test_rng();
     let degrees = (155, 197);
     let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);

@@ -1,6 +1,8 @@
 use crate::{
     bcs::transcript::{NameSpace, SimulationTranscript, Transcript},
-    iop::message::{ProverRoundMessageInfo, RoundOracle, VerifierMessage},
+    iop::message::{
+        MessagesCollection, MsgRoundRef, ProverRoundMessageInfo, RoundOracle, VerifierMessage,
+    },
     ldt::LDT,
     Error,
 };
@@ -48,35 +50,42 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         (codeword_domain, codeword_localization as usize)
     }
 
-    fn prove<'a, MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+    fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+        namespace: NameSpace,
         param: &Self::LDTParameters,
-        codewords: impl IntoIterator<Item = &'a Vec<(Vec<F>, usize)>>,
-        ldt_transcript: &mut Transcript<MT, S, F>,
+        transcript: &mut Transcript<MT, S, F>,
+        codewords: &[MsgRoundRef],
     ) -> Result<(), Error>
     where
         MT::InnerDigest: Absorb,
     {
         let param = &param.fri_parameters;
-        let namespace = NameSpace::root(iop_trace!("LDT Prove"));
         // first, get random linear combination of the codewords
-        let codewords = codewords.into_iter().collect::<Vec<_>>();
+        // let codewords = codewords
+        //     .iter()
+        //     .map(|round| {
+        //         transcript
+        //             .get_previously_sent_prover_round(*round)
+        //             .reed_solomon_codes()
+        //     })
+        //     .collect::<Vec<_>>();
         // get number of coefficients needed
-        let num_oracles: usize = codewords.iter().map(|round| round.len()).sum();
-        let random_coefficients = ldt_transcript.squeeze_verifier_field_elements(
+        let num_oracles = codewords.iter().map(|round| transcript.get_previously_sent_prover_round(*round).num_reed_solomon_codes_oracles()).sum::<usize>();
+        let random_coefficients = transcript.squeeze_verifier_field_elements(
             &(0..num_oracles)
                 .map(|_| FieldElementSize::Full)
                 .collect::<Vec<_>>(),
         );
-        ldt_transcript
-            .submit_verifier_current_round(namespace, iop_trace!("ldt random coefficeints"));
+        transcript.submit_verifier_current_round(namespace, iop_trace!("ldt random coefficeints"));
 
         let mut result_codewords = (0..param.domain.size())
             .map(|_| F::zero())
             .collect::<Vec<_>>();
+        
         codewords
             .into_iter()
-            .map(|round: &'a Vec<(Vec<F>, usize)>| {
-                round.iter().map(|(evaluation, degree_bound)| {
+            .map(|round| {
+                transcript.get_previously_sent_prover_round(*round).reed_solomon_codes().iter().map(|(evaluation, degree_bound)| {
                     assert!(
                         *degree_bound <= param.tested_degree as usize,
                         "degree bound larger than testing degree"
@@ -112,10 +121,9 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
             .zip(param.localization_parameters[1..param.localization_parameters.len()].iter())
             .try_for_each(
                 |(&localization_current, &localization_next)| -> Result<(), Error> {
-                    let alpha = ldt_transcript
-                        .squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
-                    ldt_transcript
-                        .submit_verifier_current_round(namespace, iop_trace!("ldt alpha"));
+                    let alpha =
+                        transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
+                    transcript.submit_verifier_current_round(namespace, iop_trace!("ldt alpha"));
                     let (next_domain, next_evaluations) = FRIProver::interactive_phase_single_round(
                         current_domain,
                         current_evaluations.clone(), /* TODO: change argument type to reference
@@ -125,11 +133,11 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     );
                     // prover send out this oracle evaluation as message
                     // each leaf will contain a coset
-                    ldt_transcript.send_message_oracle_with_localization(
+                    transcript.send_message_oracle_with_localization(
                         next_evaluations.clone(),
                         localization_next as usize,
                     )?;
-                    ldt_transcript
+                    transcript
                         .submit_prover_current_round(namespace, iop_trace!("ldt fri oracle"))?;
 
                     current_domain = next_domain;
@@ -138,8 +146,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 },
             )?;
         // generate final polynomial
-        let alpha = ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
-        ldt_transcript.submit_verifier_current_round(namespace, iop_trace!("ldt final alpha"));
+        let alpha = transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full])[0];
+        transcript.submit_verifier_current_round(namespace, iop_trace!("ldt final alpha"));
         let (domain_final, final_polynomial_evaluations) =
             FRIProver::interactive_phase_single_round(
                 current_domain,
@@ -163,42 +171,42 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
             sanity_check_point
         );
         assert!(final_polynomial.coeffs.len() <= (final_poly_degree_bound + 1) as usize);
-        ldt_transcript.send_message(final_polynomial.coeffs);
-        ldt_transcript
+        transcript.send_message(final_polynomial.coeffs);
+        transcript
             .submit_prover_current_round(namespace, iop_trace!("ldt final poly coefficients"))?;
 
         Ok(())
     }
 
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
-        params: &Self::LDTParameters,
+        namespace: NameSpace,
+        param: &Self::LDTParameters,
         num_codewords_oracles: usize,
-        ldt_transcript: &mut SimulationTranscript<MT, S, F>,
+        transcript: &mut SimulationTranscript<MT, S, F>,
     ) where
         MT::InnerDigest: Absorb,
     {
-        let namespace = NameSpace::root(iop_trace!("LDT register iop structure"));
-        ldt_transcript.squeeze_verifier_field_elements(
+        transcript.squeeze_verifier_field_elements(
             &(0..num_codewords_oracles)
                 .map(|_| FieldElementSize::Full)
                 .collect::<Vec<_>>(),
         );
-        ldt_transcript
+        transcript
             .submit_verifier_current_round(namespace, iop_trace!("LDT random linear combination"));
         // prover generate result codewords
-        let mut current_domain = params.fri_parameters.domain;
+        let mut current_domain = param.fri_parameters.domain;
 
         // receive ldt message oracles
-        params.fri_parameters.localization_parameters
-            [0..params.fri_parameters.localization_parameters.len() - 1]
+        param.fri_parameters.localization_parameters
+            [0..param.fri_parameters.localization_parameters.len() - 1]
             .iter()
-            .zip(params.fri_parameters.localization_parameters[1..].iter())
+            .zip(param.fri_parameters.localization_parameters[1..].iter())
             .for_each(|(&localization_curr, &localization_next)| {
-                ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full]);
-                ldt_transcript.submit_verifier_current_round(namespace, iop_trace!("LDT alpha"));
+                transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full]);
+                transcript.submit_verifier_current_round(namespace, iop_trace!("LDT alpha"));
                 let next_domain = current_domain.fold(localization_curr);
                 // ldt will receive a one oracle message
-                ldt_transcript.receive_prover_current_round(
+                transcript.receive_prover_current_round(
                     namespace,
                     ProverRoundMessageInfo {
                         reed_solomon_code_degree_bound: Vec::default(), // none
@@ -214,9 +222,9 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
             });
 
         // receive final polynomials
-        ldt_transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full]);
-        ldt_transcript.submit_verifier_current_round(namespace, iop_trace!("LDT alpha for final"));
-        ldt_transcript.receive_prover_current_round(
+        transcript.squeeze_verifier_field_elements(&[FieldElementSize::Full]);
+        transcript.submit_verifier_current_round(namespace, iop_trace!("LDT alpha for final"));
+        transcript.receive_prover_current_round(
             namespace,
             ProverRoundMessageInfo {
                 reed_solomon_code_degree_bound: Vec::default(),
@@ -230,34 +238,36 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
     }
 
     fn query_and_decide<S: CryptographicSponge, O: RoundOracle<F>>(
+        namespace: NameSpace,
         param: &Self::LDTParameters,
-        random_oracle: &mut S,
-        mut codewords_oracles: Vec<&mut O>,
-        mut ldt_prover_message_oracles: Vec<&mut O>,
-        ldt_verifier_messages: &[Vec<VerifierMessage<F>>],
+        sponge: &mut S,
+        codewords: &[MsgRoundRef],
+        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<(), Error> {
         // calculate random coset indices for each query
         let codeword_log_num_cosets = param.fri_parameters.domain.dim()
             - param.fri_parameters.localization_parameters[0] as usize;
         let query_indices = (0..param.num_queries)
-            .map(|_| le_bits_to_usize(&random_oracle.squeeze_bits(codeword_log_num_cosets)));
+            .map(|_| le_bits_to_usize(&sponge.squeeze_bits(codeword_log_num_cosets)));
         // restore random coefficients and alphas
-        let random_coefficients = ldt_verifier_messages[0][0]
+        let random_coefficients = messages_in_commit_phase.verifier_message(namespace, 0)[0]
             .clone()
             .try_into_field_elements()
             .unwrap();
 
-        let alphas = ldt_verifier_messages[1..]
-            .iter()
+        // verifier message from index 1 to num_alphas are alphas
+        let alphas = (1..param.fri_parameters.localization_parameters.len() + 1).map(| i|  
+            // TODO: prover and verifier mismatches on this message
+             messages_in_commit_phase.verifier_message(namespace, i))
             .map(|vm| {
                 assert_eq!(vm.len(), 1);
-                let vm_curr = vm[0] // each round have one message
+                let vm_curr = vm[0] // each round have one message 
                     .clone()
                     .try_into_field_elements()
                     .unwrap();
                 assert_eq!(vm_curr.len(), 1);
                 vm_curr[0]
-            }) // each message is only one field element (alpha)
+            }) // each message is only one field element (alpha) 
             .collect::<Vec<_>>();
 
         query_indices
@@ -272,9 +282,10 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     .map(|_| F::zero())
                     .collect::<Vec<_>>();
 
-                codewords_oracles
-                    .iter_mut()
+                codewords
+                    .iter()
                     .map(|oracle| {
+                        let oracle = messages_in_commit_phase.prover_message_using_ref(*oracle);
                         let query_responses = oracle
                             .query_coset(&[query_indices[0]], iop_trace!("rl_ldt query codewords"))
                             .pop()
@@ -308,11 +319,12 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     });
 
                 // get query responses in ldt prover messages oracles
-                assert_eq!(ldt_prover_message_oracles.len(), query_indices.len());
+                assert_eq!(messages_in_commit_phase.num_prover_rounds(namespace), query_indices.len());
                 let round_oracle_responses = query_indices[1..]
                     .iter()
-                    .zip(ldt_prover_message_oracles.iter_mut())
+                    .zip(messages_in_commit_phase.prover_messages(namespace).clone().into_iter())
                     .map(|(query_index, msg)| {
+                        let msg = messages_in_commit_phase.prover_message_using_ref(msg); 
                         let mut response = msg
                             .query_coset(&[*query_index], iop_trace!("rl_ldt query fri message"))
                             .pop()
@@ -323,9 +335,10 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     .collect::<Vec<_>>();
 
                 // get final polynomial coefficients
-                let final_polynomial_coeffs = ldt_prover_message_oracles
+                let final_polynomial_coeffs = {let &oracle_ref = messages_in_commit_phase.prover_messages(namespace)
                     .last()
-                    .unwrap()
+                    .unwrap();
+                messages_in_commit_phase.prover_message_using_ref(oracle_ref)} 
                     .get_short_message(0, iop_trace!("final poly coefficients"))
                     .to_vec();
                 let total_shrink_factor = param
@@ -337,7 +350,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     param.fri_parameters.tested_degree >> total_shrink_factor;
                 // make sure final polynomial degree is valid
                 assert!(final_polynomial_coeffs.len() <= (final_poly_degree_bound + 1) as usize);
-                // todo!(): generate_low_degree_coefficients should be done by prover instead!
                 let final_polynomial =
                     DensePolynomial::from_coefficients_vec(final_polynomial_coeffs);
                 let result = FRIVerifier::consistency_check(
@@ -348,7 +360,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                         .chain(round_oracle_responses.into_iter())
                         .collect::<Vec<_>>(),
                     &alphas,
-                    &domain_final,
+                    &domain_final, 
                     &final_polynomial,
                 );
 
@@ -407,25 +419,10 @@ fn degree_raise_poly_query<F: PrimeField>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        bcs::{
-            tests::FieldMTConfig,
-            transcript::{
-                test_utils::check_transcript_consistency, NameSpace, SimulationTranscript,
-                Transcript,
-            },
-            MTHashParameters,
-        },
-        iop::message::RoundOracle,
-        ldt::{
-            rl_ldt::{
+    use crate::{bcs::{MTHashParameters, tests::FieldMTConfig, transcript::{NameSpace, Transcript}}, iop::message::MessagesCollection, ldt::{LDT, rl_ldt::{
                 degree_raise_poly_eval, degree_raise_poly_query, LinearCombinationLDT,
                 LinearCombinationLDTParameters,
-            },
-            LDT,
-        },
-        test_utils::poseidon_parameters,
-    };
+            }}, test_utils::poseidon_parameters};
     use ark_bls12_381::Fr;
     use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
     use ark_poly::{
@@ -472,6 +469,7 @@ mod tests {
                 fri_parameters,
                 num_queries: 1,
             };
+            let root_namespace = NameSpace::root(iop_trace!("ldt test"));
 
             let mut sponge = PoseidonSponge::new(&poseidon_parameters());
             sponge.absorb(&i);
@@ -493,83 +491,37 @@ mod tests {
                 )
                 .unwrap();
             transcript
-                .submit_prover_current_round(NameSpace::root(iop_trace!("ldt test")), iop_trace!())
+                .submit_prover_current_round(root_namespace, iop_trace!())
                 .unwrap();
 
-            // check LDT Prove
-            let sponge_before_ldt = transcript.sponge;
-            let mut ldt_transcript = Transcript::new(
-                sponge_before_ldt.clone(),
-                hash_params.clone(),
-                |_| panic!("ldt not allowed"),
-                iop_trace!("ldt test"),
-            );
+            // check prove
+            let ldt_namespace = transcript.new_namespace(root_namespace, iop_trace!("namespace for ldt"));
+            let codewords = transcript.bookkeeper.dump_all_prover_messages_in_order();
+
             LinearCombinationLDT::prove(
+                ldt_namespace,
                 &ldt_params,
-                transcript
-                    .prover_message_oracles
-                    .iter()
-                    .map(|round| &round.reed_solomon_codes),
-                &mut ldt_transcript,
+                &mut transcript,
+                &codewords,
             )
             .unwrap();
+
+            // destruct transcript
+            let mut sponge = transcript.sponge;
+
+            let mut message_collection =  
+            MessagesCollection::new(transcript.prover_message_oracles, transcript.verifier_messages, transcript.bookkeeper);
 
             LinearCombinationLDT::query_and_decide(
+                ldt_namespace,
                 &ldt_params,
-                &mut ldt_transcript.sponge.clone(),
-                transcript.prover_message_oracles.iter_mut().collect(),
-                ldt_transcript.prover_message_oracles.iter_mut().collect(),
-                ldt_transcript.verifier_messages.as_slice(),
+                &mut sponge,
+                &codewords,
+                &mut message_collection,
             )
             .unwrap();
 
-            // check restore
-            let ldt_message_oracle = ldt_transcript.all_succinct_round_oracles();
-            let ldt_message_mt_roots = ldt_transcript.merkle_tree_roots();
-            let mut sponge_vt = sponge_before_ldt.clone();
-            let mut simulation_transcript = SimulationTranscript::from_prover_messages(
-                &ldt_message_oracle,
-                &ldt_message_mt_roots,
-                &mut sponge_vt,
-                |_| panic!(),
-                iop_trace!("ldt test"),
-            );
-
-            let codewords_oracle = transcript
-                .prover_message_oracles
-                .iter()
-                .map(|round| round.get_succinct_oracle())
-                .collect::<Vec<_>>();
-            let mut codewords_oracle_view = codewords_oracle
-                .iter()
-                .map(|r| r.get_view())
-                .collect::<Vec<_>>();
-
-            let ldt_succinct_oracles = ldt_transcript.all_succinct_round_oracles();
-            let mut ldt_succinct_oracles_view = ldt_succinct_oracles
-                .iter()
-                .map(|oracle| oracle.get_view())
-                .collect::<Vec<_>>();
-
-            LinearCombinationLDT::register_iop_structure(
-                &ldt_params,
-                codewords_oracle_view
-                    .iter()
-                    .map(|oracle| oracle.num_reed_solomon_codes_oracles())
-                    .sum::<usize>(),
-                &mut simulation_transcript,
-            );
-
-            check_transcript_consistency(&ldt_transcript, &simulation_transcript);
-
-            LinearCombinationLDT::query_and_decide(
-                &ldt_params,
-                &mut ldt_transcript.sponge.clone(),
-                codewords_oracle_view.iter_mut().collect(),
-                ldt_succinct_oracles_view.iter_mut().collect(),
-                ldt_transcript.verifier_messages.as_slice(),
-            )
-            .unwrap();
+            // TODO: check restore
         }
     }
 }

@@ -187,7 +187,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
                                          * this `oracle_refs` using the message in current
                                          * protocol */
         random_oracle: &mut S,
-        messages_in_commit_phase: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // query a random point in evaluation domain
         let evaluation_domain = verifier_parameter.evaluation_domain;

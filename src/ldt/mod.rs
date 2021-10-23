@@ -6,11 +6,10 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
 
 use crate::{
-    bcs::transcript::{SimulationTranscript, Transcript},
-    iop::message::{RoundOracle, VerifierMessage},
+    bcs::transcript::{NameSpace, SimulationTranscript, Transcript},
+    iop::message::{MessagesCollection, MsgRoundRef, RoundOracle, VerifierMessage},
     Error,
 };
-use ark_std::vec::Vec;
 
 #[cfg(feature = "r1cs")]
 /// R1CS constraints for LDT.
@@ -29,14 +28,14 @@ pub trait LDT<F: PrimeField + Absorb> {
     /// `ldt_info` will panic if `degree_bound` is not supported by this LDT.
     fn ldt_info(param: &Self::LDTParameters, degree_bound: usize) -> (Radix2CosetDomain<F>, usize);
 
-    /// Given the list of codewords along with its degree bound, send LDT prover
-    /// messages. `codewords[i][j][k]` is the `k`th leaf of `j`th RS oracle
-    /// at IOP round `i`. LDT prover cannot send LDT oracles through
-    /// `ldt_transcript`.
-    fn prove<'a, MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+    /// Given the list of message round references along with its degree bound,
+    /// generate a low degree test proof all reed solomon codes in each
+    /// reference.
+    fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+        namespace: NameSpace,
         param: &Self::LDTParameters,
-        codewords: impl IntoIterator<Item = &'a Vec<(Vec<F>, usize)>>,
-        ldt_transcript: &mut Transcript<MT, S, F>,
+        transcript: &mut Transcript<MT, S, F>,
+        codewords: &[MsgRoundRef],
     ) -> Result<(), Error>
     where
         MT::InnerDigest: Absorb;
@@ -46,21 +45,26 @@ pub trait LDT<F: PrimeField + Absorb> {
     /// simulation transcript. Returns the verifier state for query and decision
     /// phase.
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+        namespace: NameSpace,
         param: &Self::LDTParameters,
-        num_codewords_oracles: usize,
+        num_rs_oracles: usize,
         transcript: &mut SimulationTranscript<MT, S, F>,
     ) where
         MT::InnerDigest: Absorb;
 
     /// Verify `codewords` is low-degree, given the succinct codewords oracle
-    /// and proof. `codewords_oracles[i]` includes all oracles sent on round
-    /// `i`.
+    /// and proof.
+    ///
+    /// * `codewords`: All codewords references whose reed solomon codes are
+    ///   going to be low degree tested. We can treat it as a specialized
+    ///   version of `oracle_ref`.
+    /// * `ldt_prover_message_oracles`: LDT Prover messages sent.
     fn query_and_decide<S: CryptographicSponge, O: RoundOracle<F>>(
+        namespace: NameSpace,
         param: &Self::LDTParameters,
-        random_oracle: &mut S,
-        codewords_oracles: Vec<&mut O>,
-        ldt_prover_message_oracles: Vec<&mut O>,
-        ldt_verifier_messages: &[Vec<VerifierMessage<F>>],
+        sponge: &mut S,
+        codewords: &[MsgRoundRef],
+        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<(), Error>;
 }
 
@@ -95,10 +99,12 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
             .clone()
     }
 
-    fn prove<'a, MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+    /// `prove` for NoLDT is no-op.
+    fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+        _namespace: NameSpace,
         _param: &Self::LDTParameters,
-        _codewords: impl IntoIterator<Item = &'a Vec<(Vec<F>, usize)>>,
-        _ldt_transcript: &mut Transcript<MT, S, F>,
+        _transcript: &mut Transcript<MT, S, F>,
+        _codewords: &[MsgRoundRef],
     ) -> Result<(), Error>
     where
         MT::InnerDigest: Absorb,
@@ -107,6 +113,7 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
     }
 
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
+        _namespace: NameSpace,
         _param: &Self::LDTParameters,
         _num_codewords_oracles: usize,
         _transcript: &mut SimulationTranscript<MT, S, F>,
@@ -117,17 +124,23 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
     }
 
     fn query_and_decide<S: CryptographicSponge, O: RoundOracle<F>>(
+        _namespace: NameSpace,
         _param: &Self::LDTParameters,
-        _random_oracle: &mut S,
-        _codewords_oracles: Vec<&mut O>,
-        ldt_prover_message_oracles: Vec<&mut O>,
-        ldt_verifier_messages: &[Vec<VerifierMessage<F>>],
+        _sponge: &mut S,
+        codewords: &[MsgRoundRef],
+        messages_in_commit_phase: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<(), Error> {
+        // nop, but we need to check that all codewords have no RS codes
+        let no_rs_code = codewords.iter().all(|round| {
+            messages_in_commit_phase
+                .prover_message_using_ref(*round)
+                .num_reed_solomon_codes_oracles()
+                == 0
+        });
         assert!(
-            ldt_prover_message_oracles.is_empty() && ldt_verifier_messages.is_empty(),
-            "NoLDT should send no message"
+            no_rs_code,
+            "NoLDT enforces that main protocol does not send any RS code."
         );
-        // trivial: no query, no decide, always pass
         Ok(())
     }
 }

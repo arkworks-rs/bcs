@@ -147,7 +147,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
     ) -> Result<Self::VerifierOutputVar, SynthesisError> {
         // which oracle we are using to sumcheck
         let oracle_refs_sumcheck =
-            SumcheckOracleRef::new(*messages_in_commit_phase.prover_message_as_ref(namespace, 0));
+            SumcheckOracleRef::new(messages_in_commit_phase.prover_messages(namespace)[0]);
         let random_coeffs = messages_in_commit_phase.verifier_message(namespace, 0)[0]
             .clone()
             .try_into_field_elements()
