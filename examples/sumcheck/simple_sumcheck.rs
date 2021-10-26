@@ -304,7 +304,7 @@ pub mod constraints {
             oracle_refs: &Self::OracleRefs,
             sponge: &mut S::Var,
             transcript_messages: &mut MessagesCollection<
-                &mut SuccinctRoundOracleVarView<CF>,
+                SuccinctRoundOracleVarView<CF>,
                 VerifierMessageVar<CF>,
             >,
         ) -> Result<Self::VerifierOutputVar, SynthesisError> {

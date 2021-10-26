@@ -141,14 +141,14 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
         _oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
         tramscript_messages: &mut MessagesCollection<
-            &mut SuccinctRoundOracleVarView<CF>,
+            SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,
     ) -> Result<Self::VerifierOutputVar, SynthesisError> {
         // which oracle we are using to sumcheck
         let oracle_refs_sumcheck =
-            SumcheckOracleRef::new(messages_in_commit_phase.prover_messages(namespace)[0]);
-        let random_coeffs = messages_in_commit_phase.verifier_message(namespace, 0)[0]
+            SumcheckOracleRef::new(tramscript_messages.prover_messages(namespace)[0]);
+        let random_coeffs = tramscript_messages.verifier_message(namespace, 0)[0]
             .clone()
             .try_into_field_elements()
             .expect("invalid verifier message type");
