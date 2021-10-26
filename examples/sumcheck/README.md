@@ -201,7 +201,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         public_input: &Self::PublicInput,
         oracle_refs: &Self::OracleRefs, 
         random_oracle: &mut S,
-        transcript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         todo!();
     }
@@ -344,7 +344,7 @@ fn query_and_decide<O: RoundOracle<F>>(
                                      * this `oracle_refs` using the message in current
                                      * protocol */
     random_oracle: &mut S,
-    transcript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+    transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
 ) -> Result<Self::VerifierOutput, Error> {
 ```
 
@@ -653,7 +653,7 @@ fn query_and_decide<O: RoundOracle<F>>(
     public_input: &Self::PublicInput,
     _oracle_refs: &Self::OracleRefs,
     sponge: &mut S,
-    transcript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+    transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
 ) -> Result<Self::VerifierOutput, Error> {
 ```
 
@@ -943,7 +943,7 @@ fn query_and_decide_var(
     oracle_refs: &Self::OracleRefs,
     sponge: &mut S::Var,
     transcript_messages: &mut MessagesCollection<
-        &mut SuccinctRoundOracleVarView<CF>,
+        SuccinctRoundOracleVarView<CF>,
         VerifierMessageVar<CF>,
     >,
 ) -> Result<Self::VerifierOutputVar, SynthesisError>
