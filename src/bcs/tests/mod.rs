@@ -75,10 +75,10 @@ fn test_bcs() {
     .expect("fail to prove");
 
     // verify if simulation transcript reconstructs correctly
-    let mut sponge = PoseidonSponge::new(&poseidon_parameters());
+    let sponge = PoseidonSponge::new(&poseidon_parameters());
     let mut simulation_transcript = SimulationTranscript::new_transcript(
         &bcs_proof,
-        &mut sponge,
+        sponge,
         |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
         iop_trace!("test bcs"),
     );

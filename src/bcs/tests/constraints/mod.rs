@@ -131,11 +131,11 @@ fn test_bcs() {
         BCSProofVar::<_, FieldMTConfig, _>::new_witness(cs.clone(), || Ok(&bcs_proof)).unwrap();
 
     // verify if simulation transcript reconstructs correctly
-    let mut sponge = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());
+    let sponge = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());
     let mut simulation_transcript =
         SimulationTranscriptVar::<_, _, _, PoseidonSponge<_>>::new_transcript(
             &bcs_proof_var,
-            &mut sponge,
+            sponge,
             |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
             iop_trace!("bcs test"),
         );

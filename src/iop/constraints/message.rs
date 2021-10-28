@@ -7,9 +7,6 @@ use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use ark_std::{borrow::Borrow, vec::Vec};
 
-/// Constraint Gadget for `RoundOracleVar`
-pub trait RoundOracleVar<F: PrimeField> {}
-
 #[derive(Clone)]
 /// Round oracle variable that contains only queried leaves.
 pub struct SuccinctRoundOracleVar<F: PrimeField> {

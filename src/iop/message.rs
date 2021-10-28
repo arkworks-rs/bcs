@@ -35,18 +35,18 @@ impl MsgRoundRef {
 /// Message can be accessed using namespace, or `MsgRoundRef`.
 /// This struct is used by verifier to access prover message oracles and
 /// verifier messages.
-pub struct MessagesCollection<'a, Oracle, VM> {
+pub struct MessagesCollection<Oracle, VM> {
     pub(crate) prover_messages: Vec<Oracle>,
-    pub(crate) verifier_messages: &'a [Vec<VM>],
-    pub(crate) bookkeeper: &'a MessageBookkeeper,
+    pub(crate) verifier_messages: Vec<Vec<VM>>,
+    pub(crate) bookkeeper: MessageBookkeeper,
 }
 
-impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
+impl<Oracle, VM> MessagesCollection<Oracle, VM> {
     /// Constructor for Messages Collection
     pub(crate) fn new(
         prover_messages: Vec<Oracle>,
-        verifier_messages: &'a [Vec<VM>],
-        bookkeeper: &'a MessageBookkeeper,
+        verifier_messages: Vec<Vec<VM>>,
+        bookkeeper: MessageBookkeeper,
     ) -> Self {
         MessagesCollection {
             prover_messages,
@@ -70,17 +70,24 @@ impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
 
     /// Return the prover message sent at `round` in `namespace`.
     pub fn prover_message(&mut self, namespace: NameSpace, round: usize) -> &mut Oracle {
-        let round_ref = self.prover_message_as_ref(namespace, round).clone();
+        let round_ref = self.prover_messages(namespace)[round];
         self.prover_message_using_ref(round_ref)
     }
 
-    /// Return the reference to prover message
-    pub fn prover_message_as_ref(&self, namespace: NameSpace, round: usize) -> &MsgRoundRef {
+    /// Get number of prove rounds in namespace.
+    pub fn num_prover_rounds(&self, namespace: NameSpace) -> usize {
         self.bookkeeper
             .get_message_indices(namespace)
             .prover_message_refs
-            .get(round)
-            .expect("round out of range")
+            .len()
+    }
+
+    /// Return all prover rounds message as round reference.
+    pub fn prover_messages(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
+        &self
+            .bookkeeper
+            .get_message_indices(namespace)
+            .prover_message_refs
     }
 
     /// Given a `MsgRoundRef`, return the corresponding prover message.
@@ -90,14 +97,22 @@ impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
         &mut self.prover_messages[oracle_ref.index]
     }
 
+    /// Return all prover rounds message as round reference.
+    pub fn verifier_messages(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
+        &self
+            .bookkeeper
+            .get_message_indices(namespace)
+            .verifier_message_refs
+    }
+
     /// Return the verifier message sent at `round` in `namespace`.
-    pub fn verifier_message(&self, namespace: NameSpace, round: usize) -> &'a Vec<VM> {
+    pub fn verifier_message(&self, namespace: NameSpace, round: usize) -> &Vec<VM> {
         let round_ref = self.verifier_message_as_ref(namespace, round);
         self.verifier_message_using_ref(*round_ref)
     }
 
     /// Return the reference to verifier message
-    pub fn verifier_message_as_ref(&self, namespace: NameSpace, round: usize) -> &MsgRoundRef {
+    fn verifier_message_as_ref(&self, namespace: NameSpace, round: usize) -> &MsgRoundRef {
         self.bookkeeper
             .get_message_indices(namespace)
             .verifier_message_refs
@@ -105,8 +120,16 @@ impl<'a, Oracle, VM> MessagesCollection<'a, Oracle, VM> {
             .expect("round out of range")
     }
 
+    /// Get number of verifier rounds in namespace.
+    pub fn num_verifier_rounds(&self, namespace: NameSpace) -> usize {
+        self.bookkeeper
+            .get_message_indices(namespace)
+            .verifier_message_refs
+            .len()
+    }
+
     /// Given a `MsgRoundRef`, return the corresponding verifier message.
-    pub fn verifier_message_using_ref(&self, oracle_ref: MsgRoundRef) -> &'a Vec<VM> {
+    pub fn verifier_message_using_ref(&self, oracle_ref: MsgRoundRef) -> &Vec<VM> {
         &self.verifier_messages[oracle_ref.index]
     }
 }

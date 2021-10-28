@@ -69,8 +69,8 @@ where
         public_input_var: &Self::PublicInputVar,
         oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
-        tramscript_messages: &mut MessagesCollection<
-            &mut SuccinctRoundOracleVarView<CF>,
+        transcript_messages: &mut MessagesCollection<
+            SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,
     ) -> Result<Self::VerifierOutputVar, SynthesisError>;

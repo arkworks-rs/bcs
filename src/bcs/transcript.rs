@@ -105,6 +105,16 @@ impl MessageBookkeeper {
         ns
     }
 
+    /// Return all prover message reference sent at this point, in order.
+    pub(crate) fn dump_all_prover_messages_in_order(&self) -> Vec<MsgRoundRef> {
+        self.messages_store
+            .values()
+            .map(|v| v.prover_message_refs.iter())
+            .flatten()
+            .map(|v| *v)
+            .collect()
+    }
+
     /// Given a namespace id, return the details of namespace.
     pub(crate) fn get_namespace_details(&self, namespace_id: u64) -> Option<NameSpace> {
         self.ns_details.get(&namespace_id).map(|x| *x)
@@ -609,7 +619,7 @@ pub struct SimulationTranscript<
     P::InnerDigest: Absorb,
 {
     /// prover message info used to verify consistency
-    prover_messages_info: Vec<ProverRoundMessageInfo>,
+    pub(crate) prover_messages_info: Vec<ProverRoundMessageInfo>,
 
     /// For each round submit, absorb merkle tree root first
     prover_mt_roots: &'a [Option<P::InnerDigest>],
@@ -618,7 +628,7 @@ pub struct SimulationTranscript<
     prover_short_messages: Vec<&'a Vec<Vec<F>>>,
 
     /// sponge is used to sample verifier message
-    pub(crate) sponge: &'a mut S,
+    pub(crate) sponge: S,
     /// the next prover round message to absorb
     pub(crate) current_prover_round: usize,
 
@@ -643,7 +653,7 @@ where
     /// verifier messages by simulating commit phase easily.
     pub(crate) fn new_transcript(
         bcs_proof: &'a BCSProof<P, F>,
-        sponge: &'a mut S,
+        sponge: S,
         ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
         trace: TraceInfo,
     ) -> Self {
@@ -660,7 +670,7 @@ where
     pub(crate) fn new_transcript_with_offset(
         bcs_proof: &'a BCSProof<P, F>,
         round_offset: usize,
-        sponge: &'a mut S,
+        sponge: S,
         ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
         trace: TraceInfo,
     ) -> Self {
@@ -690,7 +700,7 @@ where
     pub fn from_prover_messages(
         prover_iop_messages_by_round: &'a [SuccinctRoundOracle<F>],
         prover_iop_messages_mt_roots_by_round: &'a [Option<P::InnerDigest>],
-        sponge: &'a mut S,
+        sponge: S,
         ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
         trace: TraceInfo,
     ) -> Self {
@@ -715,9 +725,8 @@ where
         }
     }
 
-    /// Returns the number of prover rounds that prover have submitted. Useful
-    /// for
-    pub(crate) fn num_prover_rounds_submitted(&self) -> usize {
+    /// Returns the number of prover rounds that prover have submitted.
+    pub fn num_prover_rounds_submitted(&self) -> usize {
         self.current_prover_round
     }
 
@@ -1053,11 +1062,11 @@ pub mod test_utils {
         // generate transcript using verifier perspective
         let succinct_prover_messages = transcript_pt.all_succinct_round_oracles();
         let prover_mt_roots = transcript_pt.merkle_tree_roots();
-        let mut sponge_vt = sponge.clone();
+        let sponge_vt = sponge.clone();
         let mut transcript_vt = SimulationTranscript::from_prover_messages(
             &succinct_prover_messages,
             &prover_mt_roots,
-            &mut sponge_vt,
+            sponge_vt,
             |degree| L::ldt_info(ldt_params, degree),
             iop_trace!("check commit phase correctness"),
         );

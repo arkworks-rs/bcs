@@ -172,7 +172,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         _public_input: &Self::PublicInput,
         _verifier_state: &Self::OracleRefs,
         _sponge: &mut S,
-        tramscript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // verify if message is indeed correct
         let mut rng = test_rng();
@@ -181,20 +181,20 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         let pm1_3: Vec<_> = (0..256).map(|_| F::rand(&mut rng)).collect();
 
         assert_eq!(
-            tramscript_messages
+            transcript_messages
                 .prover_message(namespace, 0)
                 .get_short_message(0, iop_trace!()),
             &pm1_1
         );
         assert_eq!(
-            tramscript_messages
+            transcript_messages
                 .prover_message(namespace, 0)
                 .query(&[123, 223], iop_trace!("mock query 0")),
             vec![vec![pm1_2[123], pm1_3[123]], vec![pm1_2[223], pm1_3[223]]]
         );
 
         let vm1_1 = if let VerifierMessage::FieldElements(fe) =
-            tramscript_messages.verifier_message(namespace, 0)[0].clone()
+            transcript_messages.verifier_message(namespace, 0)[0].clone()
         {
             assert_eq!(fe.len(), 3);
             fe
@@ -202,7 +202,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             panic!("invalid vm message type")
         };
         let vm1_2 = if let VerifierMessage::Bytes(bytes) =
-            tramscript_messages.verifier_message(namespace, 0)[1].clone()
+            transcript_messages.verifier_message(namespace, 0)[1].clone()
         {
             assert_eq!(bytes.len(), 16);
             bytes
@@ -210,7 +210,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             panic!("invalid vm message type");
         };
 
-        if let VerifierMessage::Bits(bits) = &tramscript_messages.verifier_message(namespace, 1)[0]
+        if let VerifierMessage::Bits(bits) = &transcript_messages.verifier_message(namespace, 1)[0]
         {
             assert_eq!(bits.len(), 19);
         } else {
@@ -220,7 +220,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square()).collect();
 
         assert_eq!(
-            tramscript_messages
+            transcript_messages
                 .prover_message(namespace, 1)
                 .get_short_message(0, iop_trace!()),
             &pm2_1
@@ -234,7 +234,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             .collect();
 
         assert_eq!(
-            tramscript_messages
+            transcript_messages
                 .prover_message(namespace, 1)
                 .query(&[19, 29, 39], iop_trace!()),
             vec![vec![pm2_2[19]], vec![pm2_2[29]], vec![pm2_2[39]]]
@@ -242,13 +242,13 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
 
         let pm3_1: Vec<_> = (0..6).map(|_| F::rand(&mut rng)).collect();
         assert_eq!(
-            tramscript_messages
+            transcript_messages
                 .prover_message(namespace, 2)
                 .get_short_message(0, iop_trace!()),
             &pm3_1
         );
         // just query some points
-        tramscript_messages
+        transcript_messages
             .prover_message(namespace, 2)
             .query(&vec![1, 2], iop_trace!());
 

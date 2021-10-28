@@ -32,10 +32,10 @@ where
     F: Absorb,
     MTG::InnerDigest: AbsorbGadget<F>,
 {
-    prover_messages_info: Vec<ProverRoundMessageInfo>,
+    pub(crate) prover_messages_info: Vec<ProverRoundMessageInfo>,
     prover_mt_roots: &'a [Option<MTG::InnerDigest>],
     prover_short_messages: Vec<&'a Vec<Vec<FpVar<F>>>>,
-    sponge: &'a mut S::Var,
+    pub(crate) sponge: S::Var,
     pub(crate) current_prover_round: usize,
     pub(crate) reconstructed_verifier_messages: Vec<Vec<VerifierMessageVar<F>>>,
 
@@ -56,7 +56,7 @@ where
 {
     pub(crate) fn new_transcript(
         bcs_proof: &'a BCSProofVar<MT, MTG, F>,
-        sponge: &'a mut S::Var,
+        sponge: S::Var,
         ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
         trace: TraceInfo,
     ) -> Self {
@@ -66,7 +66,7 @@ where
     pub(crate) fn new_transcript_with_offset(
         bcs_proof: &'a BCSProofVar<MT, MTG, F>,
         round_offset: usize,
-        sponge: &'a mut S::Var,
+        sponge: S::Var,
         ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
         trace: TraceInfo,
     ) -> Self {
@@ -103,7 +103,7 @@ where
     pub fn from_prover_messages(
         prover_iop_messages_by_round: &'a [SuccinctRoundOracleVar<F>],
         prover_iop_messages_mt_roots_by_round: &'a [Option<MTG::InnerDigest>],
-        sponge_var: &'a mut S::Var,
+        sponge_var: S::Var,
         ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
         trace: TraceInfo,
     ) -> Self {
@@ -128,7 +128,8 @@ where
         }
     }
 
-    pub(crate) fn num_prover_rounds_submitted(&self) -> usize {
+    /// Number of submitted rounds in the transcript
+    pub fn num_prover_rounds_submitted(&self) -> usize {
         self.current_prover_round
     }
 
@@ -441,11 +442,11 @@ pub mod test_utils {
                 root.map(|root| MTG::InnerDigest::new_witness(cs.clone(), || Ok(root)).unwrap())
             })
             .collect::<Vec<_>>();
-        let mut sponge_var_vt = sponge_var.clone();
+        let sponge_var_vt = sponge_var.clone();
         let mut transcript_vt = SimulationTranscriptVar::<F, MT, MTG, S>::from_prover_messages(
             &succinct_prover_messages,
             &prover_mt_roots,
-            &mut sponge_var_vt,
+            sponge_var_vt,
             |degree| L::ldt_info(ldt_params, degree),
             iop_trace!("check commit phase correctness"),
         );

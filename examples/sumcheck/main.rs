@@ -232,13 +232,13 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         public_input: &Self::PublicInput,
         _oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
-        tramscript_messages: &mut MessagesCollection<&mut O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
     ) -> Result<Self::VerifierOutput, Error> {
         // which oracle we are using to sumcheck
         let oracle_refs_sumcheck =
-            SumcheckOracleRef::new(*tramscript_messages.prover_message_as_ref(namespace, 0));
+            SumcheckOracleRef::new(transcript_messages.prover_messages(namespace)[0]);
         // get the random coefficients we squeezed in commit phase
-        let random_coeffs = tramscript_messages.verifier_message(namespace, 0)[0]
+        let random_coeffs = transcript_messages.verifier_message(namespace, 0)[0]
             .clone()
             .try_into_field_elements()
             .expect("invalid verifier message type");
@@ -249,7 +249,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
 
         // invoke first sumcheck protocol
         let mut result = SimpleSumcheck::query_and_decide(
-            tramscript_messages.get_subprotocol_namespace(namespace, 0),
+            transcript_messages.get_subprotocol_namespace(namespace, 0),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.0,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -258,12 +258,12 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
             &SumcheckPublicInput::new(asserted_sums.0, 0),
             &oracle_refs_sumcheck,
             sponge,
-            tramscript_messages,
+            transcript_messages,
         )?;
 
         // invoke second sumcheck protocol
         result &= SimpleSumcheck::query_and_decide(
-            tramscript_messages.get_subprotocol_namespace(namespace, 1),
+            transcript_messages.get_subprotocol_namespace(namespace, 1),
             &SumcheckVerifierParameter {
                 degree: verifier_parameter.degrees.1,
                 evaluation_domain: verifier_parameter.evaluation_domain,
@@ -272,7 +272,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
             &SumcheckPublicInput::new(asserted_sums.1, 1),
             &oracle_refs_sumcheck,
             sponge,
-            tramscript_messages,
+            transcript_messages,
         )?;
 
         Ok(result)
@@ -283,7 +283,9 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
 /// insecure). We assume that size of summation domain < degree of testing poly
 /// < size of evaluation domain
 fn main() {
+    // subsring to trace with max level as INFO
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+
     let mut rng = test_rng();
     let degrees = (155, 197);
     let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);

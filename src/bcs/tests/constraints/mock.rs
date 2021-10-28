@@ -92,8 +92,8 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         _public_input_var: &Self::PublicInputVar,
         _oracle_refs: &Self::OracleRefs,
         _sponge: &mut S::Var,
-        tramscript_messages: &mut MessagesCollection<
-            &mut SuccinctRoundOracleVarView<CF>,
+        transcript_messages: &mut MessagesCollection<
+            SuccinctRoundOracleVarView<CF>,
             VerifierMessageVar<CF>,
         >,
     ) -> Result<Self::VerifierOutputVar, SynthesisError> {
@@ -106,12 +106,12 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         let pm1_2: Vec<_> = (0..256).map(|_| random_fe()).collect();
         let pm1_3: Vec<_> = (0..256).map(|_| random_fe()).collect();
 
-        tramscript_messages
+        transcript_messages
             .prover_message(namespace, 0)
             .get_short_message(0)
             .enforce_equal(pm1_1.as_slice())?;
 
-        tramscript_messages
+        transcript_messages
             .prover_message(namespace, 0)
             .query(
                 &[
@@ -130,17 +130,17 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             )
             .try_for_each(|(left, right)| left.enforce_equal(&right))?;
         assert!(cs.cs().is_satisfied().unwrap());
-        let vm1_1 = tramscript_messages.verifier_message(namespace, 0)[0]
+        let vm1_1 = transcript_messages.verifier_message(namespace, 0)[0]
             .clone()
             .try_into_field_elements()
             .unwrap();
         assert_eq!(vm1_1.len(), 3);
-        let vm1_2 = tramscript_messages.verifier_message(namespace, 0)[1]
+        let vm1_2 = transcript_messages.verifier_message(namespace, 0)[1]
             .clone()
             .try_into_bytes()
             .unwrap();
         assert_eq!(vm1_2.len(), 16);
-        let vm2_1 = tramscript_messages.verifier_message(namespace, 1)[0]
+        let vm2_1 = transcript_messages.verifier_message(namespace, 1)[0]
             .clone()
             .try_into_bits()
             .unwrap();
@@ -148,7 +148,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square().unwrap()).collect();
         pm2_1.enforce_equal(
-            tramscript_messages
+            transcript_messages
                 .prover_message(namespace, 1)
                 .get_short_message(0)
                 .as_slice(),
@@ -161,7 +161,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             })
             .collect();
 
-        tramscript_messages
+        transcript_messages
             .prover_message(namespace, 1)
             .query(
                 &[
@@ -186,13 +186,13 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         let pm3_1: Vec<_> = (0..6).map(|_| random_fe()).collect();
 
         pm3_1.enforce_equal(
-            tramscript_messages
+            transcript_messages
                 .prover_message(namespace, 2)
                 .get_short_message(0)
                 .as_slice(),
         )?;
 
-        tramscript_messages.prover_message(namespace, 2).query(
+        transcript_messages.prover_message(namespace, 2).query(
             &[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]],
             iop_trace!(),
         )?; // query 1, 2

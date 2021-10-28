@@ -9,11 +9,13 @@ use ark_sponge::{
     constraints::{AbsorbGadget, SpongeWithGadget},
     Absorb,
 };
-use ark_std::vec::Vec;
 
 use crate::{
-    bcs::constraints::transcript::SimulationTranscriptVar,
-    iop::constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar},
+    bcs::{constraints::transcript::SimulationTranscriptVar, transcript::NameSpace},
+    iop::{
+        constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar},
+        message::{MessagesCollection, MsgRoundRef},
+    },
     ldt::{NoLDT, LDT},
 };
 
@@ -24,9 +26,12 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
     /// messages and verifier state using the sponge provided in the
     /// simulation transcript. Returns the verifier state for query and decision
     /// phase.
+    /// * `num_codewords_oracles`: sum of number of codeword oracles in each
+    ///   round.
     fn register_iop_structure_var<MT, MTG, S>(
+        namespace: NameSpace,
         param: &Self::LDTParameters,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
+        num_rs_oracles: usize,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
     ) -> Result<(), SynthesisError>
     where
@@ -36,22 +41,28 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
         MT::InnerDigest: Absorb,
         MTG::InnerDigest: AbsorbGadget<CF>;
 
+    /// R1CS gadget for `query_and_decide`.
+    ///
     /// Verify `codewords` is low-degree, given the succinct codewords oracle
-    /// and proof. `codewords_oracles[i]` includes all oracles sent on round
-    /// `i`.
+    /// and proof.
     fn query_and_decide_var<S: SpongeWithGadget<CF>>(
+        namespace: NameSpace,
         param: &Self::LDTParameters,
-        random_oracle: &mut S::Var,
-        codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        ldt_prover_message_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        ldt_verifier_messages: &[Vec<VerifierMessageVar<CF>>],
+        sponge: &mut S::Var,
+        codewords: &[MsgRoundRef],
+        // TODO: add virtual oracle here
+        transcript_messages: &mut MessagesCollection<
+            SuccinctRoundOracleVarView<CF>,
+            VerifierMessageVar<CF>,
+        >,
     ) -> Result<(), SynthesisError>;
 }
 
 impl<CF: PrimeField + Absorb> LDTWithGadget<CF> for NoLDT<CF> {
     fn register_iop_structure_var<MT, MTG, S>(
+        _namespace: NameSpace,
         _param: &Self::LDTParameters,
-        _codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
+        _num_rs_oracles: usize,
         _transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
     ) -> Result<(), SynthesisError>
     where
@@ -61,18 +72,31 @@ impl<CF: PrimeField + Absorb> LDTWithGadget<CF> for NoLDT<CF> {
         MT::InnerDigest: Absorb,
         MTG::InnerDigest: AbsorbGadget<CF>,
     {
-        // do nothing
         Ok(())
     }
 
     fn query_and_decide_var<S: SpongeWithGadget<CF>>(
+        _namespace: NameSpace,
         _param: &Self::LDTParameters,
-        _random_oracle: &mut S::Var,
-        _codewords_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        _ldt_prover_message_oracles: Vec<&mut SuccinctRoundOracleVarView<CF>>,
-        _ldt_verifier_messages: &[Vec<VerifierMessageVar<CF>>],
+        _sponge: &mut S::Var,
+        codewords: &[MsgRoundRef],
+        // TODO: add virtual oracle here
+        transcript_messages: &mut MessagesCollection<
+            SuccinctRoundOracleVarView<CF>,
+            VerifierMessageVar<CF>,
+        >,
     ) -> Result<(), SynthesisError> {
-        // do nothing
+        // nop, but we need to check that all codewords have no RS codes
+        let no_rs_code = codewords.iter().all(|round| {
+            transcript_messages
+                .prover_message_using_ref(*round)
+                .num_reed_solomon_codes_oracles()
+                == 0
+        });
+        assert!(
+            no_rs_code,
+            "NoLDT enforces that main protocol does not send any RS code."
+        );
         Ok(())
     }
 }
