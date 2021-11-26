@@ -10,6 +10,7 @@ pub mod verifier;
 pub mod constraints;
 /// Defines a prover message oracle.
 pub mod message;
+pub mod oracles;
 
 /// A collection of oracle references from other protocols
 /// used by current prover.

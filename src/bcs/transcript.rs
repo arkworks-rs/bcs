@@ -6,9 +6,15 @@ use tracing::info;
 
 use crate::{
     bcs::{prover::BCSProof, MTHashParameters},
-    iop::message::{
-        MsgRoundRef, PendingProverMessage, ProverRoundMessageInfo, RecordingRoundOracle,
-        RoundOracle, SuccinctRoundOracle, VerifierMessage,
+    iop::{
+        message::{
+            MsgRoundRef, PendingProverMessage, ProverRoundMessageInfo, ToMsgRoundRef,
+            VerifierMessage,
+        },
+        oracles::{
+            CosetEvaluator, RecordingRoundOracle, RoundOracle, SuccinctRoundMessage,
+            SuccinctRoundOracle, VirtualOracle,
+        },
     },
     tracer::TraceInfo,
     Error,
@@ -16,187 +22,9 @@ use crate::{
 use ark_crypto_primitives::MerkleTree;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::{univariate::DensePolynomial, Polynomial};
-use ark_std::{boxed::Box, collections::BTreeMap, mem::take};
+use ark_std::mem::take;
 
-/// Namespace is a unique id of the protocol in a transcript.
-/// `Namespace{id=0}` is always reserved for root namespace.
-#[derive(Copy, Clone, Debug, Derivative)]
-#[derivative(PartialEq, PartialOrd, Ord, Eq)]
-pub struct NameSpace {
-    /// The global id of current namespace in the transcript.
-    pub id: u64,
-    /// Trace for the current namespace
-    #[derivative(PartialEq = "ignore", PartialOrd = "ignore", Ord = "ignore")]
-    pub trace: TraceInfo,
-    /// The protocol id of the parent protocol in current transcript.
-    /// if `self.id==0`, then this field should be 0.
-    #[derivative(PartialEq = "ignore", PartialOrd = "ignore", Ord = "ignore")]
-    pub parent_id: u64,
-}
-
-impl NameSpace {
-    /// Root namespace
-    pub const fn root(trace: TraceInfo) -> Self {
-        Self {
-            id: 0,
-            trace,
-            parent_id: 0,
-        }
-    }
-
-    /// Returns a Namespace
-    pub(crate) const fn new(id: u64, trace: TraceInfo, parent_id: u64) -> Self {
-        Self {
-            id,
-            trace,
-            parent_id,
-        }
-    }
-}
-
-#[derive(Clone)]
-/// Stores the ownership relation of each message to its protocol.
-/// All data is managed by `ark-bcs` and users do not need to create the
-/// Bookkeeper by theirselves.
-pub(crate) struct MessageBookkeeper {
-    /// Store the messages by namespace id
-    pub(crate) messages_store: BTreeMap<u64, MessageIndices>,
-    /// An adjacancy list the subspaces called for current namespace, in order.
-    pub(crate) ns_map: BTreeMap<u64, Vec<u64>>,
-    /// Store the namespace details (e.g. trace) by id
-    pub(crate) ns_details: BTreeMap<u64, NameSpace>,
-    next_namespace_index: u64,
-}
-
-impl MessageBookkeeper {
-    pub(crate) fn new(trace: TraceInfo) -> Self {
-        let mut result = Self {
-            messages_store: BTreeMap::default(),
-            ns_map: BTreeMap::default(),
-            ns_details: BTreeMap::default(),
-            next_namespace_index: 0,
-        };
-        // initialize root namespace
-        result.messages_store.insert(0, Default::default());
-        result.ns_map.insert(0, Default::default());
-        result.ns_details.insert(0, NameSpace::new(0, trace, 0));
-        result.next_namespace_index = 1;
-        result
-    }
-
-    pub(crate) fn new_namespace(&mut self, trace: TraceInfo, parent_id: u64) -> NameSpace {
-        let ns = NameSpace::new(self.next_namespace_index, trace, parent_id);
-        // add new namespace details
-        self.ns_details.insert(ns.id, ns);
-        // initialize the messages store for new namespace
-        self.messages_store.insert(
-            ns.id,
-            MessageIndices {
-                prover_message_refs: Vec::new(),
-                verifier_message_refs: Vec::new(),
-            },
-        );
-        // initialize subspace store for new namespace
-        self.ns_map.insert(ns.id, Vec::new());
-        // attach new namespace as subspace for parent namespace
-        self.ns_map.get_mut(&parent_id).unwrap().push(ns.id);
-
-        self.next_namespace_index += 1;
-        ns
-    }
-
-    /// Return all prover message reference sent at this point, in order.
-    pub(crate) fn dump_all_prover_messages_in_order(&self) -> Vec<MsgRoundRef> {
-        self.messages_store
-            .values()
-            .map(|v| v.prover_message_refs.iter())
-            .flatten()
-            .map(|v| *v)
-            .collect()
-    }
-
-    /// Given a namespace id, return the details of namespace.
-    pub(crate) fn get_namespace_details(&self, namespace_id: u64) -> Option<NameSpace> {
-        self.ns_details.get(&namespace_id).map(|x| *x)
-    }
-
-    /// Get the id the subspace that got created at the `index`th call to the
-    /// `new_subspace`
-    pub(crate) fn get_subspace_id(&self, namespace_id: u64, index: usize) -> u64 {
-        *self
-            .ns_map
-            .get(&namespace_id)
-            .expect("namespace does not exist")
-            .get(index)
-            .expect("index out of range")
-    }
-
-    /// Get the subspace that got created at the `index`th call to the
-    /// `new_subspace`
-    pub(crate) fn get_subspace(&self, namespace: NameSpace, index: usize) -> NameSpace {
-        let subspace_id = self.get_subspace_id(namespace.id, index);
-        *self
-            .ns_details
-            .get(&subspace_id)
-            .expect(&ark_std::format!("Invalid Subspace ID: {}", subspace_id).clone())
-    }
-
-    pub(crate) fn attach_prover_round_to_namespace(
-        &mut self,
-        namespace: NameSpace,
-        round_index: usize,
-        trace: TraceInfo,
-    ) -> MsgRoundRef {
-        let namespace_node = self
-            .messages_store
-            .get_mut(&namespace.id)
-            .expect("namespace not found");
-        let oracle_ref = MsgRoundRef::new(round_index, trace);
-        namespace_node.prover_message_refs.push(oracle_ref);
-        oracle_ref
-    }
-
-    pub(crate) fn attach_verifier_round_to_namespace(
-        &mut self,
-        namespace: NameSpace,
-        round_index: usize,
-        trace: TraceInfo,
-    ) -> MsgRoundRef {
-        let namespace_node = self
-            .messages_store
-            .get_mut(&namespace.id)
-            .expect("namespace not found");
-        let oracle_ref = MsgRoundRef::new(round_index, trace);
-        namespace_node.verifier_message_refs.push(oracle_ref);
-        oracle_ref
-    }
-
-    /// Return the message indices for current namespace.
-    pub(crate) fn get_message_indices(&self, namespace: NameSpace) -> &MessageIndices {
-        self.messages_store
-            .get(&namespace.id)
-            .expect("message indices not exist")
-    }
-}
-
-/// contains indices of current protocol messages.
-#[derive(Clone, Derivative)]
-#[derivative(Debug)]
-pub struct MessageIndices {
-    /// Indices of prover message round oracles in this namespace.
-    pub prover_message_refs: Vec<MsgRoundRef>,
-    /// Indices of verifier round oracles in this namespace.
-    pub verifier_message_refs: Vec<MsgRoundRef>,
-}
-
-impl Default for MessageIndices {
-    fn default() -> Self {
-        Self {
-            prover_message_refs: Default::default(),
-            verifier_message_refs: Default::default(),
-        }
-    }
-}
+use super::bookkeeper::{MessageBookkeeper, NameSpace};
 
 #[allow(variant_size_differences)]
 /// Pending message for current transcript. We allow `variant_size_differences`
@@ -214,7 +42,7 @@ impl<F: PrimeField + Absorb> Default for PendingMessage<F> {
 }
 
 /// A communication protocol for IOP prover.
-pub struct Transcript<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
+pub struct Transcript<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
 where
     P::InnerDigest: Absorb,
 {
@@ -227,6 +55,11 @@ where
     /// Each merkle tree leaf is a vector which each element correspond to
     /// the same location of different oracles
     pub prover_message_oracles: Vec<RecordingRoundOracle<F>>,
+    /// Virtual oracle registered during commit phase simulation.
+    /// The second element of each tuple has shape `(num_oracles,
+    /// codeword_size)`
+    pub(crate) registered_virtual_oracles:
+        Vec<(VirtualOracle<F, RecordingRoundOracle<F>>, Vec<Vec<F>>)>,
     /// Each element `merkle_tree_for_each_round[i]` corresponds to the merkle
     /// tree for `prover_message_oracles[i]`. If no oracle messages in this
     /// round, merkle tree will be `None`.
@@ -239,13 +72,11 @@ where
     /// Random Oracle to sample verifier messages.
     pub sponge: S,
     pending_message_for_current_round: PendingMessage<F>,
-    /// Given the degree bound of polynomial, return the evaluation domain and
-    /// localization parameter. **Domain for all low-degree oracles are
-    /// managed by this function.**
-    ldt_info: Box<dyn Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a>,
+    pub(crate) ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+    pub(crate) ldt_localization_parameter: Option<usize>,
 }
 
-impl<'a, P, S, F> Transcript<'a, P, S, F>
+impl<P, S, F> Transcript<P, S, F>
 where
     P: MTConfig<Leaf = [F]>,
     S: CryptographicSponge,
@@ -256,7 +87,8 @@ where
     pub fn new(
         sponge: S,
         hash_params: MTHashParameters<P>,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
+        ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+        ldt_localization_parameter: Option<usize>,
         trace: TraceInfo,
     ) -> Self {
         Self {
@@ -267,7 +99,9 @@ where
             sponge,
             hash_params,
             pending_message_for_current_round: PendingMessage::default(),
-            ldt_info: Box::new(ldt_info),
+            ldt_codeword_domain,
+            ldt_localization_parameter,
+            registered_virtual_oracles: Vec::new(),
         }
     }
 
@@ -279,16 +113,12 @@ where
     /// Submit all prover oracles in this round, and set pending round message
     /// to `None` # Panic
     /// Panic if current prover round messages is `None` or `VerifierMessage`
-    #[tracing::instrument(
-        skip(self, namespace, trace),
-        fields(namespace = %namespace.trace)
-    )]
     pub fn submit_prover_current_round(
         &mut self,
         namespace: NameSpace,
         trace: TraceInfo,
     ) -> Result<MsgRoundRef, Error> {
-        info!("{}", trace);
+        info!("prover round: {}", trace);
 
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::ProverMessage(round_msg) = pending_message {
@@ -306,20 +136,123 @@ where
                 .for_each(|msg| self.sponge.absorb(msg));
             self.prover_message_oracles.push(recording_oracle);
             self.merkle_tree_for_each_round.push(mt);
-            Ok(self.attach_latest_prover_round_to_namespace(namespace, trace))
+            Ok(self.attach_latest_prover_round_to_namespace(namespace, false, trace))
         } else {
             panic!("Current pending message is not prover message!")
         }
     }
 
+    /// Register a virtual oracle specfied by coset evaluator.
+    /// * `coset_query_evaluator`: a function that takes a coset and constituent
+    ///   oracles, and return query responses
+    /// * `evaluation_on_domain`: evaluation of this virtual round on evaluation
+    ///   domain. `evaluation_on_domain[i]` is the evaluation of ith oracle at
+    ///   this round.
+    pub fn register_prover_virtual_round(
+        &mut self,
+        ns: NameSpace,
+        coset_query_evaluator: CosetEvaluator<F, RecordingRoundOracle<F>>,
+        evaluations_on_domain: Vec<Vec<F>>,
+        test_bound: Vec<usize>,
+        constraint_bound: Vec<usize>,
+        trace: TraceInfo,
+    ) -> MsgRoundRef {
+        info!("Register prover virtual oracle: {}", trace);
+        // make sure that we are not in midway of a round
+        assert!(!self.is_pending_message_available());
+
+        let (codeword_domain, localization_param) = (
+            self.ldt_codeword_domain(),
+            self.ldt_localization_parameter(),
+        );
+
+        // make sure all oracles in `evaluation_on_domain` has the same length as the
+        // size of `codeword_domain`
+        assert!(
+            evaluations_on_domain
+                .iter()
+                .all(|x| x.len() == codeword_domain.size()),
+            "All oracles in evaluation_on_domain should have the same length as the size of \
+             codeword_domain"
+        );
+
+        let virtual_oracle = VirtualOracle::new(
+            coset_query_evaluator,
+            codeword_domain,
+            localization_param,
+            test_bound,
+            constraint_bound,
+        );
+
+        self.registered_virtual_oracles
+            .push((virtual_oracle, evaluations_on_domain));
+        self.attach_latest_prover_round_to_namespace(ns, true, trace)
+    }
+
     /// Access previously received verifier round using a reference. This
     /// function is useful when the prover wants to have access to messages
     /// sent from other protocols.
+    ///
+    /// TODO: rethink about this because we have virtual oracle.
+    /// Probably we can have `get_previously_sent_codeword` (panic if virtual),
+    /// and `get_previously_sent_prover_round_info`
     pub fn get_previously_sent_prover_round(
         &self,
         msg_ref: MsgRoundRef,
     ) -> &RecordingRoundOracle<F> {
-        &self.prover_message_oracles[msg_ref.index]
+        if msg_ref.is_virtual {
+            &self.prover_message_oracles[msg_ref.index]
+        } else {
+            panic!("This round is virtual. ")
+        }
+    }
+
+    /// Get low-degree oracle evaluations at index `x` or requested round.
+    ///
+    /// For example, if in requested round, prover send low-degree oracle `[p0,
+    /// p1, p2, ...]`, non low-degree oracle `[q0, q1, ...]`,
+    /// `get_previously_sent_prover_rs_code(at, index)` will return evaluation
+    /// of `p_index` at domain.
+    pub fn get_previously_sent_prover_rs_code(&self, at: impl ToMsgRoundRef, index: usize) -> &[F] {
+        let msg_ref = at.to_prover_msg_round_ref(&self.bookkeeper);
+        if msg_ref.is_virtual {
+            &self.registered_virtual_oracles[msg_ref.index].1[index]
+        } else {
+            &self.prover_message_oracles[msg_ref.index].reed_solomon_codes[index].0
+        }
+    }
+
+    /// Get all low-degree oracle evaluations at  requested round.
+    ///
+    /// For example, if in requested round, prover send low-degree oracle `[p0,
+    /// p1, p2, ...]`, non low-degree oracle `[q0, q1, ...]`,
+    /// `get_previously_sent_prover_rs_code(at)` will return evaluation
+    /// of `[p0, p1, p2, ...]` at domain.
+    pub fn get_previous_sent_prover_rs_codes(&self, at: impl ToMsgRoundRef) -> Vec<Vec<F>> {
+        let msg_ref = at.to_prover_msg_round_ref(&self.bookkeeper);
+        if msg_ref.is_virtual {
+            self.registered_virtual_oracles[msg_ref.index].1.clone()
+        } else {
+            self.prover_message_oracles[msg_ref.index]
+                .reed_solomon_codes
+                .iter()
+                .map(|x| &x.0)
+                .cloned()
+                .collect()
+        }
+    }
+
+    /// Get information about the requested round.
+    pub fn get_previously_sent_prover_round_info(
+        &self,
+        at: impl ToMsgRoundRef,
+    ) -> ProverRoundMessageInfo {
+        let msg_ref = at.to_prover_msg_round_ref(&self.bookkeeper);
+        if msg_ref.is_virtual {
+            self.registered_virtual_oracles[msg_ref.index].0.get_info()
+        } else {
+            self.prover_message_oracles[msg_ref.index].get_info()
+        }
     }
 
     /// Access previously received verifier round using a reference. This
@@ -335,16 +268,12 @@ where
     /// Submit all verifier messages in this round, and set pending round
     /// message to `None`. # Panic
     /// Panic if current verifier round messages is `None` or `ProverMessage`
-    #[tracing::instrument(
-        skip(self, namespace, trace),
-        fields(namespace = %namespace.trace)
-    )]
     pub fn submit_verifier_current_round(
         &mut self,
         namespace: NameSpace,
         trace: TraceInfo,
     ) -> MsgRoundRef {
-        info!("{}", trace);
+        info!("verifier round: {}", trace);
 
         let pending_message = take(&mut self.pending_message_for_current_round);
         if let PendingMessage::VerifierMessage(round_msg) = pending_message {
@@ -366,7 +295,10 @@ where
         if poly.degree() > degree_bound {
             panic!("polynomial degree is greater than degree bound!");
         }
-        let (domain, localization_parameter) = self.ldt_info(degree_bound);
+        let (domain, localization_parameter) = (
+            self.ldt_codeword_domain(),
+            self.ldt_localization_parameter(),
+        );
         // evaluate the poly using ldt domain
         let evaluations = domain.evaluate(poly);
         self.send_oracle_evaluations_unchecked(evaluations, degree_bound, localization_parameter)?;
@@ -382,7 +314,10 @@ where
         degree_bound: usize,
         domain: Radix2CosetDomain<F>,
     ) -> Result<(), Error> {
-        let (expected_domain, localization_parameter) = self.ldt_info(degree_bound);
+        let (expected_domain, localization_parameter) = (
+            self.ldt_codeword_domain(),
+            self.ldt_localization_parameter(),
+        );
         assert_eq!(expected_domain, domain, "inconsistent domain with LDT");
         self.send_oracle_evaluations_unchecked(msg, degree_bound, localization_parameter)?;
         Ok(())
@@ -531,15 +466,14 @@ where
         return true;
     }
 
-    #[cfg(any(test, feature = "test_utils"))]
-    pub(crate) fn all_succinct_round_oracles(&self) -> Vec<SuccinctRoundOracle<F>> {
+    pub(crate) fn all_succinct_messages(&self) -> Vec<SuccinctRoundMessage<F>> {
         self.prover_message_oracles
             .iter()
-            .map(|round| round.get_succinct_oracle())
+            .map(|round| round.get_succinct())
             .collect::<Vec<_>>()
     }
 
-    #[cfg(any(test, feature = "test_utils"))]
+    #[allow(dead_code)]
     pub(crate) fn merkle_tree_roots(&self) -> Vec<Option<P::InnerDigest>> {
         self.merkle_tree_for_each_round
             .iter()
@@ -581,12 +515,17 @@ where
     fn attach_latest_prover_round_to_namespace(
         &mut self,
         namespace: NameSpace,
+        is_virtual: bool,
         trace: TraceInfo,
     ) -> MsgRoundRef {
         // add verifier message index to namespace
-        let index = self.prover_message_oracles.len() - 1;
+        let index = if is_virtual {
+            self.registered_virtual_oracles.len() - 1
+        } else {
+            self.prover_message_oracles.len() - 1
+        };
         self.bookkeeper
-            .attach_prover_round_to_namespace(namespace, index, trace)
+            .attach_prover_round_to_namespace(namespace, index, is_virtual, trace)
     }
 
     fn attach_latest_verifier_round_to_namespace(
@@ -600,16 +539,47 @@ where
             .attach_verifier_round_to_namespace(namespace, index, trace)
     }
 
-    /// returns evaluation domain and localization_parameter of codewords,
-    /// managed by LDT
-    #[inline]
-    pub fn ldt_info(&self, degree_bound: usize) -> (Radix2CosetDomain<F>, usize) {
-        (self.ldt_info)(degree_bound)
+    /// Return the codeword domain used by LDT.
+    ///
+    /// **Any low degree oracle will use this domain as evaluation domain.**
+    ///
+    /// ## Panics
+    /// This function panics if LDT is not enabled.
+    pub fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
+        self.ldt_codeword_domain.expect("LDT not enabled")
+    }
+
+    /// Return the localization parameter used by LDT. Localization parameter is
+    /// the size of query coset of the codeword.
+    ///
+    /// ## Panics
+    /// This function panics if LDT is not enabled or localization parameter is
+    /// not supported by LDT.
+    pub fn ldt_localization_parameter(&self) -> usize {
+        self.ldt_localization_parameter
+            .expect("LDT not enabled or localization parameter is not supported by LDT")
+    }
+
+    /// Given the coset index, return the corresponding query coset of the LDT.
+    ///
+    /// For example, if the codeword domain is `{a,b,c,d,e,f,g,h}`, and
+    /// localization parameter is 2, then this function returns `{a,e}` if the
+    /// coset index is 0, `{b,f}` if the coset index is 1, and `{c,g}` if the
+    /// coset index is 2, and `{d,h}` if the coset index is 3.
+    pub fn ldt_codeword_query_coset(&self, coset_index: usize) -> Radix2CosetDomain<F> {
+        let (domain, localization_parameter) = (
+            self.ldt_codeword_domain(),
+            self.ldt_localization_parameter(),
+        );
+        domain
+            .query_position_to_coset(coset_index, localization_parameter)
+            .1
     }
 }
 
 /// A wrapper for BCS proof, so that verifier can reconstruct verifier messages
 /// by simulating commit phase easily.
+/// TODO: add virtual oracle here
 pub struct SimulationTranscript<
     'a,
     P: MTConfig<Leaf = [F]>,
@@ -638,10 +608,11 @@ pub struct SimulationTranscript<
     pending_verifier_messages: Vec<VerifierMessage<F>>,
     pub(crate) bookkeeper: MessageBookkeeper,
 
-    /// Given the degree bound of polynomial, return the evaluation domain and
-    /// localization parameter. **Domain for all low-degree oracles are
-    /// managed by this function.**
-    ldt_info: Box<dyn Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a>,
+    pub(crate) ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+    pub(crate) ldt_localization_parameter: Option<usize>,
+
+    /// Virtual oracle registered during commit phase simulation.  
+    pub(crate) registered_virtual_oracles: Vec<VirtualOracle<F, SuccinctRoundOracle<'a, F>>>,
 }
 
 impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
@@ -654,10 +625,35 @@ where
     pub(crate) fn new_transcript(
         bcs_proof: &'a BCSProof<P, F>,
         sponge: S,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
+        ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+        ldt_localization_parameter: Option<usize>,
         trace: TraceInfo,
     ) -> Self {
-        Self::new_transcript_with_offset(bcs_proof, 0, sponge, ldt_info, trace)
+        let prover_short_messages = bcs_proof
+            .prover_iop_messages_by_round
+            .iter()
+            .map(|msg| &msg.short_messages)
+            .collect::<Vec<_>>();
+
+        let prover_messages_info = bcs_proof
+            .prover_iop_messages_by_round
+            .iter()
+            .map(|msg| msg.get_view().get_info())
+            .collect::<Vec<_>>();
+
+        Self {
+            prover_short_messages,
+            prover_messages_info,
+            ldt_codeword_domain,
+            ldt_localization_parameter,
+            sponge,
+            current_prover_round: 0,
+            prover_mt_roots: &bcs_proof.prover_messages_mt_root,
+            reconstructed_verifier_messages: Vec::new(),
+            pending_verifier_messages: Vec::new(),
+            bookkeeper: MessageBookkeeper::new(trace),
+            registered_virtual_oracles: Vec::new(),
+        }
     }
 
     /// Create a new namespace in bookkeeper.
@@ -667,41 +663,12 @@ where
 
     /// Returns a wrapper for BCS proof and first `round_offset` messages are
     /// ignored.
-    pub(crate) fn new_transcript_with_offset(
-        bcs_proof: &'a BCSProof<P, F>,
-        round_offset: usize,
-        sponge: S,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
-        trace: TraceInfo,
-    ) -> Self {
-        let prover_short_messages: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
-            .iter()
-            .map(|msg| &msg.short_messages)
-            .collect();
-        let prover_messages_info = bcs_proof.prover_iop_messages_by_round[round_offset..]
-            .iter()
-            .map(|msg| msg.get_view().get_info())
-            .collect();
-        Self {
-            prover_short_messages,
-            prover_messages_info,
-            prover_mt_roots: &bcs_proof.prover_messages_mt_root[round_offset..],
-            sponge,
-            current_prover_round: 0,
-            bookkeeper: MessageBookkeeper::new(trace),
-            reconstructed_verifier_messages: Vec::new(),
-            pending_verifier_messages: Vec::new(),
-            ldt_info: Box::new(ldt_info),
-        }
-    }
-
-    /// Returns a wrapper for BCS proof and first `round_offset` messages are
-    /// ignored.
     pub fn from_prover_messages(
-        prover_iop_messages_by_round: &'a [SuccinctRoundOracle<F>],
+        prover_iop_messages_by_round: &'a [SuccinctRoundMessage<F>],
         prover_iop_messages_mt_roots_by_round: &'a [Option<P::InnerDigest>],
         sponge: S,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
+        ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+        ldt_localization_parameter: Option<usize>,
         trace: TraceInfo,
     ) -> Self {
         let prover_short_messages: Vec<_> = prover_iop_messages_by_round
@@ -721,7 +688,9 @@ where
             bookkeeper: MessageBookkeeper::new(trace),
             reconstructed_verifier_messages: Vec::new(),
             pending_verifier_messages: Vec::new(),
-            ldt_info: Box::new(ldt_info),
+            ldt_codeword_domain,
+            ldt_localization_parameter,
+            registered_virtual_oracles: Vec::new(),
         }
     }
 
@@ -739,11 +708,6 @@ where
     /// parameter is managed by LDT. # Panic
     /// This function will panic is prover message structure contained in proof
     /// is not consistent with `expected_message_structure`.
-    #[tracing::instrument(
-        name="verifier: receive_prover_current_round",
-        skip(self, ns, trace, expected_message_info),
-        fields(namespace = %ns.trace)
-    )]
     pub fn receive_prover_current_round(
         &mut self,
         ns: NameSpace,
@@ -753,25 +717,13 @@ where
         info!("{}", trace);
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
             // LDT is used, so replace its localization parameter with the one given by LDT
-            let localization_parameters_from_ldt = expected_message_info
-                .reed_solomon_code_degree_bound
-                .iter()
-                .map(|&degree| self.ldt_info(degree).1)
-                .collect::<Vec<_>>();
-            // check all localization are equal, for consistency
-            localization_parameters_from_ldt.iter().for_each(|&p| {
-                assert_eq!(
-                    p, localization_parameters_from_ldt[0],
-                    "different localization parameters in one round is not allowed"
-                )
-            });
-            expected_message_info.localization_parameter = localization_parameters_from_ldt[0]
+            expected_message_info.localization_parameter = self.ldt_localization_parameter();
         }
 
         let index = self.current_prover_round;
         self.current_prover_round += 1;
 
-        let trace_info = || {
+        let trace_info = {
             ark_std::format!(
                 "\n Message trace: {}\n Namespace trace: {}",
                 trace,
@@ -782,15 +734,14 @@ where
         if index >= self.prover_messages_info.len() {
             panic!(
                 "Verifier tried to receive extra prove round message. {}",
-                trace_info()
+                trace_info
             );
         }
 
         assert_eq!(
-            &expected_message_info,
-            &self.prover_messages_info[index],
+            &expected_message_info, &self.prover_messages_info[index],
             "prover message is not what verifier want at current round. {}",
-            trace_info()
+            trace_info
         );
 
         // absorb merkle tree root, if any
@@ -799,21 +750,45 @@ where
         self.prover_short_messages[index]
             .iter()
             .for_each(|msg| self.sponge.absorb(msg));
-        self.attach_latest_prover_round_to_namespace(ns, trace)
+        self.attach_latest_prover_round_to_namespace(ns, false, trace)
+    }
+
+    /// Register a virtual oracle specified by coset evaluator.
+    pub fn register_prover_virtual_round(
+        &mut self,
+        ns: NameSpace,
+        coset_evaluator: CosetEvaluator<F, SuccinctRoundOracle<'a, F>>,
+        test_bound: Vec<usize>,
+        constraint_bound: Vec<usize>,
+        trace: TraceInfo,
+    ) -> MsgRoundRef {
+        info!("Register prover virtual oracle: {}", trace);
+        // make sure that no virtual oracle is registered when we are halfway sampling
+        // verifier round
+        assert!(!self.is_pending_message_available());
+        let (codeword_domain, localization_param) = (
+            self.ldt_codeword_domain(),
+            self.ldt_localization_parameter(),
+        );
+        let virtual_oracle = VirtualOracle::new(
+            coset_evaluator,
+            codeword_domain,
+            localization_param,
+            test_bound,
+            constraint_bound,
+        );
+
+        self.registered_virtual_oracles.push(virtual_oracle);
+        self.attach_latest_prover_round_to_namespace(ns, true, trace)
     }
 
     /// Submit all verifier messages in this round.
-    #[tracing::instrument(
-        name="verifier: submit_verifier_current_round",
-        skip(self, namespace, trace),
-        fields(namespace = %namespace.trace)
-    )]
     pub fn submit_verifier_current_round(
         &mut self,
         namespace: NameSpace,
         trace: TraceInfo,
     ) -> MsgRoundRef {
-        info!("{}", trace);
+        info!("verifier round (sim): {}", trace);
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifier_messages.push(pending_message);
         self.attach_latest_verifier_round_to_namespace(namespace, trace)
@@ -885,12 +860,17 @@ where
     fn attach_latest_prover_round_to_namespace(
         &mut self,
         namespace: NameSpace,
+        is_virtual: bool,
         trace: TraceInfo,
     ) -> MsgRoundRef {
         // add verifier message index to namespace
-        let index = self.current_prover_round - 1;
+        let index = if is_virtual {
+            self.registered_virtual_oracles.len() - 1
+        } else {
+            self.current_prover_round - 1
+        };
         self.bookkeeper
-            .attach_prover_round_to_namespace(namespace, index, trace)
+            .attach_prover_round_to_namespace(namespace, index, is_virtual, trace)
     }
 
     fn attach_latest_verifier_round_to_namespace(
@@ -904,10 +884,41 @@ where
             .attach_verifier_round_to_namespace(namespace, index, trace)
     }
 
-    /// returns the evaluation domain used by LDT and localization parameter,
-    /// given the degree bound
-    fn ldt_info(&self, degree: usize) -> (Radix2CosetDomain<F>, usize) {
-        (self.ldt_info)(degree)
+    /// Return the codeword domain used by LDT.
+    ///
+    /// **Any low degree oracle will use this domain as evaluation domain.**
+    ///
+    /// ## Panics
+    /// This function panics if LDT is not enabled.
+    pub fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
+        self.ldt_codeword_domain.expect("LDT not enabled")
+    }
+
+    /// Return the localization parameter used by LDT. Localization parameter is
+    /// the size of query coset of the codeword.
+    ///
+    /// ## Panics
+    /// This function panics if LDT is not enabled or localization parameter is
+    /// not supported by LDT.
+    pub fn ldt_localization_parameter(&self) -> usize {
+        self.ldt_localization_parameter
+            .expect("LDT not enabled or localization parameter is not supported by LDT")
+    }
+
+    /// Given the coset index, return the corresponding query coset of the LDT.
+    ///
+    /// For example, if the codeword domain is `{a,b,c,d,e,f,g,h}`, and
+    /// localization parameter is 2, then this function returns `{a,e}` if the
+    /// coset index is 0, `{b,f}` if the coset index is 1, and `{c,g}` if the
+    /// coset index is 2, and `{d,h}` if the coset index is 3.
+    pub fn ldt_codeword_query_coset(&self, coset_index: usize) -> Radix2CosetDomain<F> {
+        let (codeword_domain, localization_param) = (
+            self.ldt_codeword_domain(),
+            self.ldt_localization_parameter(),
+        );
+        codeword_domain
+            .query_position_to_coset(coset_index, localization_param)
+            .1
     }
 }
 
@@ -981,17 +992,17 @@ pub mod test_utils {
 
                 // prover message should already be verified during prover submit round
                 // check verifier message
-                (0..indices_in_current_namespace_pt.verifier_message_refs.len()).for_each(|i| {
+                (0..indices_in_current_namespace_pt.verifier_messages.len()).for_each(|i| {
                     let verifier_message_trace_pt =
-                        &indices_in_current_namespace_pt.verifier_message_refs[i].trace;
+                        &indices_in_current_namespace_pt.verifier_messages[i].trace;
                     let verifier_message_trace_vt =
-                        &indices_in_current_namespace_vt.verifier_message_refs[i].trace;
+                        &indices_in_current_namespace_vt.verifier_messages[i].trace;
                     // verifier message gained by prover transcript
                     let verifier_message_pt = &prover_transcript.verifier_messages
-                        [indices_in_current_namespace_pt.verifier_message_refs[i].index];
+                        [indices_in_current_namespace_pt.verifier_messages[i].index];
                     // verifier message gained by verifier simulation transcript
                     let verifier_message_vt = &verifier_transcript.reconstructed_verifier_messages
-                        [indices_in_current_namespace_vt.verifier_message_refs[i].index];
+                        [indices_in_current_namespace_vt.verifier_messages[i].index];
 
                     assert_eq!(
                         verifier_message_pt, verifier_message_vt,
@@ -1022,6 +1033,9 @@ pub mod test_utils {
     /// prover's code For now this method only supports protocols that can
     /// start with empty transcript. To unit test subprotocol with oracle
     /// references, you need to write a wrapper.
+    ///
+    /// Due to current limitation, `check_commit_phase_correctness` cannot check
+    /// virtual oracle.
     pub fn check_commit_phase_correctness<
         F: PrimeField + Absorb,
         S: CryptographicSponge,
@@ -1044,7 +1058,8 @@ pub mod test_utils {
             let mut transcript = Transcript::new(
                 sponge.clone(),
                 hash_params,
-                |degree| L::ldt_info(ldt_params, degree),
+                L::codeword_domain(ldt_params),
+                L::localization_param(ldt_params),
                 iop_trace!("Check commit phase correctness"),
             );
             P::prove(
@@ -1060,14 +1075,15 @@ pub mod test_utils {
         };
 
         // generate transcript using verifier perspective
-        let succinct_prover_messages = transcript_pt.all_succinct_round_oracles();
+        let succinct_prover_messages = transcript_pt.all_succinct_messages();
         let prover_mt_roots = transcript_pt.merkle_tree_roots();
         let sponge_vt = sponge.clone();
         let mut transcript_vt = SimulationTranscript::from_prover_messages(
             &succinct_prover_messages,
             &prover_mt_roots,
             sponge_vt,
-            |degree| L::ldt_info(ldt_params, degree),
+            L::codeword_domain(ldt_params),
+            L::localization_param(ldt_params),
             iop_trace!("check commit phase correctness"),
         );
         V::register_iop_structure(

@@ -8,11 +8,13 @@ use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::{marker::PhantomData, Zero};
 
 use ark_bcs::{
-    bcs::transcript::{NameSpace, SimulationTranscript, Transcript},
+    bcs::{
+        bookkeeper::NameSpace,
+        transcript::{SimulationTranscript, Transcript},
+    },
     iop::{
-        message::{
-            MessagesCollection, MsgRoundRef, ProverRoundMessageInfo, RoundOracle, VerifierMessage,
-        },
+        message::{MessagesCollection, MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
+        oracles::RoundOracle,
         prover::IOPProver,
         verifier::IOPVerifier,
         ProverOracleRefs, ProverParam,
@@ -187,7 +189,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
                                          * this `oracle_refs` using the message in current
                                          * protocol */
         random_oracle: &mut S,
-        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<F, O>,
     ) -> Result<Self::VerifierOutput, Error> {
         // query a random point in evaluation domain
         let evaluation_domain = verifier_parameter.evaluation_domain;
@@ -203,8 +205,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         let query_point = evaluation_domain.element(query);
 
         let query_responses = transcript_messages
-            .prover_message(namespace, 0)
-            .query(&[query], iop_trace!("sumcheck query"))
+            .query_prover_point((namespace, 0), &[query], iop_trace!("sumcheck query"))
             .pop()
             .unwrap();
         let h_point = query_responses[0];
@@ -212,7 +213,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         let vh_point = query_point.pow(&[summation_domain.size]) - F::one(); // evaluate over vanishing poly
 
         // f(s)
-        let expected = transcript_messages.prover_message_using_ref(oracle_refs.poly).query(&[query], iop_trace!("oracle access to poly in sumcheck"))
+        let expected = transcript_messages.query_prover_point(oracle_refs.poly, &[query], iop_trace!("oracle access to poly in sumcheck"))
             .remove(0)// there's only one query, so always zero
             .remove(public_input.which); // we want to get `which` oracle in this round
                                          // h(s) * v_h(s) + (s * p(s) + claimed_sum/summation_domain.size)

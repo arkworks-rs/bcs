@@ -6,9 +6,10 @@ pub(crate) mod mock;
 
 use crate::{
     bcs::{
+        bookkeeper::NameSpace,
         prover::BCSProof,
         tests::mock::{MockTest1Verifier, MockTestProver},
-        transcript::{NameSpace, SimulationTranscript},
+        transcript::SimulationTranscript,
         verifier::BCSVerifier,
         MTHashParameters,
     },
@@ -45,14 +46,16 @@ impl Config for FieldMTConfig {
 /// Test if restore_state_from_commit_phase message works. This test uses a
 /// dummy protocol described as `MockTestProver`.
 fn test_bcs() {
+    tracing_subscriber::fmt::fmt().init();
+
     let fri_parameters = FRIParameters::new(
         64,
-        vec![1, 2, 1],
+        vec![2, 2, 1],
         Radix2CosetDomain::new_radix2_coset(128, Fr::one()),
     );
     let ldt_parameters = LinearCombinationLDTParameters {
         fri_parameters,
-        num_queries: 1,
+        num_queries: 7,
     };
     let sponge = PoseidonSponge::new(&poseidon_parameters());
     let mt_hash_param = MTHashParameters::<FieldMTConfig> {
@@ -79,7 +82,8 @@ fn test_bcs() {
     let mut simulation_transcript = SimulationTranscript::new_transcript(
         &bcs_proof,
         sponge,
-        |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
+        LinearCombinationLDT::codeword_domain(&ldt_parameters),
+        LinearCombinationLDT::localization_param(&ldt_parameters),
         iop_trace!("test bcs"),
     );
     MockTest1Verifier::register_iop_structure(

@@ -15,15 +15,17 @@ use ark_std::{marker::PhantomData, test_rng, One};
 
 use ark_bcs::{
     bcs::{
+        bookkeeper::NameSpace,
         prover::BCSProof,
         transcript::{
-            test_utils::check_commit_phase_correctness, NameSpace, SimulationTranscript, Transcript,
+            test_utils::check_commit_phase_correctness, SimulationTranscript, Transcript,
         },
         verifier::BCSVerifier,
         MTHashParameters,
     },
     iop::{
-        message::{MessagesCollection, ProverRoundMessageInfo, RoundOracle, VerifierMessage},
+        message::{MessagesCollection, ProverRoundMessageInfo, VerifierMessage},
+        oracles::RoundOracle,
         prover::IOPProver,
         verifier::IOPVerifier,
         ProverParam,
@@ -232,13 +234,14 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         public_input: &Self::PublicInput,
         _oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
-        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<F, O>,
     ) -> Result<Self::VerifierOutput, Error> {
         // which oracle we are using to sumcheck
-        let oracle_refs_sumcheck =
-            SumcheckOracleRef::new(transcript_messages.prover_messages(namespace)[0]);
+        let oracle_refs_sumcheck = SumcheckOracleRef::new(
+            transcript_messages.prover_round_refs_in_namespace(namespace)[0],
+        );
         // get the random coefficients we squeezed in commit phase
-        let random_coeffs = transcript_messages.verifier_message(namespace, 0)[0]
+        let random_coeffs = transcript_messages.get_verifier_message((namespace, 0))[0]
             .clone()
             .try_into_field_elements()
             .expect("invalid verifier message type");

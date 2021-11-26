@@ -1,13 +1,8 @@
 use crate::{
-    bcs::{
-        transcript::{NameSpace, Transcript},
-        MTHashParameters,
-    },
+    bcs::{bookkeeper::NameSpace, transcript::Transcript, MTHashParameters},
     iop::{
-        message::{MessagesCollection, SuccinctRoundOracle},
-        prover::IOPProverWithNoOracleRefs,
-        verifier::IOPVerifierForProver,
-        ProverParam,
+        message::MessagesCollection, oracles::SuccinctRoundMessage,
+        prover::IOPProverWithNoOracleRefs, verifier::IOPVerifierForProver, ProverParam,
     },
     ldt::{NoLDT, LDT},
     Error,
@@ -35,7 +30,7 @@ where
     /// (IP message). All non-IP messages in the same prover round share the
     /// same merkle tree. Each merkle tree leaf is a vector which each
     /// element correspond to the same coset of different oracles.
-    pub prover_iop_messages_by_round: Vec<SuccinctRoundOracle<F>>,
+    pub prover_iop_messages_by_round: Vec<SuccinctRoundMessage<F>>,
 
     // BCS data below: maybe combine
     /// Merkle tree roots for all prover messages (including main prover and ldt
@@ -78,7 +73,8 @@ where
             Transcript::new(
                 sponge,
                 hash_params.clone(),
-                move |degree| L::ldt_info(&ldt_params, degree),
+                L::codeword_domain(&ldt_params),
+                L::localization_param(&ldt_params),
                 iop_trace!("BCS Proof Generation"),
             )
         };
@@ -119,6 +115,11 @@ where
 
         let mut transcript_messages = MessagesCollection::new(
             transcript.prover_message_oracles,
+            transcript
+                .registered_virtual_oracles
+                .into_iter()
+                .map(|v| Some(v.0))
+                .collect(),
             transcript.verifier_messages,
             transcript.bookkeeper,
         );
@@ -147,13 +148,13 @@ where
 
         // convert oracles to succinct oracle
         let all_succinct_oracles: Vec<_> = transcript_messages
-            .prover_messages
+            .real_oracles
             .iter()
-            .map(|x| x.get_succinct_oracle())
+            .map(|x| x.get_succinct())
             .collect();
 
         let all_queries: Vec<_> = transcript_messages
-            .prover_messages
+            .real_oracles
             .iter()
             .map(|msg| msg.queried_coset_index.clone())
             .collect();

@@ -6,8 +6,14 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
 
 use crate::{
-    bcs::transcript::{NameSpace, SimulationTranscript, Transcript},
-    iop::message::{MessagesCollection, MsgRoundRef, RoundOracle, VerifierMessage},
+    bcs::{
+        bookkeeper::NameSpace,
+        transcript::{SimulationTranscript, Transcript},
+    },
+    iop::{
+        message::{MessagesCollection, MsgRoundRef},
+        oracles::RoundOracle,
+    },
     Error,
 };
 
@@ -22,11 +28,12 @@ pub trait LDT<F: PrimeField + Absorb> {
     /// Parameters of `Self`
     type LDTParameters: Clone;
 
-    /// Given the degree bound of codeword, return the expected evaluation
-    /// domain and localization_parameter. localization parameter is
-    /// log2(size of query coset) # Panics
-    /// `ldt_info` will panic if `degree_bound` is not supported by this LDT.
-    fn ldt_info(param: &Self::LDTParameters, degree_bound: usize) -> (Radix2CosetDomain<F>, usize);
+    /// Return the codeword domain used by this LDT.
+    fn codeword_domain(param: &Self::LDTParameters) -> Option<Radix2CosetDomain<F>>;
+
+    /// Return the localization parameter (size of query coset) of codewords
+    /// used by this LDT.
+    fn localization_param(param: &Self::LDTParameters) -> Option<usize>;
 
     /// Given the list of message round references along with its degree bound,
     /// generate a low degree test proof all reed solomon codes in each
@@ -64,7 +71,7 @@ pub trait LDT<F: PrimeField + Absorb> {
         param: &Self::LDTParameters,
         sponge: &mut S,
         codewords: &[MsgRoundRef],
-        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<F, O>,
     ) -> Result<(), Error>;
 }
 
@@ -88,16 +95,6 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
     /// If LDTParameters is None, `ldt_info` will panic, so transcript would not
     /// allow low degree oracles to be sent.
     type LDTParameters = Option<(Radix2CosetDomain<F>, usize)>;
-
-    fn ldt_info(
-        param: &Self::LDTParameters,
-        _degree_bound: usize,
-    ) -> (Radix2CosetDomain<F>, usize) {
-        param
-            .as_ref()
-            .expect("NoLDT has no evaluation domain configured")
-            .clone()
-    }
 
     /// `prove` for NoLDT is no-op.
     fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
@@ -128,12 +125,12 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
         _param: &Self::LDTParameters,
         _sponge: &mut S,
         codewords: &[MsgRoundRef],
-        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<F, O>,
     ) -> Result<(), Error> {
         // nop, but we need to check that all codewords have no RS codes
         let no_rs_code = codewords.iter().all(|round| {
             transcript_messages
-                .prover_message_using_ref(*round)
+                .get_prover_round_info(*round)
                 .num_reed_solomon_codes_oracles()
                 == 0
         });
@@ -142,5 +139,13 @@ impl<F: PrimeField + Absorb> LDT<F> for NoLDT<F> {
             "NoLDT enforces that main protocol does not send any RS code."
         );
         Ok(())
+    }
+
+    fn codeword_domain(_param: &Self::LDTParameters) -> Option<Radix2CosetDomain<F>> {
+        None
+    }
+
+    fn localization_param(_param: &Self::LDTParameters) -> Option<usize> {
+        None
     }
 }

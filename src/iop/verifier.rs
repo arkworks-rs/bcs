@@ -2,15 +2,16 @@ use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
 
 use crate::{
-    bcs::transcript::{NameSpace, SimulationTranscript},
+    bcs::{bookkeeper::NameSpace, transcript::SimulationTranscript},
     iop::{
-        message::{MessagesCollection, RoundOracle, VerifierMessage},
-        prover::IOPProver,
-        ProverOracleRefs, ProverParam, VerifierOracleRefs, VerifierParam,
+        message::MessagesCollection, prover::IOPProver, ProverOracleRefs, ProverParam,
+        VerifierOracleRefs, VerifierParam,
     },
     Error,
 };
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
+
+use super::oracles::RoundOracle;
 
 /// The verifier for public coin IOP has two phases.
 /// * **Commit Phase**: Verifier send message that is uniformly sampled from a
@@ -63,7 +64,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
         public_input: &Self::PublicInput,
         oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
-        transcript_messages: &mut MessagesCollection<O, VerifierMessage<F>>,
+        transcript_messages: &mut MessagesCollection<F, O>,
     ) -> Result<Self::VerifierOutput, Error>;
 }
 

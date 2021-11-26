@@ -1,8 +1,6 @@
 use crate::{
     bcs::{
-        prover::BCSProof,
-        transcript::{NameSpace, SimulationTranscript},
-        MTHashParameters,
+        bookkeeper::NameSpace, prover::BCSProof, transcript::SimulationTranscript, MTHashParameters,
     },
     iop::{
         message::MessagesCollection,
@@ -54,7 +52,8 @@ where
         let mut transcript = SimulationTranscript::new_transcript(
             proof,
             sponge,
-            |degree| L::ldt_info(ldt_params, degree),
+            L::codeword_domain(ldt_params),
+            L::localization_param(ldt_params),
             iop_trace!("IOP Root: BCS proof verify"),
         );
 
@@ -82,8 +81,14 @@ where
                     .len()
             })
             .sum::<usize>();
+        let num_virtual_oracles = transcript.registered_virtual_oracles.len(); // TODO: change to sum of number of oracle in each virtual round
 
-        L::register_iop_structure(ldt_namespace, ldt_params, num_rs_oracles, &mut transcript);
+        L::register_iop_structure(
+            ldt_namespace,
+            ldt_params,
+            num_rs_oracles + num_virtual_oracles,
+            &mut transcript,
+        );
 
         debug_assert!(
             !transcript.is_pending_message_available(),
@@ -102,6 +107,11 @@ where
 
         let mut transcript_messages = MessagesCollection::new(
             prover_message_view,
+            transcript
+                .registered_virtual_oracles
+                .into_iter()
+                .map(|x| Some(x))
+                .collect(),
             transcript.reconstructed_verifier_messages,
             transcript.bookkeeper,
         );
@@ -134,14 +144,11 @@ where
         let all_paths = proof.prover_oracles_mt_path.clone();
         let all_mt_roots = &proof.prover_messages_mt_root;
 
-        assert_eq!(transcript_messages.prover_messages.len(), all_paths.len());
-        assert_eq!(
-            transcript_messages.prover_messages.len(),
-            all_mt_roots.len()
-        );
+        assert_eq!(transcript_messages.real_oracles.len(), all_paths.len());
+        assert_eq!(transcript_messages.real_oracles.len(), all_mt_roots.len());
 
         transcript_messages
-            .prover_messages
+            .real_oracles
             .iter()
             .zip(all_paths)
             .zip(all_mt_roots)
@@ -149,7 +156,7 @@ where
                 assert_eq!(round_oracle.coset_queries.len(), paths.len());
                 assert_eq!(
                     round_oracle.coset_queries.len(),
-                    round_oracle.oracle.queried_cosets.len(),
+                    round_oracle.underlying_message.queried_cosets.len(),
                     "insufficient queries in verifier code"
                 );
                 let mt_root = if round_oracle.coset_queries.len() > 0 {
@@ -162,7 +169,7 @@ where
                 round_oracle
                     .coset_queries
                     .iter()
-                    .zip(round_oracle.oracle.queried_cosets.iter())
+                    .zip(round_oracle.underlying_message.queried_cosets.iter())
                     .zip(paths.into_iter())
                     .for_each(|((index, coset), mut path)| {
                         debug_assert_eq!(path.leaf_index, *index);

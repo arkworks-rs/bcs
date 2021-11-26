@@ -1,5 +1,5 @@
 use crate::{
-    bcs::transcript::{NameSpace, Transcript},
+    bcs::{bookkeeper::NameSpace, transcript::Transcript},
     iop::{ProverOracleRefs, ProverParam},
 };
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
