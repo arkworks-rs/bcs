@@ -1,4 +1,4 @@
-use crate::{bcs::prover::BCSProof, iop::constraints::message::SuccinctRoundOracleVar};
+use crate::{bcs::prover::BCSProof, iop::constraints::oracles::SuccinctRoundMessageVar};
 use ark_crypto_primitives::{
     merkle_tree::{constraints::ConfigGadget, Config},
     PathVar,
@@ -29,7 +29,7 @@ where
     /// (IP message). All non-IP messages in the same prover round share the
     /// same merkle tree. Each merkle tree leaf is a vector which each
     /// element correspond to the same coset of different oracles.
-    pub prover_iop_messages_by_round: Vec<SuccinctRoundOracleVar<CF>>,
+    pub prover_iop_messages_by_round: Vec<SuccinctRoundMessageVar<CF>>,
     /// Merkle tree roots for all prover messages (including main prover and ldt
     /// prover).
     pub prover_messages_mt_root: Vec<Option<MTG::InnerDigest>>,
@@ -55,7 +55,7 @@ where
         let native = f()?;
         let native = native.borrow();
         let cs = cs.into();
-        let prover_iop_messages_by_round = Vec::<SuccinctRoundOracleVar<CF>>::new_variable(
+        let prover_iop_messages_by_round = Vec::<SuccinctRoundMessageVar<CF>>::new_variable(
             cs.clone(),
             || Ok(native.prover_iop_messages_by_round.clone()),
             mode,

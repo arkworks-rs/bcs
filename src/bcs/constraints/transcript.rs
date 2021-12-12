@@ -1,10 +1,14 @@
 use crate::{
     bcs::{
+        bookkeeper::{MessageBookkeeper, NameSpace},
         constraints::proof::BCSProofVar,
-        transcript::{MessageBookkeeper, NameSpace},
+        transcript::LDTInfo,
     },
     iop::{
-        constraints::message::{SuccinctRoundOracleVar, VerifierMessageVar},
+        constraints::{
+            message::VerifierMessageVar,
+            oracles::{CosetVarEvaluator, SuccinctRoundMessageVar, VirtualOracleVar},
+        },
         message::{MsgRoundRef, ProverRoundMessageInfo},
     },
     tracer::TraceInfo,
@@ -18,8 +22,7 @@ use ark_sponge::{
     constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
     Absorb,
 };
-use ark_std::{boxed::Box, mem::take, vec::Vec};
-use tracing::info;
+use ark_std::{mem::take, vec::Vec};
 
 /// R1CS Variable for simulation transcript used by verifier.
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
@@ -41,7 +44,12 @@ where
 
     pending_verifier_messages: Vec<VerifierMessageVar<F>>,
     pub(crate) bookkeeper: MessageBookkeeper,
-    ldt_info: Box<dyn Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a>,
+
+    pub(crate) ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+    pub(crate) ldt_localization_parameter: Option<usize>,
+
+    /// Virtual oracle registered during commit phase simulation
+    pub(crate) registered_virtual_oracles: Vec<VirtualOracleVar<F>>,
 }
 
 impl<'a, F, MT, MTG, S> SimulationTranscriptVar<'a, F, MT, MTG, S>
@@ -57,37 +65,32 @@ where
     pub(crate) fn new_transcript(
         bcs_proof: &'a BCSProofVar<MT, MTG, F>,
         sponge: S::Var,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
+        ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+        ldt_localization_parameter: Option<usize>,
         trace: TraceInfo,
     ) -> Self {
-        Self::new_transcript_with_offset(bcs_proof, 0, sponge, ldt_info, trace)
-    }
-
-    pub(crate) fn new_transcript_with_offset(
-        bcs_proof: &'a BCSProofVar<MT, MTG, F>,
-        round_offset: usize,
-        sponge: S::Var,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
-        trace: TraceInfo,
-    ) -> Self {
-        let prover_short_messages: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
+        let prover_short_messages: Vec<_> = bcs_proof
+            .prover_iop_messages_by_round
             .iter()
             .map(|msg| &msg.short_messages)
             .collect();
-        let prover_messages_info: Vec<_> = bcs_proof.prover_iop_messages_by_round[round_offset..]
+        let prover_messages_info: Vec<_> = bcs_proof
+            .prover_iop_messages_by_round
             .iter()
             .map(|msg| msg.info.clone())
             .collect();
         Self {
             prover_short_messages,
             prover_messages_info,
-            prover_mt_roots: &bcs_proof.prover_messages_mt_root[round_offset..],
+            prover_mt_roots: &bcs_proof.prover_messages_mt_root,
             sponge,
             current_prover_round: 0,
             bookkeeper: MessageBookkeeper::new(trace),
             reconstructed_verifier_messages: Vec::new(),
             pending_verifier_messages: Vec::new(),
-            ldt_info: Box::new(ldt_info),
+            ldt_codeword_domain,
+            ldt_localization_parameter,
+            registered_virtual_oracles: Vec::new(),
         }
     }
 
@@ -101,10 +104,11 @@ where
     ///
     /// `ldt_info` may panic if `NoLDT` is used.
     pub fn from_prover_messages(
-        prover_iop_messages_by_round: &'a [SuccinctRoundOracleVar<F>],
+        prover_iop_messages_by_round: &'a [SuccinctRoundMessageVar<F>],
         prover_iop_messages_mt_roots_by_round: &'a [Option<MTG::InnerDigest>],
         sponge_var: S::Var,
-        ldt_info: impl Fn(usize) -> (Radix2CosetDomain<F>, usize) + 'a,
+        ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+        ldt_localization_parameter: Option<usize>,
         trace: TraceInfo,
     ) -> Self {
         let prover_short_messages = prover_iop_messages_by_round
@@ -124,7 +128,9 @@ where
             bookkeeper: MessageBookkeeper::new(trace),
             reconstructed_verifier_messages: Vec::new(),
             pending_verifier_messages: Vec::new(),
-            ldt_info: Box::new(ldt_info),
+            ldt_codeword_domain,
+            ldt_localization_parameter,
+            registered_virtual_oracles: Vec::new(),
         }
     }
 
@@ -142,33 +148,33 @@ where
     /// parameter is managed by LDT. # Panic
     /// This function will panic is prover message structure contained in proof
     /// is not consistent with `expected_message_structure`.
-    #[tracing::instrument(skip(self, ns, expected_message_info, tracer))]
     pub fn receive_prover_current_round(
         &mut self,
         ns: NameSpace,
         mut expected_message_info: ProverRoundMessageInfo,
         tracer: TraceInfo,
     ) -> Result<MsgRoundRef, SynthesisError> {
-        info!("{}", tracer.description());
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
-            // LDT is used, so replace its localization parameter with the one given by LDT
-            let localization_parameters_from_ldt = expected_message_info
-                .reed_solomon_code_degree_bound
-                .iter()
-                .map(|&degree| self.ldt_info(degree).1)
-                .collect::<Vec<_>>();
-            // check all localization are equal, for consistency
-            localization_parameters_from_ldt.iter().for_each(|&p| {
-                assert_eq!(
-                    p, localization_parameters_from_ldt[0],
-                    "different localization parameters in one round is not allowed"
-                )
-            });
-            expected_message_info.localization_parameter = localization_parameters_from_ldt[0]
+            expected_message_info.localization_parameter = self.ldt_localization_parameter();
         }
 
         let index = self.current_prover_round;
         self.current_prover_round += 1;
+
+        let trace_info = {
+            ark_std::format!(
+                "\n Message trace: {}\n Namespace trace: {}",
+                tracer,
+                ns.trace
+            )
+        };
+
+        if index >= self.prover_messages_info.len() {
+            panic!(
+                "Verifier tried to receive extra prove round message. {}",
+                trace_info
+            );
+        }
 
         assert_eq!(
             &expected_message_info, &self.prover_messages_info[index],
@@ -177,23 +183,44 @@ where
 
         // absorb merkle tree root, if any
         self.sponge.absorb(&self.prover_mt_roots[index])?;
-
         // absorb short messages for this round, if any
         self.prover_short_messages[index]
             .iter()
             .try_for_each(|msg| self.sponge.absorb(msg))?;
+        Ok(self.attach_latest_prover_round_to_namespace(ns, false, tracer))
+    }
 
-        Ok(self.attach_latest_prover_round_to_namespace(ns, tracer))
+    /// register a virtual oracle constraints specified by coset evaluator
+    pub fn register_prover_virtual_round(
+        &mut self,
+        ns: NameSpace,
+        coset_evaluator: CosetVarEvaluator<F>,
+        test_bound: Vec<usize>,
+        constraint_bound: Vec<usize>,
+        trace: TraceInfo,
+    ) -> MsgRoundRef {
+        let (codeword_domain, localization_param) = (
+            self.ldt_codeword_domain(),
+            self.ldt_localization_parameter(),
+        );
+        let virtual_oracle = VirtualOracleVar::new(
+            coset_evaluator,
+            codeword_domain,
+            localization_param,
+            test_bound,
+            constraint_bound,
+        );
+
+        self.registered_virtual_oracles.push(virtual_oracle);
+        self.attach_latest_prover_round_to_namespace(ns, true, trace)
     }
 
     /// Submit all verification messages in this round
-    #[tracing::instrument(skip(self, namespace, tracer))]
     pub fn submit_verifier_current_round(
         &mut self,
         namespace: NameSpace,
         tracer: TraceInfo,
     ) -> MsgRoundRef {
-        info!("{}", tracer);
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifier_messages.push(pending_message);
         self.attach_latest_verifier_round_to_namespace(namespace, tracer)
@@ -259,12 +286,17 @@ where
     fn attach_latest_prover_round_to_namespace(
         &mut self,
         namespace: NameSpace,
+        is_virtual: bool,
         trace: TraceInfo,
     ) -> MsgRoundRef {
         // add verifier message index to namespace
-        let index = self.current_prover_round - 1;
+        let index = if is_virtual {
+            self.registered_virtual_oracles.len() - 1
+        } else {
+            self.current_prover_round - 1
+        };
         self.bookkeeper
-            .attach_prover_round_to_namespace(namespace, index, trace)
+            .attach_prover_round_to_namespace(namespace, index, is_virtual, trace)
     }
 
     fn attach_latest_verifier_round_to_namespace(
@@ -277,185 +309,36 @@ where
         self.bookkeeper
             .attach_verifier_round_to_namespace(namespace, index, trace)
     }
-
-    fn ldt_info(&self, degree: usize) -> (Radix2CosetDomain<F>, usize) {
-        (self.ldt_info)(degree)
-    }
 }
 
-#[cfg(any(feature = "test_utils", test))]
-/// Utilities for testing if `register_iop_structure_var` is correct
-pub mod test_utils {
-    use crate::{
-        bcs::{
-            constraints::transcript::SimulationTranscriptVar,
-            transcript::{NameSpace, Transcript},
-            MTHashParameters,
-        },
-        iop::{
-            constraints::{message::SuccinctRoundOracleVar, IOPVerifierWithGadget},
-            prover::IOPProverWithNoOracleRefs,
-        },
-        ldt::constraints::LDTWithGadget,
-    };
-    use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
-    use ark_ff::PrimeField;
-    use ark_r1cs_std::{alloc::AllocVar, fields::fp::FpVar, R1CSVar};
-    use ark_sponge::{
-        constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
-        Absorb,
-    };
-    use ark_std::{collections::BTreeSet, vec::Vec};
-
-    /// Check if simulation transcript generated by `register_iop_structure`
-    /// is consistent with prover transcript
-    pub fn check_transcript_var_consistency<MT, MTG, S, F>(
-        prover_transcript: &Transcript<MT, S, F>,
-        verifier_transcript: &SimulationTranscriptVar<F, MT, MTG, S>,
-    ) where
-        MT: Config<Leaf = [F]>,
-        MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
-        S: SpongeWithGadget<F>,
-        F: PrimeField + Absorb,
-        MT::InnerDigest: Absorb,
-        MTG::InnerDigest: AbsorbGadget<F>,
-    {
-        // check namespace consistency
-        assert_eq!(
-            verifier_transcript
-                .bookkeeper
-                .messages_store
-                .keys()
-                .collect::<BTreeSet<_>>(),
-            prover_transcript
-                .bookkeeper
-                .messages_store
-                .keys()
-                .collect::<BTreeSet<_>>(),
-            "inconsistent namespace used"
-        );
-        // check for each namespace
-        verifier_transcript
-            .bookkeeper
-            .messages_store
-            .keys()
-            .for_each(|key| {
-                let namespace_diag = ark_std::format!(
-                    "Prover transcript defines this namespace as {}\n\
-             Verifier defines this namespace as {}\n",
-                    prover_transcript
-                        .bookkeeper
-                        .ns_details
-                        .get(key)
-                        .unwrap()
-                        .trace,
-                    verifier_transcript
-                        .bookkeeper
-                        .ns_details
-                        .get(key)
-                        .unwrap()
-                        .trace
-                );
-                let indices_in_current_namespace_pt =
-                    &prover_transcript.bookkeeper.messages_store[key];
-                let indices_in_current_namespace_vt =
-                    &verifier_transcript.bookkeeper.messages_store[key];
-
-                (0..indices_in_current_namespace_pt.verifier_message_refs.len()).for_each(|i| {
-                    let verifier_message_trace_pt =
-                        &indices_in_current_namespace_pt.verifier_message_refs[i].trace;
-                    let verifier_message_trace_vt =
-                        &indices_in_current_namespace_vt.verifier_message_refs[i].trace;
-                    // verifier message gained by prover transcript
-                    let verifier_message_pt = &prover_transcript.verifier_messages
-                        [indices_in_current_namespace_pt.verifier_message_refs[i].index];
-                    // verifier message gained by verifier simulation transcript
-                    let verifier_message_vt = &verifier_transcript.reconstructed_verifier_messages
-                        [indices_in_current_namespace_vt.verifier_message_refs[i].index]
-                        .value()
-                        .unwrap();
-                    assert_eq!(
-                        verifier_message_pt, verifier_message_vt,
-                        "Inconsistent verifier round #{}.\n\
-             Prover transcript message trace: {}\n\
-             Verifier transcript message trace: {}\n\
-             {}
-             ",
-                        i, verifier_message_trace_pt, verifier_message_trace_vt, namespace_diag
-                    );
-                });
-            })
+impl<'a, F, MT, MTG, S> LDTInfo<F> for SimulationTranscriptVar<'a, F, MT, MTG, S>
+where
+    F: PrimeField + Absorb,
+    MT: Config,
+    MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
+    S: SpongeWithGadget<F>,
+    MT::InnerDigest: Absorb,
+    F: Absorb,
+    MTG::InnerDigest: AbsorbGadget<F>,
+{
+    /// Return the codeword domain used by LDT.
+    ///
+    /// **Any low degree oracle will use this domain as evaluation domain.**
+    ///
+    /// ## Panics
+    /// This function panics if LDT is not enabled.
+    fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
+        self.ldt_codeword_domain.expect("LDT not enabled")
     }
 
-    /// Check if simulation transcript variable filled by the verifier
-    /// constraints is consistent with prover transcript
-    pub fn check_commit_phase_correctness_var<
-        F: PrimeField + Absorb,
-        S: SpongeWithGadget<F>,
-        MT: Config<Leaf = [F]>,
-        MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
-        P: IOPProverWithNoOracleRefs<F>,
-        V: IOPVerifierWithGadget<S, F, PublicInput = P::PublicInput>,
-        L: LDTWithGadget<F>,
-    >(
-        sponge: S,
-        sponge_var: S::Var,
-        public_input: &P::PublicInput,
-        private_input: &P::PrivateInput,
-        prover_parameter: &P::ProverParameter,
-        verifier_parameter: &V::VerifierParameter,
-        ldt_params: &L::LDTParameters,
-        hash_params: MTHashParameters<MT>,
-    ) where
-        MT::InnerDigest: Absorb,
-        MTG::InnerDigest: AbsorbGadget<F>,
-    {
-        // generate transcript using prover perspective
-        let transcript_pt = {
-            let mut transcript = Transcript::new(
-                sponge.clone(),
-                hash_params,
-                |degree| L::ldt_info(ldt_params, degree),
-                iop_trace!("check commit phase correctness"),
-            );
-            P::prove(
-                NameSpace::root(iop_trace!("check commit phase correctness")),
-                &(),
-                public_input,
-                private_input,
-                &mut transcript,
-                prover_parameter,
-            )
-            .unwrap();
-            transcript
-        };
-        let cs = sponge_var.cs();
-        let succinct_prover_messages = transcript_pt
-            .all_succinct_round_oracles()
-            .into_iter()
-            .map(|round| SuccinctRoundOracleVar::new_witness(cs.clone(), || Ok(round)).unwrap())
-            .collect::<Vec<_>>();
-        let prover_mt_roots = transcript_pt
-            .merkle_tree_roots()
-            .into_iter()
-            .map(|root| {
-                root.map(|root| MTG::InnerDigest::new_witness(cs.clone(), || Ok(root)).unwrap())
-            })
-            .collect::<Vec<_>>();
-        let sponge_var_vt = sponge_var.clone();
-        let mut transcript_vt = SimulationTranscriptVar::<F, MT, MTG, S>::from_prover_messages(
-            &succinct_prover_messages,
-            &prover_mt_roots,
-            sponge_var_vt,
-            |degree| L::ldt_info(ldt_params, degree),
-            iop_trace!("check commit phase correctness"),
-        );
-        V::register_iop_structure_var(
-            NameSpace::root(iop_trace!("check commit phase correctness")),
-            &mut transcript_vt,
-            verifier_parameter,
-        )
-        .unwrap();
-        check_transcript_var_consistency(&transcript_pt, &transcript_vt);
+    /// Return the localization parameter used by LDT. Localization parameter is
+    /// the size of query coset of the codeword.
+    ///
+    /// ## Panics
+    /// This function panics if LDT is not enabled or localization parameter is
+    /// not supported by LDT.
+    fn ldt_localization_parameter(&self) -> usize {
+        self.ldt_localization_parameter
+            .expect("LDT not enabled or localization parameter is not supported by LDT")
     }
 }

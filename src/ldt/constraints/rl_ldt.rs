@@ -1,8 +1,8 @@
 use crate::{
-    bcs::{constraints::transcript::SimulationTranscriptVar, transcript::NameSpace},
+    bcs::{bookkeeper::NameSpace, constraints::transcript::SimulationTranscriptVar},
     iop::{
-        constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar},
-        message::{MessagesCollection, MsgRoundRef, ProverRoundMessageInfo},
+        constraints::message::MessagesCollectionVar,
+        message::{BookkeeperContainer, MsgRoundRef, ProverRoundMessageInfo},
     },
     ldt::{constraints::LDTWithGadget, rl_ldt::LinearCombinationLDT},
 };
@@ -93,11 +93,11 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
         param: &Self::LDTParameters,
         sponge: &mut S::Var,
         codewords: &[MsgRoundRef],
-        transcript_messages: &mut MessagesCollection<
-            SuccinctRoundOracleVarView<F>,
-            VerifierMessageVar<F>,
-        >,
+        transcript_messages: &mut MessagesCollectionVar<F>,
     ) -> Result<(), SynthesisError> {
+        let span = tracing::span!(tracing::Level::INFO, "LDT QueryVar");
+        let _enter = span.enter();
+
         let codeword_log_num_cosets = param.fri_parameters.domain.dim()
             - param.fri_parameters.localization_parameters[0] as usize;
 
@@ -106,14 +106,14 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
             .collect::<Result<Vec<_>, _>>()?;
 
         // restore random coefficients and alphas
-        let random_coefficients = transcript_messages.verifier_message(namespace, 0)[0]
+        let random_coefficients = transcript_messages.get_verifier_message((namespace, 0))[0]
             .clone()
             .try_into_field_elements()
             .unwrap();
 
         let alphas = (1..param.fri_parameters.localization_parameters.len() + 1)
             .map(|idx| {
-                let vm = transcript_messages.verifier_message(namespace, idx);
+                let vm = transcript_messages.get_verifier_message((namespace, idx));
                 assert_eq!(vm.len(), 1);
                 let vm_curr = vm[0].clone().try_into_field_elements().unwrap();
                 assert_eq!(vm_curr.len(), 1);
@@ -135,20 +135,24 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
 
                 codewords
                     .iter()
-                    .map(|oracle| {
-                        let oracle = transcript_messages.prover_message_using_ref(*oracle);
-                        let query_responses = oracle
-                            .query_coset(
+                    .map(|oracle| -> Result<_, SynthesisError> {
+                        let query_responses = transcript_messages
+                            .query_prover_coset(
+                                *oracle,
                                 &[query_indices[0].clone()],
                                 iop_trace!("rl_ldt query codewords"),
-                            )
+                            )?
                             .pop()
                             .unwrap()
                             .into_iter()
                             .map(|round| round.into_iter());
-                        let degrees = oracle.get_degree_bound();
-                        query_responses.zip(degrees.into_iter())
+                        let degrees = transcript_messages
+                            .get_prover_round_info(*oracle)
+                            .reed_solomon_code_degree_bound;
+                        Ok(query_responses.zip(degrees.into_iter()))
                     })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
                     .flatten()
                     .zip(random_coefficients.iter())
                     .try_for_each(
@@ -177,41 +181,42 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
 
                 // get query responses in ldt prover messages oracles
                 assert_eq!(
-                    transcript_messages.num_prover_rounds(namespace),
+                    transcript_messages.num_prover_rounds_in_namespace(namespace),
                     query_indices.len()
                 );
                 let round_oracle_responses = query_indices[1..]
                     .iter()
                     .zip(
                         transcript_messages
-                            .prover_messages(namespace)
+                            .prover_round_refs_in_namespace(namespace)
                             .clone()
                             .into_iter(),
                     )
-                    .map(|(query_index, msg)| {
-                        let msg = transcript_messages.prover_message_using_ref(msg);
-                        let mut response = msg
-                            .query_coset(
+                    .map(|(query_index, msg)| -> Result<_, SynthesisError> {
+                        let mut response = transcript_messages
+                            .query_prover_coset(
+                                msg,
                                 &[query_index.clone()],
                                 iop_trace!("rl_ldt query fri message"),
-                            )
+                            )?
                             .pop()
-                            .unwrap();
+                            .unwrap(); // get the first coset position (only one position)
                         assert_eq!(response.len(), 1);
-                        response.pop().unwrap()
+                        Ok(response.pop().unwrap())
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 // get final polynomial
                 let final_polynomial_coeffs = {
                     let &oracle_ref = transcript_messages
-                        .prover_messages(namespace)
+                        .prover_round_refs_in_namespace(namespace)
                         .last()
                         .unwrap();
-                    transcript_messages
-                        .prover_message_using_ref(oracle_ref)
-                        .get_short_message(0) // TODO add a tracer here
-                        .to_vec()
+                    transcript_messages.get_prover_short_message(
+                        oracle_ref,
+                        0,
+                        iop_trace!("final poly coefficients"),
+                    )
                 };
                 let total_shrink_factor = param
                     .fri_parameters

@@ -11,11 +11,8 @@ use ark_sponge::{
 };
 
 use crate::{
-    bcs::{constraints::transcript::SimulationTranscriptVar, transcript::NameSpace},
-    iop::{
-        constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar},
-        message::{MessagesCollection, MsgRoundRef},
-    },
+    bcs::{bookkeeper::NameSpace, constraints::transcript::SimulationTranscriptVar},
+    iop::{constraints::message::MessagesCollectionVar, message::MsgRoundRef},
     ldt::{NoLDT, LDT},
 };
 
@@ -51,10 +48,7 @@ pub trait LDTWithGadget<CF: PrimeField + Absorb>: LDT<CF> {
         sponge: &mut S::Var,
         codewords: &[MsgRoundRef],
         // TODO: add virtual oracle here
-        transcript_messages: &mut MessagesCollection<
-            SuccinctRoundOracleVarView<CF>,
-            VerifierMessageVar<CF>,
-        >,
+        transcript_messages: &mut MessagesCollectionVar<CF>,
     ) -> Result<(), SynthesisError>;
 }
 
@@ -81,15 +75,12 @@ impl<CF: PrimeField + Absorb> LDTWithGadget<CF> for NoLDT<CF> {
         _sponge: &mut S::Var,
         codewords: &[MsgRoundRef],
         // TODO: add virtual oracle here
-        transcript_messages: &mut MessagesCollection<
-            SuccinctRoundOracleVarView<CF>,
-            VerifierMessageVar<CF>,
-        >,
+        transcript_messages: &mut MessagesCollectionVar<CF>,
     ) -> Result<(), SynthesisError> {
         // nop, but we need to check that all codewords have no RS codes
         let no_rs_code = codewords.iter().all(|round| {
             transcript_messages
-                .prover_message_using_ref(*round)
+                .get_prover_round_info(*round)
                 .num_reed_solomon_codes_oracles()
                 == 0
         });

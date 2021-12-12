@@ -24,7 +24,7 @@ ark-ldt = {git = "https://github.com/arkworks-rs/ldt", branch="main", default-fe
 
 ark-relations = { version = "^0.3.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.3.1", default-features = false, optional = true }
-tracing-subscriber = { version = "0.2", optional = true}
+tracing-subscriber = { version = "0.3", optional = true}
 
 tracing = { version = "0.1", default-features = false, features = [ "attributes" ]} 
 derivative = { version = "2.0", features = ["use_core"] }
@@ -59,6 +59,7 @@ test_utils = ["std", "tracing-subscriber"]
 [patch.crates-io]
 ark-crypto-primitives = {git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main"}
 ark-sponge = {git = "https://github.com/arkworks-rs/sponge"}
+ark-r1cs-std = {git = "https://github.com/arkworks-rs/r1cs-std", branch = "master"}
 
 [[example]]
 name = "sumcheck"

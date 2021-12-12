@@ -295,43 +295,23 @@ where
         if poly.degree() > degree_bound {
             panic!("polynomial degree is greater than degree bound!");
         }
-        let (domain, localization_parameter) = (
-            self.ldt_codeword_domain(),
-            self.ldt_localization_parameter(),
-        );
         // evaluate the poly using ldt domain
-        let evaluations = domain.evaluate(poly);
-        self.send_oracle_evaluations_unchecked(evaluations, degree_bound, localization_parameter)?;
+        let evaluations = self.ldt_codeword_domain().evaluate(poly);
+        self.send_oracle_evaluations(evaluations, degree_bound)?;
         Ok(())
     }
 
     /// Send Reed-Solomon codes of a polynomial.
-    /// Domain should be consistent with LDT that user provides.
-    /// Localization parameter is managed by LDT.
+    /// Evaluation domain of the message should be the codeword domain for LDT.
     pub fn send_oracle_evaluations(
         &mut self,
         msg: impl IntoIterator<Item = F>,
         degree_bound: usize,
-        domain: Radix2CosetDomain<F>,
-    ) -> Result<(), Error> {
-        let (expected_domain, localization_parameter) = (
-            self.ldt_codeword_domain(),
-            self.ldt_localization_parameter(),
-        );
-        assert_eq!(expected_domain, domain, "inconsistent domain with LDT");
-        self.send_oracle_evaluations_unchecked(msg, degree_bound, localization_parameter)?;
-        Ok(())
-    }
-
-    fn send_oracle_evaluations_unchecked(
-        &mut self,
-        msg: impl IntoIterator<Item = F>,
-        degree_bound: usize,
-        localization_parameter: usize,
     ) -> Result<(), Error> {
         // encode the message
         let oracle = msg.into_iter().collect::<Vec<_>>();
-        self.set_length_and_localization(oracle.len(), localization_parameter);
+        assert_eq!(oracle.len(), self.ldt_codeword_domain().size());
+        self.set_length_and_localization(oracle.len(), self.ldt_localization_parameter());
         self.current_prover_pending_message()
             .reed_solomon_codes
             .push((oracle, degree_bound));
@@ -538,42 +518,20 @@ where
         self.bookkeeper
             .attach_verifier_round_to_namespace(namespace, index, trace)
     }
+}
 
-    /// Return the codeword domain used by LDT.
-    ///
-    /// **Any low degree oracle will use this domain as evaluation domain.**
-    ///
-    /// ## Panics
-    /// This function panics if LDT is not enabled.
-    pub fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
+impl<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb> LDTInfo<F>
+    for Transcript<P, S, F>
+where
+    P::InnerDigest: Absorb,
+{
+    fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")
     }
 
-    /// Return the localization parameter used by LDT. Localization parameter is
-    /// the size of query coset of the codeword.
-    ///
-    /// ## Panics
-    /// This function panics if LDT is not enabled or localization parameter is
-    /// not supported by LDT.
-    pub fn ldt_localization_parameter(&self) -> usize {
+    fn ldt_localization_parameter(&self) -> usize {
         self.ldt_localization_parameter
             .expect("LDT not enabled or localization parameter is not supported by LDT")
-    }
-
-    /// Given the coset index, return the corresponding query coset of the LDT.
-    ///
-    /// For example, if the codeword domain is `{a,b,c,d,e,f,g,h}`, and
-    /// localization parameter is 2, then this function returns `{a,e}` if the
-    /// coset index is 0, `{b,f}` if the coset index is 1, and `{c,g}` if the
-    /// coset index is 2, and `{d,h}` if the coset index is 3.
-    pub fn ldt_codeword_query_coset(&self, coset_index: usize) -> Radix2CosetDomain<F> {
-        let (domain, localization_parameter) = (
-            self.ldt_codeword_domain(),
-            self.ldt_localization_parameter(),
-        );
-        domain
-            .query_position_to_coset(coset_index, localization_parameter)
-            .1
     }
 }
 
@@ -714,7 +672,7 @@ where
         mut expected_message_info: ProverRoundMessageInfo,
         trace: TraceInfo,
     ) -> MsgRoundRef {
-        info!("{}", trace);
+        info!("prover round: {}", trace);
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
             // LDT is used, so replace its localization parameter with the one given by LDT
             expected_message_info.localization_parameter = self.ldt_localization_parameter();
@@ -801,17 +759,11 @@ where
     /// and decision phase.
     ///
     /// **Note**: In original IOP paper, verifier do not use sampled element in
-    /// commit phase. However, this implementation allows verifier to have
-    /// access to sampled elements in `register_iop_structure` to
-    /// add flexibility.
-    /// User may need to check if this flexibility will affect soundness
-    /// analysis in a case-to-case basis. TODO: enable this flexibility in
-    /// constraints as well
-    pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) -> Vec<F> {
+    /// commit phase. So in this implementation, this function returns nothing.
+    pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) {
         let msg = self.sponge.squeeze_field_elements_with_sizes(field_size);
         self.pending_verifier_messages
-            .push(VerifierMessage::FieldElements(msg.clone()));
-        msg
+            .push(VerifierMessage::FieldElements(msg));
     }
 
     /// Squeeze sampled verifier message as bytes. The squeezed bytes is
@@ -883,14 +835,20 @@ where
         self.bookkeeper
             .attach_verifier_round_to_namespace(namespace, index, trace)
     }
+}
 
+impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
+    SimulationTranscript<'a, P, S, F>
+where
+    P::InnerDigest: Absorb,
+{
     /// Return the codeword domain used by LDT.
     ///
     /// **Any low degree oracle will use this domain as evaluation domain.**
     ///
     /// ## Panics
     /// This function panics if LDT is not enabled.
-    pub fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
+    fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")
     }
 
@@ -900,10 +858,31 @@ where
     /// ## Panics
     /// This function panics if LDT is not enabled or localization parameter is
     /// not supported by LDT.
-    pub fn ldt_localization_parameter(&self) -> usize {
+    fn ldt_localization_parameter(&self) -> usize {
         self.ldt_localization_parameter
             .expect("LDT not enabled or localization parameter is not supported by LDT")
     }
+}
+
+/// A wrapper trait for transcript that contains LDT information. This trait is
+/// used to get LDT codeword domain and localization parameter, and is designed
+/// to reduce code duplication.
+pub trait LDTInfo<F: PrimeField> {
+    /// Return the codeword domain used by LDT.
+    ///
+    /// **Any low degree oracle will use this domain as evaluation domain.**
+    ///
+    /// ## Panics
+    /// This function panics if LDT is not enabled.
+    fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F>;
+
+    /// Return the localization parameter used by LDT. Localization parameter is
+    /// the size of query coset of the codeword.
+    ///
+    /// ## Panics
+    /// This function panics if LDT is not enabled or localization parameter is
+    /// not supported by LDT.
+    fn ldt_localization_parameter(&self) -> usize;
 
     /// Given the coset index, return the corresponding query coset of the LDT.
     ///
@@ -911,7 +890,7 @@ where
     /// localization parameter is 2, then this function returns `{a,e}` if the
     /// coset index is 0, `{b,f}` if the coset index is 1, and `{c,g}` if the
     /// coset index is 2, and `{d,h}` if the coset index is 3.
-    pub fn ldt_codeword_query_coset(&self, coset_index: usize) -> Radix2CosetDomain<F> {
+    fn ldt_codeword_query_coset(&self, coset_index: usize) -> Radix2CosetDomain<F> {
         let (codeword_domain, localization_param) = (
             self.ldt_codeword_domain(),
             self.ldt_localization_parameter(),

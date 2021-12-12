@@ -5,8 +5,6 @@
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 
-use crate::tracer::TraceInfo;
-
 use super::message::{MessagesCollection, ProverRoundMessageInfo};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 /// A trait for all oracle messages (including RS-code oracles, Non RS-code
@@ -20,7 +18,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, Serializatio
 /// `reed_solomon_codes` oracle will come first, and then message oracles.
 pub trait RoundOracle<F: PrimeField>: Sized {
     /// Get short message in the oracle by index.
-    fn get_short_message(&self, index: usize, tracer: TraceInfo) -> &Vec<F>;
+    fn get_short_message(&self, index: usize) -> &Vec<F>;
 
     /// Return the leaves of at `position` of all oracle. `result[i][j]` is leaf
     /// `i` at oracle `j`.
@@ -158,14 +156,7 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
 }
 
 impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
-    fn get_short_message(&self, index: usize, _tracer: TraceInfo) -> &Vec<F> {
-        #[cfg(feature = "print-trace")]
-        {
-            println!(
-                "[Recording oracle] Get short message at index {}: {}",
-                index, _tracer
-            )
-        }
+    fn get_short_message(&self, index: usize) -> &Vec<F> {
         &self.short_messages[index]
     }
 
@@ -230,14 +221,7 @@ pub struct SuccinctRoundOracle<'a, F: PrimeField> {
 }
 
 impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracle<'a, F> {
-    fn get_short_message(&self, index: usize, _tracer: TraceInfo) -> &Vec<F> {
-        #[cfg(feature = "print-trace")]
-        {
-            println!(
-                "[Succinct Round oracle] Get short message at index {}: {}",
-                index, _tracer
-            )
-        }
+    fn get_short_message(&self, index: usize) -> &Vec<F> {
         &self.underlying_message.short_messages[index]
     }
 
@@ -285,10 +269,7 @@ pub type CosetEvaluator<F, O> = Box<
                     * in this coset. */
 >;
 
-pub(crate) trait CosetEvaluatorInner<F: PrimeField> {}
-
-/// Given non-virtual or virtual round oracles, return a virtual oracle whose
-/// query responses depends on those non-virtual oracles.
+/// A virtual oracle who make query to other virtual or non-virtual oracles.
 pub struct VirtualOracle<F: PrimeField, O: RoundOracle<F>> {
     coset_evaluator: CosetEvaluator<F, O>,
     pub(crate) codeword_domain: Radix2CosetDomain<F>,

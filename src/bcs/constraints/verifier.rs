@@ -1,12 +1,12 @@
 use crate::{
     bcs::{
+        bookkeeper::NameSpace,
         constraints::{
             proof::BCSProofVar, transcript::SimulationTranscriptVar, MTHashParametersVar,
         },
-        transcript::NameSpace,
     },
     iop::{
-        constraints::IOPVerifierWithGadget, message::MessagesCollection,
+        constraints::{message::MessagesCollectionVar, IOPVerifierWithGadget},
         verifier::IOPVerifierWithNoOracleRefs,
     },
     ldt::{constraints::LDTWithGadget, NoLDT},
@@ -14,7 +14,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_r1cs_std::{boolean::Boolean, eq::EqGadget, fields::fp::FpVar, R1CSVar};
+use ark_r1cs_std::{boolean::Boolean, fields::fp::FpVar, prelude::EqGadget, R1CSVar};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::{
     constraints::{AbsorbGadget, SpongeWithGadget},
@@ -62,7 +62,8 @@ where
         let mut transcript = SimulationTranscriptVar::new_transcript(
             proof,
             sponge,
-            |degree| L::ldt_info(ldt_params, degree),
+            L::codeword_domain(ldt_params),
+            L::localization_param(ldt_params),
             iop_trace!("BCS root"),
         );
         let root_namespace = NameSpace::root(iop_trace!("IOP Root: BCS Proof Verify"));
@@ -90,10 +91,16 @@ where
                     .len()
             })
             .sum::<usize>();
+        let num_virtual_oracles = transcript.registered_virtual_oracles.len();
 
         // simulate LDT prove: reconstruct LDT verifier messages to restore verifier
         // state
-        L::register_iop_structure_var(ldt_namespace, ldt_params, num_rs_oracles, &mut transcript)?;
+        L::register_iop_structure_var(
+            ldt_namespace,
+            ldt_params,
+            num_rs_oracles + num_virtual_oracles,
+            &mut transcript,
+        )?;
         debug_assert!(
             !transcript.is_pending_message_available(),
             "Sanity check failed: pending verifier message not submitted"
@@ -108,8 +115,13 @@ where
             .map(|m| m.get_view())
             .collect::<Vec<_>>();
 
-        let mut transcript_messages = MessagesCollection::new(
+        let mut transcript_messages = MessagesCollectionVar::new(
             prover_message_view,
+            transcript
+                .registered_virtual_oracles
+                .into_iter()
+                .map(|x| Some(x))
+                .collect(),
             transcript.reconstructed_verifier_messages,
             transcript.bookkeeper,
         );
@@ -141,14 +153,11 @@ where
         let all_paths = &proof.prover_oracles_mt_path;
         let all_mt_roots = &proof.prover_messages_mt_root;
 
-        assert_eq!(transcript_messages.prover_messages.len(), all_paths.len());
-        assert_eq!(
-            transcript_messages.prover_messages.len(),
-            all_mt_roots.len()
-        );
+        assert_eq!(transcript_messages.real_oracles.len(), all_paths.len());
+        assert_eq!(transcript_messages.real_oracles.len(), all_mt_roots.len());
 
         transcript_messages
-            .prover_messages
+            .real_oracles
             .iter()
             .zip(all_paths)
             .zip(all_mt_roots)
@@ -174,9 +183,9 @@ where
                     .zip(paths.iter())
                     .try_for_each(|((index, coset), path)| {
                         let mut path = path.clone();
-                        let old_path = path.get_leaf_position().value().unwrap();
+                        let old_path = path.get_leaf_position().value().unwrap_or_default();
                         path.set_leaf_position(index.clone());
-                        let new_path = path.get_leaf_position().value().unwrap();
+                        let new_path = path.get_leaf_position().value().unwrap_or_default();
                         assert_eq!(old_path, new_path);
                         path.verify_membership(
                             &hash_params.leaf_params,

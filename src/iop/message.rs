@@ -96,68 +96,12 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
         }
     }
 
-    /// Constructor for Messages Collection
-
-    // namespace related
-
-    /// Given the current namespace, and the index of the namespace of
-    /// subprotocol namespace, return the subprotocol namespace. `index` is
-    /// the time where the subprotocol namespace is created in
-    /// `register_iop_structure`.
-    pub fn get_subprotocol_namespace(&self, namespace: NameSpace, index: usize) -> NameSpace {
-        self.bookkeeper.get_subspace(namespace, index)
-    }
-
-    /// Get number of prove rounds in namespace.
-    pub fn num_prover_rounds_in_namespace(&self, namespace: NameSpace) -> usize {
-        self.bookkeeper
-            .get_message_indices(namespace)
-            .prover_rounds
-            .len()
-    }
-
-    /// Get number of verifier rounds in namespace.
-    pub fn num_verifier_rounds_in_namespace(&self, namespace: NameSpace) -> usize {
-        self.bookkeeper
-            .get_message_indices(namespace)
-            .verifier_messages
-            .len()
-    }
-
-    // fetch all sent messages as referecnes
-
-    /// Return all prover rounds message in the namespace as round reference.
-    pub fn prover_round_refs_in_namespace(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
-        &self.bookkeeper.get_message_indices(namespace).prover_rounds
-    }
-
-    /// Given namespace and round index, return the round reference.
-    pub fn prover_round_ref(&self, namespace: NameSpace, index: usize) -> MsgRoundRef {
-        self.prover_round_refs_in_namespace(namespace)[index]
-    }
-
-    /// Return all prover rounds message as round reference.
-    pub fn verifier_round_refs_in_namespace(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
-        &self
-            .bookkeeper
-            .get_message_indices(namespace)
-            .verifier_messages
-    }
-
-    /// Given namespace and round index, return the round reference.
-    pub fn verifier_round_ref(&self, namespace: NameSpace, index: usize) -> MsgRoundRef {
-        self.verifier_round_refs_in_namespace(namespace)[index]
-    }
-
-    // fetch verifier message
-
     /// Given a `MsgRoundRef`, return the corresponding verifier message.
     pub fn get_verifier_message(&self, at: impl ToMsgRoundRef) -> &Vec<VerifierMessage<F>> {
         let at = at.to_verifier_msg_round_ref(&self.bookkeeper);
         &self.verifier_messages[at.index]
     }
 
-    // query prover message
     /// Return the leaves of at `position` of all oracle in this round.
     /// `result[i][j]` is leaf `i` at oracle `j`.
     pub fn query_prover_point(
@@ -264,10 +208,11 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
         tracer: TraceInfo,
     ) -> &[F] {
         let at = at.to_prover_msg_round_ref(&self.bookkeeper);
+        info!("Get prover short message by {}", tracer);
         if at.is_virtual {
             unimplemented!("Virtual oracle does not have short message");
         } else {
-            self.real_oracles[at.index].get_short_message(index, tracer)
+            self.real_oracles[at.index].get_short_message(index)
         }
     }
 
@@ -284,6 +229,73 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
         } else {
             self.real_oracles[at.index].get_info()
         }
+    }
+}
+
+/// This trait is used to reduce code duplication between native and
+/// constraints, as both of them use message bookkeeper to keep track of the
+/// round.
+pub trait BookkeeperContainer {
+    /// Return the underlying bookkeeper. Normally user does not need to call
+    /// this function.
+    fn _bookkeeper(&self) -> &MessageBookkeeper;
+
+    /// Given the current namespace, and the index of the namespace of
+    /// subprotocol namespace, return the subprotocol namespace. `index` is
+    /// the time where the subprotocol namespace is created in
+    /// `register_iop_structure`.
+    fn get_subprotocol_namespace(&self, namespace: NameSpace, index: usize) -> NameSpace {
+        self._bookkeeper().get_subspace(namespace, index)
+    }
+
+    /// Get number of prove rounds in namespace.
+    fn num_prover_rounds_in_namespace(&self, namespace: NameSpace) -> usize {
+        self._bookkeeper()
+            .get_message_indices(namespace)
+            .prover_rounds
+            .len()
+    }
+
+    /// Get number of verifier rounds in namespace.
+    fn num_verifier_rounds_in_namespace(&self, namespace: NameSpace) -> usize {
+        self._bookkeeper()
+            .get_message_indices(namespace)
+            .verifier_messages
+            .len()
+    }
+
+    // fetch all sent messages as referecnes
+
+    /// Return all prover rounds message in the namespace as round reference.
+    fn prover_round_refs_in_namespace(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
+        &self
+            ._bookkeeper()
+            .get_message_indices(namespace)
+            .prover_rounds
+    }
+
+    /// Given namespace and round index, return the round reference.
+    fn prover_round_ref_at_index(&self, namespace: NameSpace, index: usize) -> MsgRoundRef {
+        self.prover_round_refs_in_namespace(namespace)[index]
+    }
+
+    /// Return all prover rounds message as round reference.
+    fn verifier_round_refs_in_namespace(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
+        &self
+            ._bookkeeper()
+            .get_message_indices(namespace)
+            .verifier_messages
+    }
+
+    /// Given namespace and round index, return the round reference.
+    fn verifier_round_ref_at_index(&self, namespace: NameSpace, index: usize) -> MsgRoundRef {
+        self.verifier_round_refs_in_namespace(namespace)[index]
+    }
+}
+
+impl<F: PrimeField, O: RoundOracle<F>> BookkeeperContainer for MessagesCollection<F, O> {
+    fn _bookkeeper(&self) -> &MessageBookkeeper {
+        &self.bookkeeper
     }
 }
 

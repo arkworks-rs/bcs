@@ -3,12 +3,14 @@ use crate::{
         bookkeeper::NameSpace,
         tests::FieldMTConfig,
         transcript::{
-            test_utils::check_commit_phase_correctness, SimulationTranscript, Transcript,
+            test_utils::check_commit_phase_correctness, LDTInfo, SimulationTranscript, Transcript,
         },
         MTHashParameters,
     },
     iop::{
-        message::{MessagesCollection, ProverRoundMessageInfo, VerifierMessage},
+        message::{
+            BookkeeperContainer, MessagesCollection, ProverRoundMessageInfo, VerifierMessage,
+        },
         oracles::{RecordingRoundOracle, RoundOracle, SuccinctRoundOracle},
         prover::IOPProver,
         verifier::IOPVerifier,
@@ -172,6 +174,8 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
                 .to_vec(),
         );
 
+        // warning: make sure you register this virtual round again in your verifier (and its constraints)
+        // otherwise verification will fail
         transcript.register_prover_virtual_round(
             namespace,
             virtual_oracle_querier,
@@ -328,7 +332,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
 
         assert_eq!(
             transcript_messages.get_prover_short_message(
-                transcript_messages.prover_round_ref(namespace, 1),
+                transcript_messages.prover_round_ref_at_index(namespace, 1),
                 0,
                 iop_trace!()
             ),

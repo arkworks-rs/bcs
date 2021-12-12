@@ -4,7 +4,7 @@ use crate::{
         transcript::{SimulationTranscript, Transcript},
     },
     iop::{
-        message::{MessagesCollection, MsgRoundRef, ProverRoundMessageInfo},
+        message::{BookkeeperContainer, MessagesCollection, MsgRoundRef, ProverRoundMessageInfo},
         oracles::RoundOracle,
     },
     ldt::LDT,
@@ -83,7 +83,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     .num_reed_solomon_codes_oracles()
             })
             .sum::<usize>();
-        println!("LDT prove: num_oracles: {}, {}", num_oracles, iop_trace!());
 
         let random_coefficients = transcript.squeeze_verifier_field_elements(
             &(0..num_oracles)
@@ -539,11 +538,7 @@ mod tests {
                 iop_trace!("ldt test"),
             );
             transcript
-                .send_oracle_evaluations(
-                    poly.evaluate_over_domain(evaluation_domain).evals,
-                    69,
-                    Radix2CosetDomain::new(evaluation_domain, Fr::one()),
-                )
+                .send_oracle_evaluations(poly.evaluate_over_domain(evaluation_domain).evals, 69)
                 .unwrap();
             transcript
                 .submit_prover_current_round(root_namespace, iop_trace!())

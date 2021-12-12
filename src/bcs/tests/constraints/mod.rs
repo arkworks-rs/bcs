@@ -6,10 +6,9 @@ use ark_r1cs_std::fields::fp::FpVar;
 
 use crate::{
     bcs::{
+        bookkeeper::NameSpace,
         constraints::{
-            proof::BCSProofVar,
-            transcript::{test_utils::check_commit_phase_correctness_var, SimulationTranscriptVar},
-            verifier::BCSVerifierGadget,
+            proof::BCSProofVar, transcript::SimulationTranscriptVar, verifier::BCSVerifierGadget,
             MTHashParametersVar,
         },
         prover::BCSProof,
@@ -17,7 +16,6 @@ use crate::{
             mock::{MockTest1Verifier, MockTestProver},
             FieldMTConfig, Fr,
         },
-        transcript::NameSpace,
         MTHashParameters,
     },
     iop::constraints::IOPVerifierWithGadget,
@@ -50,45 +48,6 @@ impl ConfigGadget<Self, Fr> for FieldMTConfig {
     type InnerDigest = FpVar<Fr>;
     type LeafHash = HG;
     type TwoToOneHash = TwoToOneHG;
-}
-
-#[test]
-/// Test register_iop_structure_var
-fn test_register() {
-    let fri_parameters = FRIParameters::new(
-        64,
-        vec![1, 2, 1],
-        Radix2CosetDomain::new_radix2_coset(128, Fr::one()),
-    );
-    let ldt_parameters = LinearCombinationLDTParameters {
-        fri_parameters,
-        num_queries: 1,
-    };
-    let sponge = PoseidonSponge::new(&poseidon_parameters());
-    let cs = ConstraintSystem::new_ref();
-    let sponge_var = PoseidonSpongeVar::new(cs.clone(), &poseidon_parameters());
-    let mt_hash_param = MTHashParameters::<FieldMTConfig> {
-        leaf_hash_param: poseidon_parameters(),
-        inner_hash_param: poseidon_parameters(),
-    };
-    check_commit_phase_correctness_var::<
-        Fr,
-        _,
-        FieldMTConfig,
-        FieldMTConfig,
-        MockTestProver<Fr>,
-        MockTest1Verifier<Fr>,
-        LinearCombinationLDT<Fr>,
-    >(
-        sponge,
-        sponge_var,
-        &(),
-        &(),
-        &(),
-        &(),
-        &ldt_parameters,
-        mt_hash_param,
-    );
 }
 
 #[test]
@@ -136,9 +95,11 @@ fn test_bcs() {
         SimulationTranscriptVar::<_, _, _, PoseidonSponge<_>>::new_transcript(
             &bcs_proof_var,
             sponge,
-            |degree| LinearCombinationLDT::ldt_info(&ldt_parameters, degree),
-            iop_trace!("bcs test"),
+            LinearCombinationLDT::codeword_domain(&ldt_parameters),
+            LinearCombinationLDT::localization_param(&ldt_parameters),
+            iop_trace!("test bcs"),
         );
+
     MockTest1Verifier::register_iop_structure_var(
         NameSpace::root(iop_trace!("BCS test")),
         &mut simulation_transcript,

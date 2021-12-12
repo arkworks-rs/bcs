@@ -8,16 +8,16 @@ use ark_sponge::{
 };
 
 use crate::{
-    bcs::{constraints::transcript::SimulationTranscriptVar, transcript::NameSpace},
-    iop::{
-        constraints::message::{SuccinctRoundOracleVarView, VerifierMessageVar},
-        message::MessagesCollection,
-        verifier::IOPVerifier,
-    },
+    bcs::{bookkeeper::NameSpace, constraints::transcript::SimulationTranscriptVar},
+    iop::verifier::IOPVerifier,
 };
+
+use self::message::MessagesCollectionVar;
 
 /// Defines prover and verifier message variable.
 pub mod message;
+/// Defines message oracles.
+pub mod oracles;
 
 /// Constraints for IOP Verifier.
 ///
@@ -62,16 +62,13 @@ where
     ///
     /// To access prover message oracle and previous verifier messages of
     /// current namespace, use bookkeeper.
-    fn query_and_decide_var(
+    fn query_and_decide_var<'a>(
         cs: ConstraintSystemRef<CF>,
         namespace: NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         public_input_var: &Self::PublicInputVar,
         oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
-        transcript_messages: &mut MessagesCollection<
-            SuccinctRoundOracleVarView<CF>,
-            VerifierMessageVar<CF>,
-        >,
+        transcript_messages: &mut MessagesCollectionVar<'a, CF>,
     ) -> Result<Self::VerifierOutputVar, SynthesisError>;
 }
