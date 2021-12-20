@@ -1,10 +1,12 @@
 use crate::{
-    bcs::{bookkeeper::NameSpace, transcript::Transcript},
+    bcs::transcript::Transcript,
     iop::{ProverOracleRefs, ProverParam},
 };
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
+
+use super::bookkeeper::NameSpace;
 
 /// A Prover for Public Coin IOP.
 pub trait IOPProver<F: PrimeField + Absorb> {

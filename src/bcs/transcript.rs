@@ -7,10 +7,8 @@ use tracing::info;
 use crate::{
     bcs::{prover::BCSProof, MTHashParameters},
     iop::{
-        message::{
-            MsgRoundRef, PendingProverMessage, ProverRoundMessageInfo, ToMsgRoundRef,
-            VerifierMessage,
-        },
+        bookkeeper::{MessageBookkeeper, NameSpace, ToMsgRoundRef},
+        message::{MsgRoundRef, PendingProverMessage, ProverRoundMessageInfo, VerifierMessage},
         oracles::{
             CosetEvaluator, RecordingRoundOracle, RoundOracle, SuccinctRoundMessage,
             SuccinctRoundOracle, VirtualOracle,
@@ -23,8 +21,6 @@ use ark_crypto_primitives::MerkleTree;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::{univariate::DensePolynomial, Polynomial};
 use ark_std::mem::take;
-
-use super::bookkeeper::{MessageBookkeeper, NameSpace};
 
 #[allow(variant_size_differences)]
 /// Pending message for current transcript. We allow `variant_size_differences`
@@ -446,6 +442,7 @@ where
         return true;
     }
 
+    #[allow(unused)]
     pub(crate) fn all_succinct_messages(&self) -> Vec<SuccinctRoundMessage<F>> {
         self.prover_message_oracles
             .iter()

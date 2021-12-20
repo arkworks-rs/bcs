@@ -7,12 +7,11 @@ use ark_sponge::{
     Absorb,
 };
 
-use crate::{
-    bcs::{bookkeeper::NameSpace, constraints::transcript::SimulationTranscriptVar},
-    iop::verifier::IOPVerifier,
-};
+use crate::{bcs::constraints::transcript::SimulationTranscriptVar, iop::verifier::IOPVerifier};
 
 use self::message::MessagesCollectionVar;
+
+use super::bookkeeper::NameSpace;
 
 /// Defines prover and verifier message variable.
 pub mod message;

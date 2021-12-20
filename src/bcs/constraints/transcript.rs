@@ -1,10 +1,7 @@
 use crate::{
-    bcs::{
-        bookkeeper::{MessageBookkeeper, NameSpace},
-        constraints::proof::BCSProofVar,
-        transcript::LDTInfo,
-    },
+    bcs::{constraints::proof::BCSProofVar, transcript::LDTInfo},
     iop::{
+        bookkeeper::{MessageBookkeeper, NameSpace},
         constraints::{
             message::VerifierMessageVar,
             oracles::{CosetVarEvaluator, SuccinctRoundMessageVar, VirtualOracleVar},

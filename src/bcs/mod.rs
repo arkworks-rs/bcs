@@ -7,8 +7,6 @@ pub mod transcript;
 /// BCS verifier.
 pub mod verifier;
 
-/// Namespace and MsgRoundRef
-pub mod bookkeeper;
 #[cfg(feature = "r1cs")]
 /// R1CS Constraints for BCS.
 pub mod constraints;

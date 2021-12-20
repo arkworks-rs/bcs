@@ -11,8 +11,10 @@ use ark_sponge::{
 };
 
 use crate::{
-    bcs::{bookkeeper::NameSpace, constraints::transcript::SimulationTranscriptVar},
-    iop::{constraints::message::MessagesCollectionVar, message::MsgRoundRef},
+    bcs::constraints::transcript::SimulationTranscriptVar,
+    iop::{
+        bookkeeper::NameSpace, constraints::message::MessagesCollectionVar, message::MsgRoundRef,
+    },
     ldt::{NoLDT, LDT},
 };
 

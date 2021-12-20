@@ -1,11 +1,9 @@
 use crate::{
-    bcs::{
-        bookkeeper::NameSpace,
-        constraints::{
-            proof::BCSProofVar, transcript::SimulationTranscriptVar, MTHashParametersVar,
-        },
+    bcs::constraints::{
+        proof::BCSProofVar, transcript::SimulationTranscriptVar, MTHashParametersVar,
     },
     iop::{
+        bookkeeper::NameSpace,
         constraints::{message::MessagesCollectionVar, IOPVerifierWithGadget},
         verifier::IOPVerifierWithNoOracleRefs,
     },

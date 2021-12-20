@@ -1,8 +1,7 @@
 use crate::{
-    bcs::{
-        bookkeeper::NameSpace, prover::BCSProof, transcript::SimulationTranscript, MTHashParameters,
-    },
+    bcs::{prover::BCSProof, transcript::SimulationTranscript, MTHashParameters},
     iop::{
+        bookkeeper::NameSpace,
         message::MessagesCollection,
         verifier::{IOPVerifier, IOPVerifierWithNoOracleRefs},
     },

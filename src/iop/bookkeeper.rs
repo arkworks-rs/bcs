@@ -42,7 +42,7 @@ impl NameSpace {
 /// Stores the ownership relation of each message to its protocol.
 /// All data is managed by `ark-bcs` and users do not need to create the
 /// Bookkeeper by themselves.
-/// 
+///
 /// **In almost all cases, users do not need to interact with this struct.**
 pub struct MessageBookkeeper {
     /// Store the messages by namespace id
@@ -177,5 +177,86 @@ impl Default for MessageIndices {
             prover_rounds: Default::default(),
             verifier_messages: Default::default(),
         }
+    }
+}
+
+/// Cam be converted to `MsgRoundRef`
+pub trait ToMsgRoundRef {
+    /// Convert to `MsgRoundRef`
+    fn to_prover_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef;
+
+    /// Convert to `MsgRoundRef`
+    fn to_verifier_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef;
+}
+
+impl ToMsgRoundRef for MsgRoundRef {
+    fn to_prover_msg_round_ref(&self, _c: &MessageBookkeeper) -> MsgRoundRef {
+        *self
+    }
+
+    fn to_verifier_msg_round_ref(&self, _c: &MessageBookkeeper) -> MsgRoundRef {
+        *self
+    }
+}
+
+impl ToMsgRoundRef for (NameSpace, usize) {
+    fn to_prover_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef {
+        let msg_ref = c.get_message_indices(self.0).prover_rounds[self.1];
+        msg_ref
+    }
+
+    fn to_verifier_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef {
+        let msg_ref = c.get_message_indices(self.0).verifier_messages[self.1];
+        msg_ref
+    }
+}
+
+/// This trait is used to reduce code duplication between native and
+/// constraints, as both of them use message bookkeeper to keep track of the
+/// round.
+pub trait BookkeeperContainer {
+    /// Return the underlying bookkeeper. Normally user does not need to call
+    /// this function.
+    fn _bookkeeper(&self) -> &MessageBookkeeper;
+
+    /// Given the current namespace, and the index of the namespace of
+    /// subprotocol namespace, return the subprotocol namespace. `index` is
+    /// the time where the subprotocol namespace is created in
+    /// `register_iop_structure`.
+    fn get_subprotocol_namespace(&self, namespace: NameSpace, index: usize) -> NameSpace {
+        self._bookkeeper().get_subspace(namespace, index)
+    }
+
+    /// Get number of prove rounds in namespace.
+    fn num_prover_rounds_in_namespace(&self, namespace: NameSpace) -> usize {
+        self._bookkeeper()
+            .get_message_indices(namespace)
+            .prover_rounds
+            .len()
+    }
+
+    /// Get number of verifier rounds in namespace.
+    fn num_verifier_rounds_in_namespace(&self, namespace: NameSpace) -> usize {
+        self._bookkeeper()
+            .get_message_indices(namespace)
+            .verifier_messages
+            .len()
+    }
+
+    // fetch all sent messages as referecnes
+
+    /// Return all prover rounds message in the namespace as round reference.
+    fn prover_round_refs_in_namespace(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
+        &self
+            ._bookkeeper()
+            .get_message_indices(namespace)
+            .prover_rounds
+    }
+    /// Return all prover rounds message as round reference.
+    fn verifier_round_refs_in_namespace(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
+        &self
+            ._bookkeeper()
+            .get_message_indices(namespace)
+            .verifier_messages
     }
 }

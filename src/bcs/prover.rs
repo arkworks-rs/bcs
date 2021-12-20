@@ -1,7 +1,7 @@
 use crate::{
-    bcs::{bookkeeper::NameSpace, transcript::Transcript, MTHashParameters},
+    bcs::{transcript::Transcript, MTHashParameters},
     iop::{
-        message::MessagesCollection, oracles::SuccinctRoundMessage,
+        bookkeeper::NameSpace, message::MessagesCollection, oracles::SuccinctRoundMessage,
         prover::IOPProverWithNoOracleRefs, verifier::IOPVerifierForProver, ProverParam,
     },
     ldt::{NoLDT, LDT},

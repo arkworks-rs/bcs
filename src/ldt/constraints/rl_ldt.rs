@@ -1,8 +1,9 @@
 use crate::{
-    bcs::{bookkeeper::NameSpace, constraints::transcript::SimulationTranscriptVar},
+    bcs::constraints::transcript::SimulationTranscriptVar,
     iop::{
+        bookkeeper::{BookkeeperContainer, NameSpace},
         constraints::message::MessagesCollectionVar,
-        message::{BookkeeperContainer, MsgRoundRef, ProverRoundMessageInfo},
+        message::{MsgRoundRef, ProverRoundMessageInfo},
     },
     ldt::{constraints::LDTWithGadget, rl_ldt::LinearCombinationLDT},
 };
@@ -106,14 +107,14 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
             .collect::<Result<Vec<_>, _>>()?;
 
         // restore random coefficients and alphas
-        let random_coefficients = transcript_messages.get_verifier_message((namespace, 0))[0]
+        let random_coefficients = transcript_messages.verifier_round((namespace, 0))[0]
             .clone()
             .try_into_field_elements()
             .unwrap();
 
         let alphas = (1..param.fri_parameters.localization_parameters.len() + 1)
             .map(|idx| {
-                let vm = transcript_messages.get_verifier_message((namespace, idx));
+                let vm = transcript_messages.verifier_round((namespace, idx));
                 assert_eq!(vm.len(), 1);
                 let vm_curr = vm[0].clone().try_into_field_elements().unwrap();
                 assert_eq!(vm_curr.len(), 1);
@@ -137,8 +138,8 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
                     .iter()
                     .map(|oracle| -> Result<_, SynthesisError> {
                         let query_responses = transcript_messages
-                            .query_prover_coset(
-                                *oracle,
+                            .prover_round(*oracle)
+                            .query_coset(
                                 &[query_indices[0].clone()],
                                 iop_trace!("rl_ldt query codewords"),
                             )?
@@ -194,8 +195,8 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
                     )
                     .map(|(query_index, msg)| -> Result<_, SynthesisError> {
                         let mut response = transcript_messages
-                            .query_prover_coset(
-                                msg,
+                            .prover_round(msg)
+                            .query_coset(
                                 &[query_index.clone()],
                                 iop_trace!("rl_ldt query fri message"),
                             )?
@@ -212,11 +213,9 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
                         .prover_round_refs_in_namespace(namespace)
                         .last()
                         .unwrap();
-                    transcript_messages.get_prover_short_message(
-                        oracle_ref,
-                        0,
-                        iop_trace!("final poly coefficients"),
-                    )
+                    transcript_messages
+                        .prover_round(oracle_ref)
+                        .short_message(0, iop_trace!("final poly coefficients"))
                 };
                 let total_shrink_factor = param
                     .fri_parameters

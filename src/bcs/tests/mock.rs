@@ -1,6 +1,5 @@
 use crate::{
     bcs::{
-        bookkeeper::NameSpace,
         tests::FieldMTConfig,
         transcript::{
             test_utils::check_commit_phase_correctness, LDTInfo, SimulationTranscript, Transcript,
@@ -8,9 +7,8 @@ use crate::{
         MTHashParameters,
     },
     iop::{
-        message::{
-            BookkeeperContainer, MessagesCollection, ProverRoundMessageInfo, VerifierMessage,
-        },
+        bookkeeper::NameSpace,
+        message::{MessagesCollection, ProverRoundMessageInfo, VerifierMessage},
         oracles::{RecordingRoundOracle, RoundOracle, SuccinctRoundOracle},
         prover::IOPProver,
         verifier::IOPVerifier,
@@ -43,8 +41,9 @@ fn mock_virtual_oracle_for_query<F: PrimeField, O: RoundOracle<F>>(
     let _enter = span.enter();
     // calculate f(x) * (x^2 + 2x + 1)
 
-    let msg2_points =
-        iop_messages.query_prover_coset((namespace, 2), queries, iop_trace!("mock virtual oracle"));
+    let msg2_points = iop_messages
+        .prover_round((namespace, 2))
+        .query_coset(queries, iop_trace!("mock virtual oracle"));
     assert_eq!(cosets.len(), msg2_points.len());
     msg2_points
         .into_iter()
@@ -287,24 +286,20 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         let pm1_3: Vec<_> = (0..256).map(|_| F::rand(&mut rng)).collect();
 
         assert_eq!(
-            transcript_messages.get_prover_short_message(
-                transcript_messages.prover_round_refs_in_namespace(namespace)[0],
-                0,
-                iop_trace!()
-            ),
+            transcript_messages
+                .prover_round((namespace, 0))
+                .short_message(0, iop_trace!()),
             &pm1_1
         );
         assert_eq!(
-            transcript_messages.query_prover_point(
-                transcript_messages.prover_round_refs_in_namespace(namespace)[0],
-                &[123, 223],
-                iop_trace!("mock query 0")
-            ),
+            transcript_messages
+                .prover_round((namespace, 0))
+                .query_point(&[123, 223], iop_trace!("mock query 0")),
             vec![vec![pm1_2[123], pm1_3[123]], vec![pm1_2[223], pm1_3[223]]]
         );
 
         let vm1_1 = if let VerifierMessage::FieldElements(fe) =
-            transcript_messages.get_verifier_message((namespace, 0))[0].clone()
+            transcript_messages.verifier_round((namespace, 0))[0].clone()
         {
             assert_eq!(fe.len(), 3);
             fe
@@ -312,7 +307,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             panic!("invalid vm message type")
         };
         let vm1_2 = if let VerifierMessage::Bytes(bytes) =
-            transcript_messages.get_verifier_message((namespace, 0))[1].clone()
+            transcript_messages.verifier_round((namespace, 0))[1].clone()
         {
             assert_eq!(bytes.len(), 16);
             bytes
@@ -320,8 +315,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             panic!("invalid vm message type");
         };
 
-        if let VerifierMessage::Bits(bits) =
-            &transcript_messages.get_verifier_message((namespace, 1))[0]
+        if let VerifierMessage::Bits(bits) = &transcript_messages.verifier_round((namespace, 1))[0]
         {
             assert_eq!(bits.len(), 19);
         } else {
@@ -331,11 +325,9 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square()).collect();
 
         assert_eq!(
-            transcript_messages.get_prover_short_message(
-                transcript_messages.prover_round_ref_at_index(namespace, 1),
-                0,
-                iop_trace!()
-            ),
+            transcript_messages
+                .prover_round((namespace, 1))
+                .short_message(0, iop_trace!()),
             &pm2_1
         );
 
@@ -347,17 +339,23 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             .collect();
 
         assert_eq!(
-            transcript_messages.query_prover_point((namespace, 1), &[19, 29, 39], iop_trace!()),
+            transcript_messages
+                .prover_round((namespace, 1))
+                .query_point(&[19, 29, 39], iop_trace!()),
             vec![vec![pm2_2[19]], vec![pm2_2[29]], vec![pm2_2[39]]]
         );
 
         let pm3_1: Vec<_> = (0..6).map(|_| F::rand(&mut rng)).collect();
         assert_eq!(
-            transcript_messages.get_prover_short_message((namespace, 2), 0, iop_trace!()),
+            transcript_messages
+                .prover_round((namespace, 2))
+                .short_message(0, iop_trace!()),
             &pm3_1
         );
         // just query some points
-        transcript_messages.query_prover_point((namespace, 2), &vec![1, 2], iop_trace!());
+        transcript_messages
+            .prover_round((namespace, 2))
+            .query_point(&vec![1, 2], iop_trace!());
 
         Ok(true)
     }

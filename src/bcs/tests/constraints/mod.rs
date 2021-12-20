@@ -6,7 +6,6 @@ use ark_r1cs_std::fields::fp::FpVar;
 
 use crate::{
     bcs::{
-        bookkeeper::NameSpace,
         constraints::{
             proof::BCSProofVar, transcript::SimulationTranscriptVar, verifier::BCSVerifierGadget,
             MTHashParametersVar,
@@ -18,7 +17,7 @@ use crate::{
         },
         MTHashParameters,
     },
-    iop::constraints::IOPVerifierWithGadget,
+    iop::{bookkeeper::NameSpace, constraints::IOPVerifierWithGadget},
     ldt::{
         rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
         LDT,

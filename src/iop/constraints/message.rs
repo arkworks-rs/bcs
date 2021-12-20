@@ -1,7 +1,7 @@
 use crate::{
-    bcs::bookkeeper::MessageBookkeeper,
-    iop::message::{
-        BookkeeperContainer, MsgRoundRef, ProverRoundMessageInfo, ToMsgRoundRef, VerifierMessage,
+    iop::{
+        bookkeeper::{BookkeeperContainer, MessageBookkeeper, ToMsgRoundRef},
+        message::{MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
     },
     tracer::TraceInfo,
 };
@@ -66,56 +66,15 @@ impl<'a, F: PrimeField> MessagesCollectionVar<'a, F> {
     }
 
     /// Get verifier message at at requested round.
-    pub fn get_verifier_message(&self, at: impl ToMsgRoundRef) -> &Vec<VerifierMessageVar<F>> {
+    pub fn verifier_round(&self, at: impl ToMsgRoundRef) -> &Vec<VerifierMessageVar<F>> {
         let at = at.to_verifier_msg_round_ref(&self.bookkeeper);
         &self.verifier_messages[at.index]
     }
 
-    /// Query the prover message as an evaluation oracle at the requested round
-    /// at a point.
-    pub fn query_prover_point(
-        &mut self,
-        at: impl ToMsgRoundRef,
-        positions: &[Vec<Boolean<F>>],
-        _tracer: TraceInfo,
-    ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
+    /// Get prover message at at requested round.
+    pub fn prover_round<'b>(&'b mut self, at: impl ToMsgRoundRef) -> AtProverRoundVar<'a, 'b, F> {
         let round = at.to_prover_msg_round_ref(&self.bookkeeper);
-        if !round.is_virtual {
-            return self.real_oracles[round.index].query(positions);
-        }
-
-        let (virtual_round, mut shadow_self) = self.take_virtual_oracle(round);
-
-        let query_result = virtual_round.query_point(positions, &mut shadow_self);
-
-        // restore self
-        self.restore_from_shadow_self(shadow_self, round, virtual_round);
-
-        // return the query result
-        query_result
-    }
-
-    /// Return the queried coset at `coset_index` of all oracles in this round.
-    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
-    /// in this coset.
-    pub fn query_prover_coset(
-        &mut self,
-        at: impl ToMsgRoundRef,
-        positions: &[Vec<Boolean<F>>],
-        _tracer: TraceInfo,
-    ) -> Result<Vec<Vec<Vec<FpVar<F>>>>, SynthesisError> {
-        let round = at.to_prover_msg_round_ref(&self.bookkeeper);
-        if !round.is_virtual {
-            return Ok(self.real_oracles[round.index].query_coset(positions));
-        }
-
-        let (virtual_round, mut shadow_self) = self.take_virtual_oracle(round);
-
-        let query_result = virtual_round.query_coset(positions, &mut shadow_self)?;
-
-        self.restore_from_shadow_self(shadow_self, round, virtual_round);
-
-        Ok(query_result)
+        AtProverRoundVar::<'a, 'b, F> { _self: self, round }
     }
 
     /// Take a virtual oracle and return a shadow `self` that can be used by
@@ -185,6 +144,72 @@ impl<'a, F: PrimeField> MessagesCollectionVar<'a, F> {
                 .get_info()
         } else {
             self.real_oracles[at.index].get_info().clone()
+        }
+    }
+}
+
+/// A temporary struct to for querying/viewing prover round message.
+pub struct AtProverRoundVar<'a, 'b, F: PrimeField> {
+    pub(crate) _self: &'b mut MessagesCollectionVar<'a, F>,
+    pub(crate) round: MsgRoundRef,
+}
+
+impl<'a, 'b, F: PrimeField> AtProverRoundVar<'a, 'b, F> {
+    /// Query the prover message as an evaluation oracle at the requested round
+    /// at a point.
+    pub fn query_point(
+        &mut self,
+        positions: &[Vec<Boolean<F>>],
+        _tracer: TraceInfo,
+    ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
+        let round = self.round;
+        let _self = &mut self._self;
+        if !round.is_virtual {
+            return _self.real_oracles[round.index].query(positions);
+        }
+
+        let (virtual_round, mut shadow_self) = _self.take_virtual_oracle(round);
+
+        let query_result = virtual_round.query_point(positions, &mut shadow_self);
+
+        // restore self
+        _self.restore_from_shadow_self(shadow_self, round, virtual_round);
+
+        // return the query result
+        query_result
+    }
+
+    /// Return the queried coset at `coset_index` of all oracles in this round.
+    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
+    /// in this coset.
+    pub fn query_coset(
+        &mut self,
+        positions: &[Vec<Boolean<F>>],
+        _tracer: TraceInfo,
+    ) -> Result<Vec<Vec<Vec<FpVar<F>>>>, SynthesisError> {
+        let round = self.round;
+        let _self = &mut self._self;
+        if !round.is_virtual {
+            return Ok(_self.real_oracles[round.index].query_coset(positions));
+        }
+
+        let (virtual_round, mut shadow_self) = _self.take_virtual_oracle(round);
+
+        let query_result = virtual_round.query_coset(positions, &mut shadow_self)?;
+
+        _self.restore_from_shadow_self(shadow_self, round, virtual_round);
+
+        Ok(query_result)
+    }
+    /// Get prover's short messages sent at this round. Short messages are not
+    /// serialized in Merkle tree. Instead, those IP-style short messages are
+    /// directly included in proof variable.
+    pub fn short_message(&mut self, index: usize, _tracer: TraceInfo) -> Vec<FpVar<F>> {
+        let at = self.round;
+        if at.is_virtual {
+            unimplemented!("Virtual oracle does not have short message");
+        } else {
+            self._self.real_oracles[at.index].get_short_message(index)
         }
     }
 }

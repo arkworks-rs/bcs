@@ -1,16 +1,17 @@
 use ark_std::fmt::Debug;
 
-/// Public Coin IOP Prover
-pub mod prover;
-/// Public coin IOP verifier
-pub mod verifier;
-
+/// Bookkeeping references to round oracles
+pub mod bookkeeper;
 /// Constraints for Public Coin IOP Verifier
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 /// Defines a prover message oracle.
 pub mod message;
 pub mod oracles;
+/// Public Coin IOP Prover
+pub mod prover;
+/// Public coin IOP verifier
+pub mod verifier;
 
 /// A collection of oracle references from other protocols
 /// used by current prover.

@@ -1,10 +1,8 @@
 use crate::{
-    bcs::{
-        bookkeeper::NameSpace,
-        transcript::{SimulationTranscript, Transcript},
-    },
+    bcs::transcript::{SimulationTranscript, Transcript},
     iop::{
-        message::{BookkeeperContainer, MessagesCollection, MsgRoundRef, ProverRoundMessageInfo},
+        bookkeeper::{BookkeeperContainer, NameSpace},
+        message::{MessagesCollection, MsgRoundRef, ProverRoundMessageInfo},
         oracles::RoundOracle,
     },
     ldt::LDT,
@@ -270,7 +268,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         let query_indices = (0..param.num_queries)
             .map(|_| le_bits_to_usize(&sponge.squeeze_bits(codeword_log_num_cosets)));
         // restore random coefficients and alphas
-        let random_coefficients = transcript_messages.get_verifier_message((namespace, 0))[0]
+        let random_coefficients = transcript_messages.verifier_round((namespace, 0))[0]
             .clone()
             .try_into_field_elements()
             .unwrap();
@@ -278,7 +276,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         // verifier message from index 1 to num_alphas are alphas
         let alphas = (1..param.fri_parameters.localization_parameters.len() + 1).map(|i|
             // TODO: prover and verifier mismatches on this message
-            transcript_messages.get_verifier_message((namespace, i))
+            transcript_messages.verifier_round((namespace, i))
         )
             .map(|vm| {
                 assert_eq!(vm.len(), 1);
@@ -307,11 +305,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     .iter()
                     .map(|oracle| {
                         let query_responses = transcript_messages
-                            .query_prover_coset(
-                                *oracle,
-                                &[query_indices[0]],
-                                iop_trace!("rl_ldt query codewords"),
-                            )
+                            .prover_round(*oracle)
+                            .query_coset(&[query_indices[0]], iop_trace!("rl_ldt query codewords"))
                             .pop()
                             .unwrap()
                             .into_iter()
@@ -359,11 +354,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     )
                     .map(|(query_index, msg)| {
                         let mut response = transcript_messages
-                            .query_prover_coset(
-                                msg,
-                                &[*query_index],
-                                iop_trace!("rl_ldt query fri message"),
-                            )
+                            .prover_round(msg)
+                            .query_coset(&[*query_index], iop_trace!("rl_ldt query fri message"))
                             .pop()
                             .unwrap(); // get the first coset position (only one position)
                         assert_eq!(response.len(), 1); // get the first oracle message in this round (only one message)
@@ -377,11 +369,9 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                         .prover_round_refs_in_namespace(namespace)
                         .last()
                         .unwrap();
-                    transcript_messages.get_prover_short_message(
-                        oracle_ref,
-                        0,
-                        iop_trace!("final poly coefficients"),
-                    )
+                    transcript_messages
+                        .prover_round(oracle_ref)
+                        .short_message(0, iop_trace!("final poly coefficients"))
                 }
                 .to_vec();
                 let total_shrink_factor = param
@@ -463,10 +453,8 @@ fn degree_raise_poly_query<F: PrimeField>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        bcs::{
-            bookkeeper::NameSpace, tests::FieldMTConfig, transcript::Transcript, MTHashParameters,
-        },
-        iop::message::MessagesCollection,
+        bcs::{tests::FieldMTConfig, transcript::Transcript, MTHashParameters},
+        iop::{bookkeeper::NameSpace, message::MessagesCollection},
         ldt::{
             rl_ldt::{
                 degree_raise_poly_eval, degree_raise_poly_query, LinearCombinationLDT,

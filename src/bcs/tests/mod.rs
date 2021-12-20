@@ -6,14 +6,13 @@ pub(crate) mod mock;
 
 use crate::{
     bcs::{
-        bookkeeper::NameSpace,
         prover::BCSProof,
         tests::mock::{MockTest1Verifier, MockTestProver},
         transcript::SimulationTranscript,
         verifier::BCSVerifier,
         MTHashParameters,
     },
-    iop::verifier::IOPVerifier,
+    iop::{bookkeeper::NameSpace, verifier::IOPVerifier},
     ldt::{
         rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
         LDT,

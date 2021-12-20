@@ -1,9 +1,7 @@
 use crate::{
-    bcs::{
-        bookkeeper::NameSpace, constraints::transcript::SimulationTranscriptVar,
-        tests::mock::MockTest1Verifier,
-    },
+    bcs::{constraints::transcript::SimulationTranscriptVar, tests::mock::MockTest1Verifier},
     iop::{
+        bookkeeper::NameSpace,
         constraints::{message::MessagesCollectionVar, IOPVerifierWithGadget},
         message::ProverRoundMessageInfo,
     },
@@ -37,11 +35,9 @@ fn mock_virtual_oracle_for_query<F: PrimeField>(
     let span = tracing::span!(Level::INFO, "virtual oracle");
     let _enter = span.enter();
 
-    let msg2_points = iop_messages.query_prover_coset(
-        (namespace, 2),
-        queries,
-        iop_trace!("mock virtual oracle"),
-    )?;
+    let msg2_points = iop_messages
+        .prover_round((namespace, 2))
+        .query_coset(queries, iop_trace!("mock virtual oracle"))?;
     assert_eq!(msg2_points.len(), cosets.len());
     msg2_points
         .into_iter()
@@ -160,12 +156,13 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         let pm1_3: Vec<_> = (0..256).map(|_| random_fe()).collect();
 
         transcript_messages
-            .get_prover_short_message((namespace, 0), 0, iop_trace!())
+            .prover_round((namespace, 0))
+            .short_message(0, iop_trace!())
             .enforce_equal(pm1_1.as_slice())?;
 
         transcript_messages
-            .query_prover_point(
-                (namespace, 0),
+            .prover_round((namespace, 0))
+            .query_point(
                 &[
                     UInt8::new_witness(cs.cs(), || Ok(123))?.to_bits_le()?,
                     UInt8::new_witness(cs.cs(), || Ok(223))?.to_bits_le()?,
@@ -183,17 +180,17 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             .try_for_each(|(left, right)| left.enforce_equal(&right))?;
 
         assert!(cs.cs().is_satisfied().unwrap());
-        let vm1_1 = transcript_messages.get_verifier_message((namespace, 0))[0]
+        let vm1_1 = transcript_messages.verifier_round((namespace, 0))[0]
             .clone()
             .try_into_field_elements()
             .unwrap();
         assert_eq!(vm1_1.len(), 3);
-        let vm1_2 = transcript_messages.get_verifier_message((namespace, 0))[1]
+        let vm1_2 = transcript_messages.verifier_round((namespace, 0))[1]
             .clone()
             .try_into_bytes()
             .unwrap();
         assert_eq!(vm1_2.len(), 16);
-        let vm2_1 = transcript_messages.get_verifier_message((namespace, 1))[0]
+        let vm2_1 = transcript_messages.verifier_round((namespace, 1))[0]
             .clone()
             .try_into_bits()
             .unwrap();
@@ -202,7 +199,8 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         let pm2_1: Vec<_> = vm1_1.into_iter().map(|x| x.square().unwrap()).collect();
         pm2_1.enforce_equal(
             transcript_messages
-                .get_prover_short_message((namespace, 1), 0, iop_trace!())
+                .prover_round((namespace, 1))
+                .short_message(0, iop_trace!())
                 .as_slice(),
         )?;
 
@@ -214,8 +212,8 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
             .collect();
 
         transcript_messages
-            .query_prover_point(
-                (namespace, 1),
+            .prover_round((namespace, 1))
+            .query_point(
                 &[
                     UInt8::constant(19).to_bits_le()?,
                     UInt8::constant(29).to_bits_le()?,
@@ -238,15 +236,17 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
 
         pm3_1.enforce_equal(
             transcript_messages
-                .get_prover_short_message((namespace, 2), 0, iop_trace!())
+                .prover_round((namespace, 2))
+                .short_message(0, iop_trace!())
                 .as_slice(),
         )?;
 
-        transcript_messages.query_prover_point(
-            (namespace, 2),
-            &[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]],
-            iop_trace!(),
-        )?; // query 1, 2
+        transcript_messages
+            .prover_round((namespace, 2))
+            .query_point(
+                &[vec![Boolean::TRUE], vec![Boolean::FALSE, Boolean::TRUE]],
+                iop_trace!(),
+            )?; // query 1, 2
         Ok(Boolean::TRUE)
     }
 }

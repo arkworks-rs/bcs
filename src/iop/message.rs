@@ -1,18 +1,14 @@
-use crate::{
-    bcs::{
-        bookkeeper::{MessageBookkeeper, NameSpace},
-        MTHashParameters,
-    },
-    tracer::TraceInfo,
-    Error,
-};
+use crate::{bcs::MTHashParameters, iop::bookkeeper::MessageBookkeeper, tracer::TraceInfo, Error};
 use ark_crypto_primitives::{merkle_tree::Config as MTConfig, MerkleTree};
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::vec::Vec;
 use tracing::info;
 
-use super::oracles::{RecordingRoundOracle, RoundOracle, VirtualOracle};
+use super::{
+    bookkeeper::{BookkeeperContainer, ToMsgRoundRef},
+    oracles::{RecordingRoundOracle, RoundOracle, VirtualOracle},
+};
 
 /// Contains location of round oracles in a transcript.
 #[derive(Clone, Copy, Debug)]
@@ -36,37 +32,6 @@ impl MsgRoundRef {
     /// Get the trace for the round oracle reference.
     pub fn trace(&self) -> TraceInfo {
         self.trace
-    }
-}
-
-/// Cam be converted to `MsgRoundRef`
-pub trait ToMsgRoundRef {
-    /// Convert to `MsgRoundRef`
-    fn to_prover_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef;
-
-    /// Convert to `MsgRoundRef`
-    fn to_verifier_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef;
-}
-
-impl ToMsgRoundRef for MsgRoundRef {
-    fn to_prover_msg_round_ref(&self, _c: &MessageBookkeeper) -> MsgRoundRef {
-        *self
-    }
-
-    fn to_verifier_msg_round_ref(&self, _c: &MessageBookkeeper) -> MsgRoundRef {
-        *self
-    }
-}
-
-impl ToMsgRoundRef for (NameSpace, usize) {
-    fn to_prover_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef {
-        let msg_ref = c.get_message_indices(self.0).prover_rounds[self.1];
-        msg_ref
-    }
-
-    fn to_verifier_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef {
-        let msg_ref = c.get_message_indices(self.0).verifier_messages[self.1];
-        msg_ref
     }
 }
 
@@ -97,69 +62,30 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
     }
 
     /// Given a `MsgRoundRef`, return the corresponding verifier message.
-    pub fn get_verifier_message(&self, at: impl ToMsgRoundRef) -> &Vec<VerifierMessage<F>> {
+    pub fn verifier_round(&self, at: impl ToMsgRoundRef) -> &Vec<VerifierMessage<F>> {
         let at = at.to_verifier_msg_round_ref(&self.bookkeeper);
         &self.verifier_messages[at.index]
     }
 
-    /// Return the leaves of at `position` of all oracle in this round.
-    /// `result[i][j]` is leaf `i` at oracle `j`.
-    pub fn query_prover_point(
-        &mut self,
-        at: impl ToMsgRoundRef,
-        positions: &[usize],
-        tracer: TraceInfo,
-    ) -> Vec<Vec<F>> {
+    /// Given a `MsgRoundRef`, return the corresponding prover round message.
+    pub fn prover_round(&mut self, at: impl ToMsgRoundRef) -> AtProverRound<F, O> {
         let round = at.to_prover_msg_round_ref(&self.bookkeeper);
-        if !round.is_virtual {
-            info!("Query Real Oracle point at {:?} by {}", positions, tracer);
-            return self.real_oracles[round.index].query(positions);
-        }
-
-        info!(
-            "Query Virtual Oracle point at {:?} by {}",
-            positions, tracer
-        );
-
-        let (virtual_round, mut shadow_self) = self.take_virtual_oracle(round);
-
-        let query_result = virtual_round.query_point(positions, &mut shadow_self);
-
-        // restore self
-        self.restore_from_shadow_self(shadow_self, round, virtual_round);
-
-        // return the query result
-        query_result
+        AtProverRound { _self: self, round }
     }
 
-    /// Return the queried coset at `coset_index` of all oracles in this round.
-    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
-    /// in this coset.
-    pub fn query_prover_coset(
-        &mut self,
-        at: impl ToMsgRoundRef,
-        positions: &[usize],
-        tracer: TraceInfo,
-    ) -> Vec<Vec<Vec<F>>> {
-        let round = at.to_prover_msg_round_ref(&self.bookkeeper);
-        if !round.is_virtual {
-            info!("Query Real Oracle coset at {:?} by {}", positions, tracer);
-            return self.real_oracles[round.index].query_coset(positions);
+    /// Get metadata of current prover round message.
+    pub fn get_prover_round_info(&self, at: impl ToMsgRoundRef) -> ProverRoundMessageInfo {
+        let at = at.to_prover_msg_round_ref(&self.bookkeeper);
+        if at.is_virtual {
+            self.virtual_oracles
+                .get(at.index)
+                .expect("round out of range")
+                .as_ref()
+                .expect("Virtual oracle contains circular query: For example, A -> B -> C -> A")
+                .get_info()
+        } else {
+            self.real_oracles[at.index].get_info()
         }
-
-        let (virtual_round, mut shadow_self) = self.take_virtual_oracle(round);
-
-        info!(
-            "Query Virtual Oracle coset at {:?} by {}",
-            positions, tracer
-        );
-        let query_result = virtual_round.query_coset(positions, &mut shadow_self);
-
-        // restore self
-        self.restore_from_shadow_self(shadow_self, round, virtual_round);
-
-        // return the query result
-        query_result
     }
 
     /// Take a virtual oracle and return a shadow `self` that can be used by
@@ -199,103 +125,82 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
         self.verifier_messages = shadow_self.verifier_messages;
         self.virtual_oracles[round.index] = Some(vo);
     }
-
-    /// Return the short message at a prover round
-    pub fn get_prover_short_message(
-        &self,
-        at: impl ToMsgRoundRef,
-        index: usize,
-        tracer: TraceInfo,
-    ) -> &[F] {
-        let at = at.to_prover_msg_round_ref(&self.bookkeeper);
-        info!("Get prover short message by {}", tracer);
-        if at.is_virtual {
-            unimplemented!("Virtual oracle does not have short message");
-        } else {
-            self.real_oracles[at.index].get_short_message(index)
-        }
-    }
-
-    /// Get metadata of current prover round message.
-    pub fn get_prover_round_info(&self, at: impl ToMsgRoundRef) -> ProverRoundMessageInfo {
-        let at = at.to_prover_msg_round_ref(&self.bookkeeper);
-        if at.is_virtual {
-            self.virtual_oracles
-                .get(at.index)
-                .expect("round out of range")
-                .as_ref()
-                .expect("Virtual oracle contains circular query: For example, A -> B -> C -> A")
-                .get_info()
-        } else {
-            self.real_oracles[at.index].get_info()
-        }
-    }
-}
-
-/// This trait is used to reduce code duplication between native and
-/// constraints, as both of them use message bookkeeper to keep track of the
-/// round.
-pub trait BookkeeperContainer {
-    /// Return the underlying bookkeeper. Normally user does not need to call
-    /// this function.
-    fn _bookkeeper(&self) -> &MessageBookkeeper;
-
-    /// Given the current namespace, and the index of the namespace of
-    /// subprotocol namespace, return the subprotocol namespace. `index` is
-    /// the time where the subprotocol namespace is created in
-    /// `register_iop_structure`.
-    fn get_subprotocol_namespace(&self, namespace: NameSpace, index: usize) -> NameSpace {
-        self._bookkeeper().get_subspace(namespace, index)
-    }
-
-    /// Get number of prove rounds in namespace.
-    fn num_prover_rounds_in_namespace(&self, namespace: NameSpace) -> usize {
-        self._bookkeeper()
-            .get_message_indices(namespace)
-            .prover_rounds
-            .len()
-    }
-
-    /// Get number of verifier rounds in namespace.
-    fn num_verifier_rounds_in_namespace(&self, namespace: NameSpace) -> usize {
-        self._bookkeeper()
-            .get_message_indices(namespace)
-            .verifier_messages
-            .len()
-    }
-
-    // fetch all sent messages as referecnes
-
-    /// Return all prover rounds message in the namespace as round reference.
-    fn prover_round_refs_in_namespace(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
-        &self
-            ._bookkeeper()
-            .get_message_indices(namespace)
-            .prover_rounds
-    }
-
-    /// Given namespace and round index, return the round reference.
-    fn prover_round_ref_at_index(&self, namespace: NameSpace, index: usize) -> MsgRoundRef {
-        self.prover_round_refs_in_namespace(namespace)[index]
-    }
-
-    /// Return all prover rounds message as round reference.
-    fn verifier_round_refs_in_namespace(&self, namespace: NameSpace) -> &Vec<MsgRoundRef> {
-        &self
-            ._bookkeeper()
-            .get_message_indices(namespace)
-            .verifier_messages
-    }
-
-    /// Given namespace and round index, return the round reference.
-    fn verifier_round_ref_at_index(&self, namespace: NameSpace, index: usize) -> MsgRoundRef {
-        self.verifier_round_refs_in_namespace(namespace)[index]
-    }
 }
 
 impl<F: PrimeField, O: RoundOracle<F>> BookkeeperContainer for MessagesCollection<F, O> {
     fn _bookkeeper(&self) -> &MessageBookkeeper {
         &self.bookkeeper
+    }
+}
+
+/// A temporary struct to for querying/viewing prover round message.
+pub struct AtProverRound<'a, F: PrimeField, O: RoundOracle<F>> {
+    _self: &'a mut MessagesCollection<F, O>,
+    round: MsgRoundRef,
+}
+
+impl<'a, F: PrimeField, O: RoundOracle<F>> AtProverRound<'a, F, O> {
+    /// Return the leaves of at `position` of all oracle in this round.
+    /// `result[i][j]` is leaf `i` at oracle `j`.
+    pub fn query_point(&mut self, positions: &[usize], tracer: TraceInfo) -> Vec<Vec<F>> {
+        let _self = &mut self._self;
+        let round = self.round;
+        if !round.is_virtual {
+            info!("Query Real Oracle point at {:?} by {}", positions, tracer);
+            return _self.real_oracles[round.index].query(positions);
+        }
+
+        info!(
+            "Query Virtual Oracle point at {:?} by {}",
+            positions, tracer
+        );
+
+        let (virtual_round, mut shadow_self) = _self.take_virtual_oracle(round);
+
+        let query_result = virtual_round.query_point(positions, &mut shadow_self);
+
+        // restore self
+        _self.restore_from_shadow_self(shadow_self, round, virtual_round);
+
+        // return the query result
+        query_result
+    }
+
+    /// Return the queried coset at `coset_index` of all oracles in this round.
+    /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
+    /// in this coset.
+    pub fn query_coset(&mut self, positions: &[usize], tracer: TraceInfo) -> Vec<Vec<Vec<F>>> {
+        let _self = &mut self._self;
+        let round = self.round;
+        if !round.is_virtual {
+            info!("Query Real Oracle coset at {:?} by {}", positions, tracer);
+            return _self.real_oracles[round.index].query_coset(positions);
+        }
+
+        let (virtual_round, mut shadow_self) = _self.take_virtual_oracle(round);
+
+        info!(
+            "Query Virtual Oracle coset at {:?} by {}",
+            positions, tracer
+        );
+        let query_result = virtual_round.query_coset(positions, &mut shadow_self);
+
+        // restore self
+        _self.restore_from_shadow_self(shadow_self, round, virtual_round);
+
+        // return the query result
+        query_result
+    }
+
+    /// Return the short message at a prover round
+    pub fn short_message(&self, index: usize, tracer: TraceInfo) -> &[F] {
+        let at = self.round;
+        info!("Get prover short message by {}", tracer);
+        if at.is_virtual {
+            unimplemented!("Virtual oracle does not have short message");
+        } else {
+            self._self.real_oracles[at.index].get_short_message(index)
+        }
     }
 }
 
