@@ -1,6 +1,9 @@
-#![allow(unused)] // for this example only
+#![allow(unused)]
+
+// for this example only
 use std::borrow::Borrow;
 
+use crate::ark_bcs::iop::bookkeeper::ToMsgRoundRef;
 use ark_bls12_381::Fr;
 use ark_crypto_primitives::{
     crh::poseidon,
@@ -33,11 +36,12 @@ use ark_bcs::{
             MTHashParametersVar,
         },
         prover::BCSProof,
-        transcript::NameSpace,
     },
     iop::{
+        bookkeeper::{BookkeeperContainer, NameSpace},
         constraints::{
-            message::{SuccinctRoundOracleVarView, VerifierMessageVar},
+            message::{MessagesCollectionVar, VerifierMessageVar},
+            oracles::SuccinctRoundOracleVar,
             IOPVerifierWithGadget,
         },
         message::{MessagesCollection, ProverRoundMessageInfo},
@@ -79,19 +83,19 @@ impl<CF: PrimeField + Absorb> AllocVar<PublicInput<CF>, CF> for PublicInputVar<C
 }
 
 impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, CF>
-    for SumcheckExample<CF>
+for SumcheckExample<CF>
 {
     type VerifierOutputVar = Boolean<CF>;
     type PublicInputVar = PublicInputVar<CF>;
 
-    fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
+    fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf=[FpVar<CF>]>>(
         namespace: NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
     ) -> Result<(), SynthesisError>
-    where
-        MT::InnerDigest: Absorb,
-        MTG::InnerDigest: AbsorbGadget<CF>,
+        where
+            MT::InnerDigest: Absorb,
+            MTG::InnerDigest: AbsorbGadget<CF>,
     {
         transcript.squeeze_verifier_field_elements(2)?;
         transcript
@@ -140,15 +144,12 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
         public_input: &Self::PublicInputVar,
         _oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
-        tramscript_messages: &mut MessagesCollection<
-            SuccinctRoundOracleVarView<CF>,
-            VerifierMessageVar<CF>,
-        >,
+        tramscript_messages: &mut MessagesCollectionVar<CF>,
     ) -> Result<Self::VerifierOutputVar, SynthesisError> {
         // which oracle we are using to sumcheck
         let oracle_refs_sumcheck =
-            SumcheckOracleRef::new(tramscript_messages.prover_messages(namespace)[0]);
-        let random_coeffs = tramscript_messages.verifier_message(namespace, 0)[0]
+            SumcheckOracleRef::new((namespace, 0).to_prover_msg_round_ref(tramscript_messages));
+        let random_coeffs = tramscript_messages.verifier_round((namespace, 0))[0]
             .clone()
             .try_into_field_elements()
             .expect("invalid verifier message type");
@@ -194,8 +195,9 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
 struct SumcheckExampleVerification {
     // Constants embedded into the circuit: some parameters, for example
     param: Parameter<Fr>,
-    poseidon_param: PoseidonParameters<Fr>, /* for simplicity, same poseidon parameter is used
-                                             * for both merkle tree, and sponge */
+    poseidon_param: PoseidonParameters<Fr>,
+    /* for simplicity, same poseidon parameter is used
+                                                * for both merkle tree, and sponge */
     ldt_param: LinearCombinationLDTParameters<Fr>,
 
     // public input is the public input known by the verifier
@@ -206,6 +208,7 @@ struct SumcheckExampleVerification {
 }
 
 pub(crate) struct FieldMTConfig;
+
 impl Config for FieldMTConfig {
     type Leaf = [Fr];
     type LeafDigest = Fr;
@@ -216,6 +219,7 @@ impl Config for FieldMTConfig {
 }
 
 pub(crate) struct FieldMTConfigGadget;
+
 impl ConfigGadget<FieldMTConfig, Fr> for FieldMTConfigGadget {
     type Leaf = [FpVar<Fr>];
     type LeafDigest = FpVar<Fr>;
@@ -322,7 +326,7 @@ fn sumcheck_example_correctness() {
         &ldt_parameter,
         mt_hash_parameters.clone(),
     )
-    .expect("fail to generate proof");
+        .expect("fail to generate proof");
 
     let circuit = SumcheckExampleVerification {
         param: prover_param,
@@ -332,11 +336,6 @@ fn sumcheck_example_correctness() {
         proof,
     };
 
-    // some debugging tools for constraints
-    let mut layer = ConstraintLayer::default();
-    layer.mode = TracingMode::OnlyConstraints;
-    let subscriber = tracing_subscriber::Registry::default().with(layer);
-    let _guard = tracing::subscriber::set_default(subscriber);
     // Next, let's make the circuit!
     let cs = ConstraintSystem::new_ref();
     circuit.generate_constraints(cs.clone()).unwrap();

@@ -115,23 +115,6 @@ impl<'a, F: PrimeField> MessagesCollectionVar<'a, F> {
         self.virtual_oracles[round.index] = Some(vo);
     }
 
-    /// Get prover's short messages sent at this round. Short messages are not
-    /// serialized in Merkle tree. Instead, those IP-style short messages are
-    /// directly included in proof variable.
-    pub fn get_prover_short_message(
-        &mut self,
-        at: impl ToMsgRoundRef,
-        index: usize,
-        _tracer: TraceInfo,
-    ) -> Vec<FpVar<F>> {
-        let at = at.to_prover_msg_round_ref(&self.bookkeeper);
-        if at.is_virtual {
-            unimplemented!("Virtual oracle does not have short message");
-        } else {
-            self.real_oracles[at.index].get_short_message(index)
-        }
-    }
-
     /// Get metadata of current prover round message.
     pub fn get_prover_round_info(&self, at: impl ToMsgRoundRef) -> ProverRoundMessageInfo {
         let at = at.to_prover_msg_round_ref(&self.bookkeeper);
@@ -271,21 +254,21 @@ impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {
                     .map(|x| FpVar::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::FieldElements(var?))
-            }
+            },
             VerifierMessage::Bits(bits) => {
                 let var: Result<Vec<_>, _> = bits
                     .iter()
                     .map(|x| Boolean::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bits(var?))
-            }
+            },
             VerifierMessage::Bytes(bytes) => {
                 let var: Result<Vec<_>, _> = bytes
                     .iter()
                     .map(|x| UInt8::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bytes(var?))
-            }
+            },
         }
     }
 }

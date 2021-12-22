@@ -173,8 +173,8 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
                 .to_vec(),
         );
 
-        // warning: make sure you register this virtual round again in your verifier (and its constraints)
-        // otherwise verification will fail
+        // warning: make sure you register this virtual round again in your verifier
+        // (and its constraints) otherwise verification will fail
         transcript.register_prover_virtual_round(
             namespace,
             virtual_oracle_querier,

@@ -8,11 +8,9 @@ use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::{marker::PhantomData, Zero};
 
 use ark_bcs::{
-    bcs::{
-        bookkeeper::NameSpace,
-        transcript::{SimulationTranscript, Transcript},
-    },
+    bcs::transcript::{SimulationTranscript, Transcript},
     iop::{
+        bookkeeper::NameSpace,
         message::{MessagesCollection, MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
         oracles::RoundOracle,
         prover::IOPProver,
@@ -205,7 +203,8 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         let query_point = evaluation_domain.element(query);
 
         let query_responses = transcript_messages
-            .query_prover_point((namespace, 0), &[query], iop_trace!("sumcheck query"))
+            .prover_round((namespace, 0))
+            .query_point(&[query], iop_trace!("sumcheck query"))
             .pop()
             .unwrap();
         let h_point = query_responses[0];
@@ -213,7 +212,8 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
         let vh_point = query_point.pow(&[summation_domain.size]) - F::one(); // evaluate over vanishing poly
 
         // f(s)
-        let expected = transcript_messages.query_prover_point(oracle_refs.poly, &[query], iop_trace!("oracle access to poly in sumcheck"))
+        let expected = transcript_messages.prover_round(oracle_refs.poly)
+            .query_point( &[query], iop_trace!("oracle access to poly in sumcheck"))
             .remove(0)// there's only one query, so always zero
             .remove(public_input.which); // we want to get `which` oracle in this round
                                          // h(s) * v_h(s) + (s * p(s) + claimed_sum/summation_domain.size)
@@ -240,10 +240,12 @@ pub mod constraints {
     };
 
     use ark_bcs::{
-        bcs::{constraints::transcript::SimulationTranscriptVar, transcript::NameSpace},
+        bcs::constraints::transcript::SimulationTranscriptVar,
         iop::{
+            bookkeeper::NameSpace,
             constraints::{
-                message::{SuccinctRoundOracleVarView, VerifierMessageVar},
+                message::{MessagesCollectionVar, VerifierMessageVar},
+                oracles::SuccinctRoundOracleVar,
                 IOPVerifierWithGadget,
             },
             message::{MessagesCollection, ProverRoundMessageInfo},
@@ -304,10 +306,7 @@ pub mod constraints {
             public_input: &Self::PublicInputVar,
             oracle_refs: &Self::OracleRefs,
             sponge: &mut S::Var,
-            transcript_messages: &mut MessagesCollection<
-                SuccinctRoundOracleVarView<CF>,
-                VerifierMessageVar<CF>,
-            >,
+            transcript_messages: &mut MessagesCollectionVar<CF>,
         ) -> Result<Self::VerifierOutputVar, SynthesisError> {
             // // query a random point in evaluation domain
             let evaluation_domain = verifier_parameter.evaluation_domain;
@@ -322,8 +321,8 @@ pub mod constraints {
             let query_point = FpVar::constant(evaluation_domain.group_gen).pow_le(&query)?;
 
             let query_responses = transcript_messages
-                .prover_message(namespace, 0)
-                .query(&[query.clone()], iop_trace!("sumcheck query"))?
+                .prover_round((namespace, 0))
+                .query_point(&[query.clone()], iop_trace!("sumcheck query"))?
                 .pop()
                 .unwrap();
             let h_point = query_responses[0].clone();
@@ -332,14 +331,9 @@ pub mod constraints {
                 .pow_le(&UInt64::constant(summation_domain.size).to_bits_le())?
                 - FpVar::constant(CF::one());
 
-            // f(s)
             let expected = transcript_messages
-                .prover_message_using_ref(oracle_refs.poly)
-                .query(
-                    &[query.clone()],
-                    iop_trace!("oracle access to poly in sumcheck"),
-                )?
-                .remove(0)
+                .prover_round(oracle_refs.poly)
+                .query_point(&[query], iop_trace!("oracle access to poly in sumcheck"))?[0]
                 .remove(public_input.which);
             let actual = &h_point * &vh_point
                 + &(&query_point * &p_point

@@ -194,9 +194,10 @@ where
     /// and `get_previously_sent_prover_round_info`
     pub fn get_previously_sent_prover_round(
         &self,
-        msg_ref: MsgRoundRef,
+        msg_ref: impl ToMsgRoundRef,
     ) -> &RecordingRoundOracle<F> {
-        if msg_ref.is_virtual {
+        let msg_ref = msg_ref.to_prover_msg_round_ref(&self.bookkeeper);
+        if !msg_ref.is_virtual {
             &self.prover_message_oracles[msg_ref.index]
         } else {
             panic!("This round is virtual. ")

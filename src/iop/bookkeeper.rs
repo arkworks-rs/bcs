@@ -183,30 +183,33 @@ impl Default for MessageIndices {
 /// Cam be converted to `MsgRoundRef`
 pub trait ToMsgRoundRef {
     /// Convert to `MsgRoundRef`
-    fn to_prover_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef;
+    fn to_prover_msg_round_ref(&self, c: &impl BookkeeperContainer) -> MsgRoundRef;
 
     /// Convert to `MsgRoundRef`
-    fn to_verifier_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef;
+    fn to_verifier_msg_round_ref(&self, c: &impl BookkeeperContainer) -> MsgRoundRef;
 }
 
 impl ToMsgRoundRef for MsgRoundRef {
-    fn to_prover_msg_round_ref(&self, _c: &MessageBookkeeper) -> MsgRoundRef {
+    fn to_prover_msg_round_ref(&self, _c: &impl BookkeeperContainer) -> MsgRoundRef {
         *self
     }
 
-    fn to_verifier_msg_round_ref(&self, _c: &MessageBookkeeper) -> MsgRoundRef {
+    fn to_verifier_msg_round_ref(&self, _c: &impl BookkeeperContainer) -> MsgRoundRef {
         *self
     }
 }
 
 impl ToMsgRoundRef for (NameSpace, usize) {
-    fn to_prover_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef {
-        let msg_ref = c.get_message_indices(self.0).prover_rounds[self.1];
+    fn to_prover_msg_round_ref(&self, c: &impl BookkeeperContainer) -> MsgRoundRef {
+        let msg_ref = c._bookkeeper().get_message_indices(self.0).prover_rounds[self.1];
         msg_ref
     }
 
-    fn to_verifier_msg_round_ref(&self, c: &MessageBookkeeper) -> MsgRoundRef {
-        let msg_ref = c.get_message_indices(self.0).verifier_messages[self.1];
+    fn to_verifier_msg_round_ref(&self, c: &impl BookkeeperContainer) -> MsgRoundRef {
+        let msg_ref = c
+            ._bookkeeper()
+            .get_message_indices(self.0)
+            .verifier_messages[self.1];
         msg_ref
     }
 }
@@ -258,5 +261,11 @@ pub trait BookkeeperContainer {
             ._bookkeeper()
             .get_message_indices(namespace)
             .verifier_messages
+    }
+}
+
+impl BookkeeperContainer for MessageBookkeeper {
+    fn _bookkeeper(&self) -> &MessageBookkeeper {
+        self
     }
 }

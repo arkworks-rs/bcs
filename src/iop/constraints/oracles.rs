@@ -194,9 +194,9 @@ fn coset_query_response_to_point_query_response<F: PrimeField>(
             }).collect::<Result<Vec<Vec<FpVar<_>>>, _>>()
 }
 
-/// The constraints for coset evaluator defined by user, which takes a query position (as index
-/// and coset) and use constituent oracles in iop messages to build up
-/// responses.
+/// The constraints for coset evaluator defined by user, which takes a query
+/// position (as index and coset) and use constituent oracles in iop messages to
+/// build up responses.
 pub type CosetVarEvaluator<CF> = Box<
     dyn Fn(
             &mut MessagesCollectionVar<CF>, // iop messages
@@ -206,7 +206,8 @@ pub type CosetVarEvaluator<CF> = Box<
         + 'static,
 >;
 
-/// A virtual oracle variable who make query to other virtual or non-virtual oracles.
+/// A virtual oracle variable who make query to other virtual or non-virtual
+/// oracles.
 pub struct VirtualOracleVar<CF: PrimeField> {
     coset_evaluator: CosetVarEvaluator<CF>,
     pub(crate) codeword_domain: Radix2CosetDomain<CF>,

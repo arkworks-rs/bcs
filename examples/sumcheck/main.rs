@@ -1,7 +1,29 @@
-#![allow(unused)] // for this example only
+#![allow(unused)]
+// for this example only
 #[macro_use]
 extern crate ark_bcs;
 
+use crate::ark_bcs::iop::bookkeeper::ToMsgRoundRef;
+use ark_bcs::{
+    bcs::{
+        prover::BCSProof,
+        transcript::{
+            test_utils::check_commit_phase_correctness, SimulationTranscript, Transcript,
+        },
+        verifier::BCSVerifier,
+        MTHashParameters,
+    },
+    iop::{
+        bookkeeper::{BookkeeperContainer, NameSpace},
+        message::{MessagesCollection, ProverRoundMessageInfo, VerifierMessage},
+        oracles::RoundOracle,
+        prover::IOPProver,
+        verifier::IOPVerifier,
+        ProverParam,
+    },
+    ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+    Error,
+};
 use ark_bls12_381::fr::Fr;
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
@@ -12,27 +34,6 @@ use ark_poly::{
 use ark_serialize::CanonicalSerialize;
 use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::{marker::PhantomData, test_rng, One};
-
-use ark_bcs::{
-    bcs::{
-        bookkeeper::NameSpace,
-        prover::BCSProof,
-        transcript::{
-            test_utils::check_commit_phase_correctness, SimulationTranscript, Transcript,
-        },
-        verifier::BCSVerifier,
-        MTHashParameters,
-    },
-    iop::{
-        message::{MessagesCollection, ProverRoundMessageInfo, VerifierMessage},
-        oracles::RoundOracle,
-        prover::IOPProver,
-        verifier::IOPVerifier,
-        ProverParam,
-    },
-    ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
-    Error,
-};
 use tracing::Level;
 
 use crate::{
@@ -87,7 +88,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
     type PublicInput = PublicInput<F>;
     type PrivateInput = PrivateInput<F>;
 
-    fn prove<MT: Config<Leaf = [F]>, S: CryptographicSponge>(
+    fn prove<MT: Config<Leaf=[F]>, S: CryptographicSponge>(
         namespace: NameSpace,
         _oracle_refs: &Self::RoundOracleRefs,
         public_input: &Self::PublicInput,
@@ -95,8 +96,8 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
         transcript: &mut Transcript<MT, S, F>,
         prover_parameter: &Self::ProverParameter,
     ) -> Result<(), Error>
-    where
-        MT::InnerDigest: Absorb,
+        where
+            MT::InnerDigest: Absorb,
     {
         // receive two random combination
         let random_coeffs = transcript
@@ -175,7 +176,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
     type OracleRefs = ();
     type PublicInput = PublicInput<F>;
 
-    fn register_iop_structure<MT: Config<Leaf = [F]>>(
+    fn register_iop_structure<MT: Config<Leaf=[F]>>(
         namespace: NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -237,11 +238,10 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         transcript_messages: &mut MessagesCollection<F, O>,
     ) -> Result<Self::VerifierOutput, Error> {
         // which oracle we are using to sumcheck
-        let oracle_refs_sumcheck = SumcheckOracleRef::new(
-            transcript_messages.prover_round_refs_in_namespace(namespace)[0],
-        );
+        let oracle_refs_sumcheck =
+            SumcheckOracleRef::new((namespace, 0).to_prover_msg_round_ref(transcript_messages));
         // get the random coefficients we squeezed in commit phase
-        let random_coeffs = transcript_messages.get_verifier_message((namespace, 0))[0]
+        let random_coeffs = transcript_messages.verifier_round((namespace, 0))[0]
             .clone()
             .try_into_field_elements()
             .expect("invalid verifier message type");
@@ -342,7 +342,7 @@ fn main() {
         &ldt_parameter,
         mt_hash_parameters.clone(),
     )
-    .expect("fail to generate proof");
+        .expect("fail to generate proof");
     println!("Proof Size: {} bytes", proof.serialized_size());
 
     // Now let's verify if the proof is correct!
@@ -358,7 +358,7 @@ fn main() {
         &ldt_parameter,
         mt_hash_parameters.clone(),
     )
-    .expect("fail to verify");
+        .expect("fail to verify");
     assert!(result);
     println!("verify result: ok!")
 }
