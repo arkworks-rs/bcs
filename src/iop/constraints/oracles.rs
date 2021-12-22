@@ -1,5 +1,6 @@
-use std::borrow::Borrow;
+use ark_std::borrow::Borrow;
 
+use crate::iop::{message::ProverRoundMessageInfo, oracles::SuccinctRoundMessage};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_r1cs_std::{
@@ -10,8 +11,7 @@ use ark_r1cs_std::{
     select::CondSelectGadget,
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
-
-use crate::iop::{message::ProverRoundMessageInfo, oracles::SuccinctRoundMessage};
+use ark_std::{boxed::Box, vec::Vec};
 
 use super::message::MessagesCollectionVar;
 

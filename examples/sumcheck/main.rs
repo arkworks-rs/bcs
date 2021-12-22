@@ -88,7 +88,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
     type PublicInput = PublicInput<F>;
     type PrivateInput = PrivateInput<F>;
 
-    fn prove<MT: Config<Leaf=[F]>, S: CryptographicSponge>(
+    fn prove<MT: Config<Leaf = [F]>, S: CryptographicSponge>(
         namespace: NameSpace,
         _oracle_refs: &Self::RoundOracleRefs,
         public_input: &Self::PublicInput,
@@ -96,8 +96,8 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
         transcript: &mut Transcript<MT, S, F>,
         prover_parameter: &Self::ProverParameter,
     ) -> Result<(), Error>
-        where
-            MT::InnerDigest: Absorb,
+    where
+        MT::InnerDigest: Absorb,
     {
         // receive two random combination
         let random_coeffs = transcript
@@ -176,7 +176,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
     type OracleRefs = ();
     type PublicInput = PublicInput<F>;
 
-    fn register_iop_structure<MT: Config<Leaf=[F]>>(
+    fn register_iop_structure<MT: Config<Leaf = [F]>>(
         namespace: NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -342,7 +342,7 @@ fn main() {
         &ldt_parameter,
         mt_hash_parameters.clone(),
     )
-        .expect("fail to generate proof");
+    .expect("fail to generate proof");
     println!("Proof Size: {} bytes", proof.serialized_size());
 
     // Now let's verify if the proof is correct!
@@ -358,7 +358,7 @@ fn main() {
         &ldt_parameter,
         mt_hash_parameters.clone(),
     )
-        .expect("fail to verify");
+    .expect("fail to verify");
     assert!(result);
     println!("verify result: ok!")
 }

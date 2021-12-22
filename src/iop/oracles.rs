@@ -7,6 +7,7 @@ use ark_ldt::domain::Radix2CosetDomain;
 
 use super::message::{MessagesCollection, ProverRoundMessageInfo};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
+use ark_std::{boxed::Box, vec::Vec};
 /// A trait for all oracle messages (including RS-code oracles, Non RS-code
 /// oracles, and IP short messages) sent in one round. Those oracles (except IP
 /// short messages) need to have same length.

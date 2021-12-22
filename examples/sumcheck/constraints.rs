@@ -83,19 +83,19 @@ impl<CF: PrimeField + Absorb> AllocVar<PublicInput<CF>, CF> for PublicInputVar<C
 }
 
 impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, CF>
-for SumcheckExample<CF>
+    for SumcheckExample<CF>
 {
     type VerifierOutputVar = Boolean<CF>;
     type PublicInputVar = PublicInputVar<CF>;
 
-    fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf=[FpVar<CF>]>>(
+    fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
         namespace: NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
         verifier_parameter: &Self::VerifierParameter,
     ) -> Result<(), SynthesisError>
-        where
-            MT::InnerDigest: Absorb,
-            MTG::InnerDigest: AbsorbGadget<CF>,
+    where
+        MT::InnerDigest: Absorb,
+        MTG::InnerDigest: AbsorbGadget<CF>,
     {
         transcript.squeeze_verifier_field_elements(2)?;
         transcript
@@ -196,8 +196,8 @@ struct SumcheckExampleVerification {
     // Constants embedded into the circuit: some parameters, for example
     param: Parameter<Fr>,
     poseidon_param: PoseidonParameters<Fr>,
-    /* for simplicity, same poseidon parameter is used
-                                                * for both merkle tree, and sponge */
+    // for simplicity, same poseidon parameter is used
+    // for both merkle tree, and sponge
     ldt_param: LinearCombinationLDTParameters<Fr>,
 
     // public input is the public input known by the verifier
@@ -326,7 +326,7 @@ fn sumcheck_example_correctness() {
         &ldt_parameter,
         mt_hash_parameters.clone(),
     )
-        .expect("fail to generate proof");
+    .expect("fail to generate proof");
 
     let circuit = SumcheckExampleVerification {
         param: prover_param,

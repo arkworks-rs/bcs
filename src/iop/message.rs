@@ -106,9 +106,9 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
         // construct a shadow MessageCollection to query the virtual oracle.
         let shadow_self = Self {
             bookkeeper: self.bookkeeper.clone(),
-            real_oracles: std::mem::take(&mut self.real_oracles),
-            virtual_oracles: std::mem::take(&mut self.virtual_oracles),
-            verifier_messages: std::mem::take(&mut self.verifier_messages),
+            real_oracles: ark_std::mem::take(&mut self.real_oracles),
+            virtual_oracles: ark_std::mem::take(&mut self.virtual_oracles),
+            verifier_messages: ark_std::mem::take(&mut self.verifier_messages),
         };
 
         (virtual_round, shadow_self)

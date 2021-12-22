@@ -1,6 +1,7 @@
 use ark_std::collections::BTreeMap;
 
 use crate::{iop::message::MsgRoundRef, tracer::TraceInfo};
+use ark_std::vec::Vec;
 
 /// Namespace is a unique id of the protocol in a transcript.
 /// `Namespace{id=0}` is always reserved for root namespace.
