@@ -45,8 +45,6 @@ impl Config for FieldMTConfig {
 /// Test if restore_state_from_commit_phase message works. This test uses a
 /// dummy protocol described as `MockTestProver`.
 fn test_bcs() {
-    tracing_subscriber::fmt::fmt().init();
-
     let fri_parameters = FRIParameters::new(
         64,
         vec![2, 2, 1],
