@@ -362,39 +362,39 @@ let evaluation_domain_log_size = evaluation_domain.log_size_of_group;
 Then, let's use the built in sponge to sample a random element in evaluation domain: 
 
 ```rust
-let query: usize = random_oracle
+let query = random_oracle
     .squeeze_bits(evaluation_domain_log_size as usize)
     .into_iter()
     .enumerate()
     .map(|(k, v)| (v as usize) << k)
     .sum::<usize>();
-let query_point: F = evaluation_domain.element(query);
+let query_point = evaluation_domain.element(query);
 ```
 
 Next, let query `h(s)`and`p(s)`. Adding `iop_trace!` here can help us debugging in case something does wrong. 
 
 ```rust
-let queried_points = transcript_messages
-    .prover_message(namespace, 0)
-    .query(&[query], iop_trace!("sumcheck query"))
+let query_responses = transcript_messages
+    .prover_round((namespace, 0))
+    .query_point(&[query], iop_trace!("sumcheck query"))
     .pop()
     .unwrap();
-let h_point = queried_points[0];
-let p_point = queried_points[1];
+let h_point = query_responses[0];
+let p_point = query_responses[1];
+
 ```
 
 We can calculate `V_H(s)` locally: 
 
 ```rust
-let vh_point = summation_domain
-    .vanishing_polynomial()
-    .evaluate(&query_point);
+let vh_point = query_point.pow(&[summation_domain.size]) - F::one(); // evaluate over vanishing poly
 ```
 
 Then, we can query `f(s)`. We can pass `oracle_refs.poly` to `transcript_messages` to get a reference to the oracle of `f`. 
 
 ```rust
-let expected = transcript_messages.prover_message_using_ref(oracle_refs.poly).query(&[query], iop_trace!("oracle access to poly in sumcheck"))
+let expected = transcript_messages.prover_round(oracle_refs.poly)
+    .query_point( &[query], iop_trace!("oracle access to poly in sumcheck"))
     .remove(0)// there's only one query, so always zero
     .remove(public_input.which); // we want to get `which` oracle in this round
                                  // h(s) * v_h(s) + (s * p(s) + claimed_sum/summation_domain.size)
@@ -406,9 +406,7 @@ Finally, just check that  `f(s)` is equal to `h(s)*v_H(s) + (s*p(s) + claimed_su
 
 ```rust
 let actual: F = h_point * vh_point
-            + (query_point * p_point + claimed_sum / F::from(summation_domain.size as u128));
-return Ok(expected == actual);
-}
+    + (query_point * p_point + claimed_sum / F::from(summation_domain.size as u128));
 ```
 
 **Well done!** You got it! You now learned how to construct a univariate sumcheck protocol using `ark-bcs`. Now let's start implementing out main protocol using sumcheck as a subroutine. 
@@ -661,13 +659,13 @@ First, let's get a reference to the oracle that prover just sent in this protoco
 
 ```rust
 let oracle_refs_sumcheck =
-    SumcheckOracleRef::new(*transcript_messages.prover_message_as_ref(namespace, 0));
+    SumcheckOracleRef::new((namespace, 0).to_prover_msg_round_ref(transcript_messages));
 ```
 
 Now get the random coefficients the verifier sampled in commit phase, and compute the asserted sums of `r0*poly[0]`, `r1*poly[1]` using those coefficients. 
 
 ```rust
-let random_coeffs = transcript_messages.verifier_message(namespace, 0)[0]
+let random_coeffs = transcript_messages.verifier_round((namespace, 0))[0]
     .clone()
     .try_into_field_elements()
     .expect("invalid verifier message type");
@@ -1057,107 +1055,6 @@ Finally, let's constrain the `proof_var` using the verifier gadget we just wrote
 ```
 
 And that's it! 
-
-## Bonus: Debug Your IOP Code using `iop_trace!`
-
-You may recall that anytime we send message using the transcript, or query messages from the oracles, we use a macro called `iop_trace! `. It basically records the position where this macro is called, and when something goes wrong, it can output which one goes wrong. 
-
-One particularly useful application is to check if `register_iop_structure` is consistent with prover code. Now, let's first write a test called `test_register`. Same as `main` code, we generate all necessary parameters and inputs for prover and verifier. 
-
-```rust
-#[test]
-fn test_register() {
-    let mut rng = test_rng();
-    let degrees = (155, 197);
-    let poly0 = DensePolynomial::<Fr>::rand(degrees.0, &mut rng);
-    let poly1 = DensePolynomial::<Fr>::rand(degrees.1, &mut rng);
-    let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
-    let evaluation_domain = Radix2EvaluationDomain::new(512).unwrap();
-    let fri_parameters = FRIParameters::new(
-        256,
-        vec![1, 3, 1],
-        Radix2CosetDomain::new(evaluation_domain, Fr::one()),
-    );
-    let ldt_parameter = LinearCombinationLDTParameters {
-        fri_parameters,
-        num_queries: 3,
-    };
-    let claimed_sum1 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
-        .evaluate(&poly0)
-        .into_iter()
-        .sum::<Fr>();
-    let claimed_sum2 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
-        .evaluate(&poly1)
-        .into_iter()
-        .sum::<Fr>();
-
-    let sponge = PoseidonSponge::new(&poseidon_parameters());
-    let mt_hash_parameters = MTHashParameters::<FieldMTConfig> {
-        leaf_hash_param: poseidon_parameters(),
-        inner_hash_param: poseidon_parameters(),
-    };
-
-    let vp = PublicInput {
-        sums: (claimed_sum1, claimed_sum2),
-    };
-    let wp = PrivateInput(poly0, poly1);
-    let prover_param = Parameter {
-        degrees,
-        summation_domain,
-        evaluation_domain,
-    };
-```
-
-Then, we can invoke call `ark_bcs::bcs::transcript::test_utils::check_commit_phase_correctness` helper function, which will panic if `register_iop_structure` is inconsistent with the prover code. 
-
-*Note: make sure `test_utils` feature is on.*
-
-```rust
-check_commit_phase_correctness::<
-        _,
-        _,
-        _,
-        SumcheckExample<_>,
-        SumcheckExample<_>,
-        LinearCombinationLDT<_>,
-    >(
-        sponge,
-        &vp,
-        &wp,
-        &prover_param,
-        &ldt_parameter,
-        mt_hash_parameters.clone(),
-    );
-}
-```
-
-The test is also provided in the `examples/sumcheck ` folder of the repo. When you run this test using the following command, you should find the test passes when running this command:
-
-```shell
-cargo test --package ark-bcs --example sumcheck --features r1cs --features test_utils -- test_register --exact
-```
-
-Now, let's manually introduce a bug in `register_iop_structure`. Suppose the verifier tries to send a wrong message. Say: 
-
-```rust
-// verifier should sample two random combination, but sampled three!
-        transcript
-            .squeeze_verifier_field_elements(&[FieldElementSize::Full, FieldElementSize::Full, FieldElementSize::Full]);
-```
-
- Now let's run the test again! The test should fail, showing the following message: 
-
-```log
-thread 'test_register' panicked at 'assertion failed: `(left == right)`
-  left: `[FieldElements([Fp256(BigInteger256([15868405394323405676, 15996445718776549797, 6686138471952702797, 6934092815371758962])), Fp256(BigInteger256([5499267208319786770, 1299149589602166132, 2231165342563635412, 5630332791626216984]))])]`,
- right: `[FieldElements([Fp256(BigInteger256([15868405394323405676, 15996445718776549797, 6686138471952702797, 6934092815371758962])), Fp256(BigInteger256([5499267208319786770, 1299149589602166132, 2231165342563635412, 5630332791626216984])), Fp256(BigInteger256([15777789622597396422, 11153390519922978925, 10843330044712850024, 3170697828371625695]))])]`: Inconsistent verifier round #0.
-Prover transcript message trace: [Verifier Random Coefficients] at examples\sumcheck\main.rs:103:55
-Verifier transcript message trace: [Verifier Random Coefficients] at examples\sumcheck\main.rs:190:55
-Prover transcript defines this namespace as [Check commit phase correctness] at src\bcs\transcript.rs:1039:17
-Verifier defines this namespace as [check commit phase correctness] at src\bcs\transcript.rs:1062:13
-```
-
-From this message, we can learn that at least one location of `examples\sumcheck\main.rs:103:55`, `examples\sumcheck\main.rs:190:55` goes wrong, which can greatly save us from detective works!
 
 ## Further Reading: Multi-round example
 
