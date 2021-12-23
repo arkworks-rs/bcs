@@ -44,7 +44,6 @@ use crate::{
     test_utils::{poseidon_parameters, FieldMTConfig},
 };
 
-#[cfg(feature = "r1cs")]
 mod constraints;
 mod multiround_example;
 mod simple_sumcheck;

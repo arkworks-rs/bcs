@@ -15,12 +15,16 @@ In this tutorial, we are going to write a public coin RS-IOP to verify the sum o
 
 ## Background
 
-In `ark-bcs`, a public coin (RS-)IOP have two phases: 
+In `ark-bcs`, a public coin (RS-)IOP have two phases:
 
-- **Commit Phase:** Prover run the interactive proof generation code, where prover can send message oracles with or without degree bound, and short messages. Verifier can send message sampled uniformly without reading prover messages. Ideally, verifier delays all verifier messages to next phase. 
-- **Query and decision phase:** Verifier starts in a clean state, can query prover's message in arbitrary order, and have access to all previously sent messages. Verifier will generate an user-defined output. Prover do not have query and decision phase. 
+- **Commit Phase:** Prover run the interactive proof generation code, where prover can send message oracles with or
+  without degree bound, and short messages. Verifier can send message sampled uniformly without reading prover messages.
+  Ideally, verifier delays all verifier messages to next phase.
+- **Query and decision phase:** Verifier starts in a clean state, can query prover's message in arbitrary order, and
+  have access to all previously sent messages. Verifier will generate an user-defined output. Prover do not have query
+  and decision phase.
 
-Here is a table summarizing what prover/verifier can do in each phase. 
+Here is a table summarizing what prover/verifier can do in each phase.
 
 |                                   | Commit Phase (Prover)         | Commit Phase (Verifier)                                      | Query Phase (Verifier)                               |
 | --------------------------------- | ----------------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
@@ -31,21 +35,25 @@ Here is a table summarizing what prover/verifier can do in each phase.
 | Public Input                      | Yes                           | No**                                                         | Yes                                                  |
 | Private Input                     | Yes                           | No                                                           | No                                                   |
 
-**: BCS Paper does not allow verifier to have access to previously sent verifier messages, but our implementation makes this possible for flexibility. Use with caution!*
+**: BCS Paper does not allow verifier to have access to previously sent verifier messages, but our implementation makes
+this possible for flexibility. Use with caution!*
 
-***:  Although in BCS paper, public input can decide number of rounds, `ark-bcs` does not allow transcript structure (e.g. number of rounds, degree bound, etc) to depend on public input. Instead, user can specify verifier parameter that can change the transcript structure.*
+***:  Although in BCS paper, public input can decide number of rounds, `ark-bcs` does not allow transcript structure (
+e.g. number of rounds, degree bound, etc) to depend on public input. Instead, user can specify verifier parameter that
+can change the transcript structure.*
 
 ## Example Protocol Spec
 
 Here is the spec for the example protocol we will build!
 
-**Private Input**: Coefficients of`poly0`, `poly1`. *For this example, those two coefficients are selected arbitrarily. In real scenario, those coefficients can come from elsewhere.*
+**Private Input**: Coefficients of`poly0`, `poly1`. *For this example, those two coefficients are selected arbitrarily.
+In real scenario, those coefficients can come from elsewhere.*
 
 **Public Input:** asserted sum of `poly0` over summation domain, asserted sum of `poly1` over summation domain
 
 **Prover & Parameters:** evaluations domain, summation domain, degree bound
 
-**Satisfy Condition:** asserted sums are correct. 
+**Satisfy Condition:** asserted sums are correct.
 
 | Prover*                                                      | Verifier                                  |
 | ------------------------------------------------------------ | ----------------------------------------- |
@@ -54,19 +62,25 @@ Here is the spec for the example protocol we will build!
 | Invoke univariate sumcheck on `r0*poly0`                     | Invoke univariate sumcheck on `r0*poly0`  |
 | Invoke univariate sumcheck on `r1*poly1`                     | Invoke univariate sumcheck on `r1*poly1`  |
 
-**: Disclaimer: This protocol is solely for an example and is not an implementation of any real-world protocol. However, we believe user can easily extend the example to a much more complex one.*
+**: Disclaimer: This protocol is solely for an example and is not an implementation of any real-world protocol. However,
+we believe user can easily extend the example to a much more complex one.*
 
-***: In real scenario, we probably do not send this message because same message may already present elsewhere (e.g.as witness assignment), and we can simply take a reference to that message.*
+***: In real scenario, we probably do not send this message because same message may already present elsewhere (e.g.as
+witness assignment), and we can simply take a reference to that message.*
 
 ## Build Simple Univariate Sumcheck
 
-Before we write the main protocol, let's build a subprotocol `SimpleSumcheck` so that the main protocol can simply invoke this subprotocol as a black box. Note that this protocol is solely a toy example and not optimized, so do not use it in production!
+Before we write the main protocol, let's build a subprotocol `SimpleSumcheck` so that the main protocol can simply
+invoke this subprotocol as a black box. Note that this protocol is solely a toy example and not optimized, so do not use
+it in production!
 
 ### Overview of Simple Univariate Sumcheck
 
-In this simple univariate sumcheck, the verifier has oracle access to the evaluations of polynomial`f` over evaluation domain. We want to check if the sum of evaluations of `f` at summation domain equals to `gamma`. 
+In this simple univariate sumcheck, the verifier has oracle access to the evaluations of polynomial`f` over evaluation
+domain. We want to check if the sum of evaluations of `f` at summation domain equals to `gamma`.
 
-The sumcheck verifier needs to have `degree`, `evaluation_domain`, `summation_domain` as parameter. So, we define the following struct:
+The sumcheck verifier needs to have `degree`, `evaluation_domain`, `summation_domain` as parameter. So, we define the
+following struct:
 
 ```rust
 #[derive(Clone, Debug)]
@@ -80,7 +94,9 @@ pub struct SumcheckVerifierParameter<F: PrimeField> {
 }
 ```
 
-Prover's parameter in this protocol also needs the coefficients of the polynomial that we take the sum, and we define the prover parameter is below. In this example, we use `Radix2EvaluationDomain` defined in [`ark-poly`](https://crates.io/crates/ark-poly) library. 
+Prover's parameter in this protocol also needs the coefficients of the polynomial that we take the sum, and we define
+the prover parameter is below. In this example, we use `Radix2EvaluationDomain` defined
+in [`ark-poly`](https://crates.io/crates/ark-poly) library.
 
 ```rust
 #[derive(Clone, Debug)]
@@ -96,7 +112,8 @@ pub struct SumcheckProverParameter<F: PrimeField> {
 }
 ```
 
-The (RS-)IOP interface requires that verifier parameter is the subset of prover parameter, and let's show the prover parameter is valid. 
+The (RS-)IOP interface requires that verifier parameter is the subset of prover parameter, and let's show the prover
+parameter is valid.
 
 ```rust
 impl<F: PrimeField> ProverParam for SumcheckProverParameter<F> {
@@ -112,7 +129,9 @@ impl<F: PrimeField> ProverParam for SumcheckProverParameter<F> {
 }
 ```
 
-Additionally, verifier needs to have oracle access to oracle evaluations. In almost all cases, the oracle evaluations is already sent by prover previously in the same transcript, so univariate sumcheck verifier only needs an oracle reference. In code: 
+Additionally, verifier needs to have oracle access to oracle evaluations. In almost all cases, the oracle evaluations is
+already sent by prover previously in the same transcript, so univariate sumcheck verifier only needs an oracle
+reference. In code:
 
 ```rust
 #[derive(Clone, Debug, Copy)]
@@ -127,7 +146,8 @@ impl SumcheckOracleRef {
 }
 ```
 
-Again, oracle reference for prover is a superset of oracle reference for verifier, in code, we need to implement this trait to show this fact: 
+Again, oracle reference for prover is a superset of oracle reference for verifier, in code, we need to implement this
+trait to show this fact:
 
 ```rust
 impl ProverOracleRefs for SumcheckOracleRef {
@@ -139,9 +159,15 @@ impl ProverOracleRefs for SumcheckOracleRef {
 }
 ```
 
-The protocol reads **claimed sum** in public input. It is sometimes tricky to determine what puts to verifier parameter and what puts to public input. `ark-bcs` implementation requires that public-input should not change the structure of transcript, including number of rounds, type of message at each round, or degree bound. Therefore, verifier do not have access to public input in `register_iop_structure` function, which simulates interaction with prover in commit phase using succinct proof. 
+The protocol reads **claimed sum** in public input. It is sometimes tricky to determine what puts to verifier parameter
+and what puts to public input. `ark-bcs` implementation requires that public-input should not change the structure of
+transcript, including number of rounds, type of message at each round, or degree bound. Therefore, verifier do not have
+access to public input in `register_iop_structure` function, which simulates interaction with prover in commit phase
+using succinct proof.
 
-Also, one `MsgRoundRef` represents one round, and one round can have multiple oracles with same length sharing one merkle tree, sumcheck protocol also needs to know which oracle in that round is the oracle we want. In code, we need this as public input: 
+Also, one `MsgRoundRef` represents one round, and one round can have multiple oracles with same length sharing one
+merkle tree, sumcheck protocol also needs to know which oracle in that round is the oracle we want. In code, we need
+this as public input:
 
 ```rust
 #[derive(Clone)]
@@ -153,7 +179,8 @@ pub struct SumcheckPublicInput<F: PrimeField + Absorb> {
 }
 ```
 
-Ideally every implementation in a virtual struct that implements `IOPProver` and `IOPVerifier` trait. For `SimpleSumcheck`, we can define the following struct, and implement the two traits: 
+Ideally every implementation in a virtual struct that implements `IOPProver` and `IOPVerifier` trait.
+For `SimpleSumcheck`, we can define the following struct, and implement the two traits:
 
 ```rust
 pub struct SimpleSumcheck<F: PrimeField + Absorb> {
@@ -208,20 +235,32 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
 }
 ```
 
-Note that any protocol that does not need to access oracles from other protocols (i.e. `OracleRefs = ()`) can be automatically made into a succinct proof using BCS transform. For example, suppose we have protocol `A`, which uses subprotocol `B`. `A` does not uses any oracles outside its scope, but verifier of `B` needs to access one oracle sent in `A`. In this case, protocol `A` can be accepted by BCS transform, but protocol `B` cannot be transformed without defining a wrapper. For `SimpleSumcheck`, because it does need to access oracle outside its scope, `SimpleSumcheck` can only be used as a subprotocol and cannot directly be transformed to a succinct proof using BCS. 
+Note that any protocol that does not need to access oracles from other protocols (i.e. `OracleRefs = ()`) can be
+automatically made into a succinct proof using BCS transform. For example, suppose we have protocol `A`, which uses
+subprotocol `B`. `A` does not uses any oracles outside its scope, but verifier of `B` needs to access one oracle sent
+in `A`. In this case, protocol `A` can be accepted by BCS transform, but protocol `B` cannot be transformed without
+defining a wrapper. For `SimpleSumcheck`, because it does need to access oracle outside its scope, `SimpleSumcheck` can
+only be used as a subprotocol and cannot directly be transformed to a succinct proof using BCS.
 
-Now let's build the main prover and verifier code! First, let's review what prover and verifier do in this protocol. Suppose the polynomial we takes some is `f(x)`, and let `H` be summation domain, `V_H(x)` be vanishing polynomial of the summation domain, `|H| `be size of summation domain. 
+Now let's build the main prover and verifier code! First, let's review what prover and verifier do in this protocol.
+Suppose the polynomial we takes some is `f(x)`, and let `H` be summation domain, `V_H(x)` be vanishing polynomial of the
+summation domain, `|H| `be size of summation domain.
 
-- Prover compute `h(x)` with `deg(h)=deg(f) - |H|`, and `p(x)` with `deg(p) < |H| - 1`, such that `f(x) = h(x)V_H(x) + (x*p(x) + claimed_sum/|H|)`. Prover send `h(x)` and `p(x)`, evaluated at evaluation domain. In this example, we simply use polynomial division algorithm defined in `ark-poly` but there'll be a lot of room to optimize if we want to use in production.
-- Verifier sends **no** message in commit phase. 
-- Verifier samples a random element `s` in evaluation domain, and queries `f(s)`, `h(s)`, `p(s)`, and computes `v_H(s)` locally. Then, it checks `f(s)` is equal to `h(s)*v_H(s) + (s*p(s) + claimed_sum/|H|)`
-- LDT checks that `h(x)` enforces degree bound `deg(f) - |H|`; `p(x)` enforces degree bound `|H| - 2`. 
+- Prover compute `h(x)` with `deg(h)=deg(f) - |H|`, and `p(x)` with `deg(p) < |H| - 1`, such
+  that `f(x) = h(x)V_H(x) + (x*p(x) + claimed_sum/|H|)`. Prover send `h(x)` and `p(x)`, evaluated at evaluation domain.
+  In this example, we simply use polynomial division algorithm defined in `ark-poly` but there'll be a lot of room to
+  optimize if we want to use in production.
+- Verifier sends **no** message in commit phase.
+- Verifier samples a random element `s` in evaluation domain, and queries `f(s)`, `h(s)`, `p(s)`, and computes `v_H(s)`
+  locally. Then, it checks `f(s)` is equal to `h(s)*v_H(s) + (s*p(s) + claimed_sum/|H|)`
+- LDT checks that `h(x)` enforces degree bound `deg(f) - |H|`; `p(x)` enforces degree bound `|H| - 2`.
 
-We will not go over proof of completeness and soundness for this protocol in this tutorial. Let's assume this protocol is correct. 
+We will not go over proof of completeness and soundness for this protocol in this tutorial. Let's assume this protocol
+is correct.
 
 #### `prove`
 
-Recall prover needs to write the prove function with the following signature: 
+Recall prover needs to write the prove function with the following signature:
 
 ```rust
 fn prove<MT: Config<Leaf = [F]>, S: CryptographicSponge>(
@@ -234,7 +273,8 @@ fn prove<MT: Config<Leaf = [F]>, S: CryptographicSponge>(
     ) -> Result<(), ark_bcs::Error> {
 ```
 
-As a first step, prover can perform a sanity check to make sure the coefficients provided in prover parameter is consistent with the referenced oracle evaluation. 
+As a first step, prover can perform a sanity check to make sure the coefficients provided in prover parameter is
+consistent with the referenced oracle evaluation.
 
 ```rust
 // sanity check: `coeffs` in prover parameter matches the referenced oracle
@@ -250,7 +290,7 @@ let expected_eval = prover_parameter
 assert_eq!(&expected_eval, actual_eval);
 ```
 
-Then, we calculate `h(x)` and `p(x)` using basic polynomial division algorithm. 
+Then, we calculate `h(x)` and `p(x)` using basic polynomial division algorithm.
 
 ```rust
 let (hx, gx) = prover_parameter
@@ -274,25 +314,31 @@ let px_degree_bound = prover_parameter.summation_domain.size as usize - 2;
 println!("px: degree {}, bound {}", px.degree(), px_degree_bound);
 ```
 
-Then, prover can add those two polynomial as oracles going to be sent in current round. 
+Then, prover can add those two polynomial as oracles going to be sent in current round.
 
 ```rust
 transcript.send_univariate_polynomial(hx_degree_bound, &hx)?;
 transcript.send_univariate_polynomial(px_degree_bound, &px)?;
 ```
 
-The backend will automatically turns the coefficients to evaluations on evaluation domain. Transcript will get the evaluation domain from LDT parameter passed in to BCS, and it's caller's responsibility to make sure evaluation domain in parameter is consistent with evaluation domain in LDT. The protocol will fail otherwise. 
+The backend will automatically turns the coefficients to evaluations on evaluation domain. Transcript will get the
+evaluation domain from LDT parameter passed in to BCS, and it's caller's responsibility to make sure evaluation domain
+in parameter is consistent with evaluation domain in LDT. The protocol will fail otherwise.
 
-Then don't forget to submit this round! We can add a `&'static str` in `iop_trace!` here to help us debugging. When backend found something strange, it will this string and line number of the `iop_trace!` macro for assistance. 
+Then don't forget to submit this round! We can add a `&'static str` in `iop_trace!` here to help us debugging. When
+backend found something strange, it will this string and line number of the `iop_trace!` macro for assistance.
 
 ```rust
-transcript.submit_prover_current_round(namespace, iop_trace!("sumcheck hx, px"))?;
+transcript.submit_prover_current_round(namespace, iop_trace!("sumcheck hx, px")) ?;
 }
 ```
 
 #### `register_iop_structure`
 
-Verifier needs to implement two functions, and one of them is `register_iop_structure`. `register_iop_structure` simulates interaction with prover, using the succinct proof. You can think this as the "`prove` code", but all prover message is already given for you.  All you need to do, is to replay the interaction and sample verifier message in commit phase as needed. For simple sumcheck example, let's start with function signature: 
+Verifier needs to implement two functions, and one of them is `register_iop_structure`. `register_iop_structure`
+simulates interaction with prover, using the succinct proof. You can think this as the "`prove` code", but all prover
+message is already given for you. All you need to do, is to replay the interaction and sample verifier message in commit
+phase as needed. For simple sumcheck example, let's start with function signature:
 
 ```rust
 fn register_iop_structure<MT: Config<Leaf = [F]>>(
@@ -304,7 +350,7 @@ fn register_iop_structure<MT: Config<Leaf = [F]>>(
     {
 ```
 
-The verifier will tell the transcript that prover will send a message with a certain degree at this time, in code: 
+The verifier will tell the transcript that prover will send a message with a certain degree at this time, in code:
 
 ```rust
 let hx_degree_bound =
@@ -319,21 +365,28 @@ let expected_round_info = ProverRoundMessageInfo {
 };
 ```
 
-Similar to `libiop`, In `ark-bcs` implementation, the backend will serialize a message into a number of cosets where each coset is encoded into a leaf. Doing so can greatly improve performance if verifier query is structured. `localization_parameter` is the size of each coset. Note that `localization_parameter` can be any arbitrary value here because we are sending an oracle with degree bound: in this case LDT will automatically manage the localization parameter. If current round contains only oracles without degree bound, then `localization_parameter` is meaningful. 
+Similar to `libiop`, In `ark-bcs` implementation, the backend will serialize a message into a number of cosets where
+each coset is encoded into a leaf. Doing so can greatly improve performance if verifier query is
+structured. `localization_parameter` is the size of each coset. Note that `localization_parameter` can be any arbitrary
+value here because we are sending an oracle with degree bound: in this case LDT will automatically manage the
+localization parameter. If current round contains only oracles without degree bound, then `localization_parameter` is
+meaningful.
 
-Again, remember to "submit" this round: 
+Again, remember to "submit" this round:
 
 ```rust
 transcript.receive_prover_current_round(
-            namespace,
-            expected_round_info,
-            iop_trace!("sumcheck hx, px"),
-        );
+namespace,
+expected_round_info,
+iop_trace!("sumcheck hx, px"),
+);
 ```
 
 #### `query_and_decide`
 
-In `query_and_decide` phase, verifier has oracle access to all prover messages sent in the transcript in commit phase, and access to all verifier messages (verifier messages from current protocol, and verifier messages from other protocols, using reference). Again, let's start with function signature
+In `query_and_decide` phase, verifier has oracle access to all prover messages sent in the transcript in commit phase,
+and access to all verifier messages (verifier messages from current protocol, and verifier messages from other
+protocols, using reference). Again, let's start with function signature
 
 ```rust
 fn query_and_decide<O: RoundOracle<F>>(
@@ -348,9 +401,12 @@ fn query_and_decide<O: RoundOracle<F>>(
 ) -> Result<Self::VerifierOutput, Error> {
 ```
 
-*Technical Note*: When `query_and_decide` is called by BCS prover, round oracle is a wrapper to the entire message and records the verifier's query. When `query_and_decide` is called by BCS verifier, round oracle is a pointer to one message in a succinct proof with a mutable state storing read position, and will panic if verifier queries more positions than expected. 
+*Technical Note*: When `query_and_decide` is called by BCS prover, round oracle is a wrapper to the entire message and
+records the verifier's query. When `query_and_decide` is called by BCS verifier, round oracle is a pointer to one
+message in a succinct proof with a mutable state storing read position, and will panic if verifier queries more
+positions than expected.
 
-First, let define some useful variable here: 
+First, let define some useful variable here:
 
 ```rust
 let evaluation_domain = verifier_parameter.evaluation_domain;
@@ -359,7 +415,7 @@ let claimed_sum = public_input.claimed_sum;
 let evaluation_domain_log_size = evaluation_domain.log_size_of_group;
 ```
 
-Then, let's use the built in sponge to sample a random element in evaluation domain: 
+Then, let's use the built in sponge to sample a random element in evaluation domain:
 
 ```rust
 let query = random_oracle
@@ -371,36 +427,39 @@ let query = random_oracle
 let query_point = evaluation_domain.element(query);
 ```
 
-Next, let query `h(s)`and`p(s)`. Adding `iop_trace!` here can help us debugging in case something does wrong. 
+Next, let query `h(s)`and`p(s)`. Adding `iop_trace!` here can help us debugging in case something does wrong.
 
 ```rust
 let query_responses = transcript_messages
-    .prover_round((namespace, 0))
-    .query_point(&[query], iop_trace!("sumcheck query"))
-    .pop()
-    .unwrap();
+.prover_round((namespace, 0))
+.query_point( & [query], iop_trace!("sumcheck query"))
+.pop()
+.unwrap();
 let h_point = query_responses[0];
 let p_point = query_responses[1];
 
 ```
 
-We can calculate `V_H(s)` locally: 
+We can calculate `V_H(s)` locally:
 
 ```rust
 let vh_point = query_point.pow(&[summation_domain.size]) - F::one(); // evaluate over vanishing poly
 ```
 
-Then, we can query `f(s)`. We can pass `oracle_refs.poly` to `transcript_messages` to get a reference to the oracle of `f`. 
+Then, we can query `f(s)`. We can pass `oracle_refs.poly` to `transcript_messages` to get a reference to the oracle
+of `f`.
 
 ```rust
 let expected = transcript_messages.prover_round(oracle_refs.poly)
-    .query_point( &[query], iop_trace!("oracle access to poly in sumcheck"))
-    .remove(0)// there's only one query, so always zero
-    .remove(public_input.which); // we want to get `which` oracle in this round
-                                 // h(s) * v_h(s) + (s * p(s) + claimed_sum/summation_domain.size)
+.query_point( & [query], iop_trace!("oracle access to poly in sumcheck"))
+.remove(0)// there's only one query, so always zero
+.remove(public_input.which); // we want to get `which` oracle in this round
+// h(s) * v_h(s) + (s * p(s) + claimed_sum/summation_domain.size)
 ```
 
-The result returned by query is a 2D vector. The first axis is the query index. Since we have only one query here, we can simply call`remove(0)` to get what we want. The second axis is the the oracle index in this round. Caller already specifies which oracle we are going to use in `public_input.which`. 
+The result returned by query is a 2D vector. The first axis is the query index. Since we have only one query here, we
+can simply call`remove(0)` to get what we want. The second axis is the the oracle index in this round. Caller already
+specifies which oracle we are going to use in `public_input.which`.
 
 Finally, just check that  `f(s)` is equal to `h(s)*v_H(s) + (s*p(s) + claimed_sum/|H|)`
 
@@ -409,19 +468,30 @@ let actual: F = h_point * vh_point
     + (query_point * p_point + claimed_sum / F::from(summation_domain.size as u128));
 ```
 
-**Well done!** You got it! You now learned how to construct a univariate sumcheck protocol using `ark-bcs`. Now let's start implementing out main protocol using sumcheck as a subroutine. 
+**Well done!** You got it! You now learned how to construct a univariate sumcheck protocol using `ark-bcs`. Now let's
+start implementing out main protocol using sumcheck as a subroutine.
 
 *Notice that univariate sumcheck is, indeed, a public coin PCP. But our main toy example will become an IOP.*
 
 #### Seems that low degree test is "missing"?
 
-One important check to guarantee soundness of sumcheck is that verifier must ensure `h(x)` and `p(x)` are bounded by a certain degree, but from above it seems that we do not write code for LDT check. In fact, this is one highlighted feature for RS-IOP, where **LDT check is seamless and automatic**. As long as verifier specifies the degree bound of the polynomial she plans to receive at this round, all LDT check will be automatically performed by BCS algorithm. There's a built-in LDT implementation, which uses FRI protocol defined in [`ark-ldt`](https://github.com/arkworks-rs/ldt). User can also use their own LDT implementation, though at current version, implementing a custom LDT is a little bit tricky. In future versions, there might not be an LDT interface, and a LDT checker will implementation `IOPProver` and `IOPVerifier` trait instead. 
+One important check to guarantee soundness of sumcheck is that verifier must ensure `h(x)` and `p(x)` are bounded by a
+certain degree, but from above it seems that we do not write code for LDT check. In fact, this is one highlighted
+feature for RS-IOP, where **LDT check is seamless and automatic**. As long as verifier specifies the degree bound of the
+polynomial she plans to receive at this round, all LDT check will be automatically performed by BCS algorithm. There's a
+built-in LDT implementation, which uses FRI protocol defined in [`ark-ldt`](https://github.com/arkworks-rs/ldt). User
+can also use their own LDT implementation, though at current version, implementing a custom LDT is a little bit tricky.
+In future versions, there might not be an LDT interface, and a LDT checker will implementation `IOPProver`
+and `IOPVerifier` trait instead.
 
 ## Build Main Protocol
 
-Now you learned how to write univariate sumcheck using `ark-bcs` backend.  In this section, we will guide you to write the main protocol using sumcheck as a black box. There are a few blanks that you need to fill in order to check your understanding. A working solution can be found in [`examples/sumcheck/main.rs`](./main.rs).
+Now you learned how to write univariate sumcheck using `ark-bcs` backend. In this section, we will guide you to write
+the main protocol using sumcheck as a black box. There are a few blanks that you need to fill in order to check your
+understanding. A working solution can be found in [`examples/sumcheck/main.rs`](src/main.rs).
 
-First, as usual, think about what goes to parameter, public input and private input.  Go back to [Example Protocol Spec](#example-protocol-spec) to review the example protocol. 
+First, as usual, think about what goes to parameter, public input and private input. Go back
+to [Example Protocol Spec](#example-protocol-spec) to review the example protocol.
 
 ```rust
 #[derive(Clone, Debug)]
@@ -480,7 +550,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for SumcheckExample<F> {
     {
 ```
 
-Write code to let verifier send two random field elements `r0` and `r1`. 
+Write code to let verifier send two random field elements `r0` and `r1`.
 
 ```rust
 // receive two random combination
@@ -489,7 +559,8 @@ let random_coeffs = transcript
 transcript.submit_verifier_current_round(namespace, iop_trace!("Verifier Random Coefficients"));
 ```
 
-Prover will then multiply `poly0` by `r0`, and `poly1` by `r1`. The asserted sum also needs to be multiplied correspondingly. 
+Prover will then multiply `poly0` by `r0`, and `poly1` by `r1`. The asserted sum also needs to be multiplied
+correspondingly.
 
 ```rust
 // multiply each polynomial in private input by the coefficient
@@ -515,18 +586,20 @@ let poly1 = DensePolynomial::from_coefficients_vec(
 let asserted_sum1 = public_input.sums.1 * random_coeffs[1];
 ```
 
- Write code to let send evaluations of `poly0`, `poly1` over evaluation domain, and store a reference to the round submitted to `round_ref`.  
+Write code to let send evaluations of `poly0`, `poly1` over evaluation domain, and store a reference to the round
+submitted to `round_ref`.
 
 ```rust
 // Hint: check out univariate sumcheck example 
 transcript.______________________________________;
 transcript.______________________________________;
 // always remember to submit this round
-let round_ref: MsgRoundRef = 
-    transcript.submit_prover_current_round(namespace, iop_trace!("two polynomials for sumcheck"))?;
+let round_ref: MsgRoundRef =
+transcript.submit_prover_current_round(namespace, iop_trace!("two polynomials for sumcheck")) ?;
 ```
 
-Next invoke univariate sumcheck to prove sum of `r0*poly0`. First, we need to give subprotocol a new namespace, so that the subprotocol interactions will not affect current namespace. We can do so by
+Next invoke univariate sumcheck to prove sum of `r0*poly0`. First, we need to give subprotocol a new namespace, so that
+the subprotocol interactions will not affect current namespace. We can do so by
 
 ```rust
 let ns0 = transcript.new_namespace(namespace, iop_trace!("first sumcheck protocol"));
@@ -536,37 +609,37 @@ Then, we can just call `prove`.
 
 ```rust
 SimpleSumcheck::prove(
-    ns0, // namespace
-    &SumcheckOracleRef::new(round_ref), //oracle_refs: reference to `poly0`
-    &SumcheckPublicInput::new(asserted_sum0, 0 /*which oracle in round*/),
-    &(), // pricate input is not needed for simple univariate sumcheck 
-    transcript,
-    &SumcheckProverParameter {
-        coeffs: poly0,
-        summation_domain: prover_parameter.summation_domain,
-        evaluation_domain: prover_parameter.evaluation_domain,
-        degree: prover_parameter.degrees.0,
-    },
-)?;
+ns0, // namespace
+& SumcheckOracleRef::new(round_ref), //oracle_refs: reference to `poly0`
+& SumcheckPublicInput::new(asserted_sum0, 0 /*which oracle in round*/),
+& (), // pricate input is not needed for simple univariate sumcheck 
+transcript,
+& SumcheckProverParameter {
+coeffs: poly0,
+summation_domain: prover_parameter.summation_domain,
+evaluation_domain: prover_parameter.evaluation_domain,
+degree: prover_parameter.degrees.0,
+},
+) ?;
 ```
 
-Finally, invoke univariate sumcheck to prover sum of `r1*poly1`. It should be quite similar to last code block. 
+Finally, invoke univariate sumcheck to prover sum of `r1*poly1`. It should be quite similar to last code block.
 
 ```rust
 transcript.new_namespace(ns1.clone(), iop_trace!("second sumcheck protocol 1"));
 SimpleSumcheck::prove(
-    ns1,
-    &SumcheckOracleRef::new(round_ref),
-    &SumcheckPublicInput::new(asserted_sum1, 1),
-    &(),
-    transcript,
-    &SumcheckProverParameter {
-        coeffs: poly1,
-        summation_domain: prover_parameter.summation_domain,
-        evaluation_domain: prover_parameter.evaluation_domain,
-        degree: prover_parameter.degrees.1,
-    },
-)?;
+ns1,
+& SumcheckOracleRef::new(round_ref),
+& SumcheckPublicInput::new(asserted_sum1, 1),
+& (),
+transcript,
+& SumcheckProverParameter {
+coeffs: poly1,
+summation_domain: prover_parameter.summation_domain,
+evaluation_domain: prover_parameter.evaluation_domain,
+degree: prover_parameter.degrees.1,
+},
+) ?;
 ```
 
 Finally, we can end the function by returning
@@ -575,11 +648,10 @@ Finally, we can end the function by returning
 Ok(())
 ```
 
-
-
 #### `register_iop_structure`
 
-Writing `register_iop_structure` is easy. Just copy the `prove` function, and keeps only the interaction with transcript. All prover computation can be removed. 
+Writing `register_iop_structure` is easy. Just copy the `prove` function, and keeps only the interaction with
+transcript. All prover computation can be removed.
 
 ```rust
 impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for SumcheckExample<F> {
@@ -588,7 +660,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
     type OracleRefs = ();
     type PublicInput = PublicInput<F>;
 
-    fn register_iop_structure<MT: Config<Leaf = [F]>>(
+    fn register_iop_structure<MT: Config<Leaf=[F]>>(
         namespace: NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
@@ -598,7 +670,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
         // verifier send two random combination
         transcript.___________________________________________;
         transcript.___________________________________________;
-        
+
         // receive two prover oracles in one round.
         transcript.receive_prover_current_round(
             namespace,
@@ -642,7 +714,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Sumch
 
 #### `query_and_decide`
 
-Finally, let's write verifier's `query_and_decide` phase. 
+Finally, let's write verifier's `query_and_decide` phase.
 
 ```rust
 fn query_and_decide<O: RoundOracle<F>>(
@@ -655,14 +727,15 @@ fn query_and_decide<O: RoundOracle<F>>(
 ) -> Result<Self::VerifierOutput, Error> {
 ```
 
-First, let's get a reference to the oracle that prover just sent in this protocol. 
+First, let's get a reference to the oracle that prover just sent in this protocol.
 
 ```rust
 let oracle_refs_sumcheck =
     SumcheckOracleRef::new((namespace, 0).to_prover_msg_round_ref(transcript_messages));
 ```
 
-Now get the random coefficients the verifier sampled in commit phase, and compute the asserted sums of `r0*poly[0]`, `r1*poly[1]` using those coefficients. 
+Now get the random coefficients the verifier sampled in commit phase, and compute the asserted sums of `r0*poly[0]`
+, `r1*poly[1]` using those coefficients.
 
 ```rust
 let random_coeffs = transcript_messages.verifier_round((namespace, 0))[0]
@@ -675,47 +748,53 @@ let asserted_sums = (
 );
 ```
 
-Finally, let's invoke sumcheck subprotocols! In `query`, we will instead use `transcript_messages` struct to get subspace. `transcript_messages.get_subprotocol_namespace(namespace, 0)` will return the first subspace created during `register_iop_structure`. Similarly, `transcript_messages.get_subprotocol_namespace(namespace, 1)` will return the second subspace created during `register_iop_structure`. 
+Finally, let's invoke sumcheck subprotocols! In `query`, we will instead use `transcript_messages` struct to get
+subspace. `transcript_messages.get_subprotocol_namespace(namespace, 0)` will return the first subspace created
+during `register_iop_structure`. Similarly, `transcript_messages.get_subprotocol_namespace(namespace, 1)` will return
+the second subspace created during `register_iop_structure`.
 
 ```rust
 // invoke first sumcheck protocol
 let mut result = SimpleSumcheck::query_and_decide(
-    transcript_messages.get_subprotocol_namespace(namespace, 0),
-    &SumcheckVerifierParameter {
-        degree: verifier_parameter.degrees.0,
-        evaluation_domain: verifier_parameter.evaluation_domain,
-        summation_domain: verifier_parameter.summation_domain,
-    },
-    &SumcheckPublicInput::new(asserted_sums.0, 0),
-    &oracle_refs_sumcheck,
-    sponge,
-    transcript_messages,
-)?;
+transcript_messages.get_subprotocol_namespace(namespace, 0),
+& SumcheckVerifierParameter {
+degree: verifier_parameter.degrees.0,
+evaluation_domain: verifier_parameter.evaluation_domain,
+summation_domain: verifier_parameter.summation_domain,
+},
+& SumcheckPublicInput::new(asserted_sums.0, 0),
+& oracle_refs_sumcheck,
+sponge,
+transcript_messages,
+) ?;
 
 // invoke second sumcheck protocol
 result &= SimpleSumcheck::query_and_decide(
-    transcript_messages.get_subprotocol_namespace(namespace, 1),
-    &SumcheckVerifierParameter {
-        degree: verifier_parameter.degrees.1,
-        evaluation_domain: verifier_parameter.evaluation_domain,
-        summation_domain: verifier_parameter.summation_domain,
-    },
-    &SumcheckPublicInput::new(asserted_sums.1, 1),
-    &oracle_refs_sumcheck,
-    sponge,
-    transcript_messages,
-)?;
+transcript_messages.get_subprotocol_namespace(namespace, 1),
+& SumcheckVerifierParameter {
+degree: verifier_parameter.degrees.1,
+evaluation_domain: verifier_parameter.evaluation_domain,
+summation_domain: verifier_parameter.summation_domain,
+},
+& SumcheckPublicInput::new(asserted_sums.1, 1),
+& oracle_refs_sumcheck,
+sponge,
+transcript_messages,
+) ?;
 
 Ok(result)
 ```
 
-**Congratulations!** You now built your first RS-IOP using `ark-bcs` library. Next, we will show you how to transform this interactive protocol to a succinct non-interactive proof using BCS transform. 
+**Congratulations!** You now built your first RS-IOP using `ark-bcs` library. Next, we will show you how to transform
+this interactive protocol to a succinct non-interactive proof using BCS transform.
 
 ## Put it together: Proof Generation
 
-Now we have written an interactive protocol for univariate sumcheck. By using `ark-bcs` backend, it will be quite easy to convert it to a succinct proof. 
+Now we have written an interactive protocol for univariate sumcheck. By using `ark-bcs` backend, it will be quite easy
+to convert it to a succinct proof.
 
-First let's make up a context. Suppose we have `poly1` and `poly2` from somewhere else. For now, to make this tutorial self-contained, the polynomial is just some random garbage. 
+First let's make up a context. Suppose we have `poly1` and `poly2` from somewhere else. For now, to make this tutorial
+self-contained, the polynomial is just some random garbage.
 
 ```rust
 fn main() {
@@ -725,14 +804,14 @@ fn main() {
     let poly1 = DensePolynomial::<Fr>::rand(degrees.1, &mut rng);
 ```
 
-Then, we define its summation domain and evaluation domain. 
+Then, we define its summation domain and evaluation domain.
 
 ```rust
 let summation_domain = Radix2EvaluationDomain::new(64).unwrap();
 let evaluation_domain = Radix2EvaluationDomain::new(512).unwrap();
 ```
 
-Then, suppose we also have the claimed sum ready. 
+Then, suppose we also have the claimed sum ready.
 
 ```rust
 let claimed_sum1 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
@@ -745,9 +824,13 @@ let claimed_sum2 = Radix2CosetDomain::new(summation_domain.clone(), Fr::one())
     .sum::<Fr>();
 ```
 
-We will use built in LDT implementation, we runs one FRI on a random linear combination of all polynomial with degree bound. For example, we have `f_1(x)` and `f_2(x)`, and FRI has degree bound `D`. This protocol first sample randomness `r1` and `r2` and runs FRI on `r1*f_1(x)*x^{D-deg(f_1)} + r2*f_2(x)*x^{D-deg(f_2)}`. FRI's degree bound should be larger than the max degree of all polynomials, and should be a power of two. 
+We will use built in LDT implementation, we runs one FRI on a random linear combination of all polynomial with degree
+bound. For example, we have `f_1(x)` and `f_2(x)`, and FRI has degree bound `D`. This protocol first sample
+randomness `r1` and `r2` and runs FRI on `r1*f_1(x)*x^{D-deg(f_1)} + r2*f_2(x)*x^{D-deg(f_2)}`. FRI's degree bound
+should be larger than the max degree of all polynomials, and should be a power of two.
 
-We will use FRI with degree bound `256`. At first bound, we shrink the domain by `1/2^1`, second round `1/2^3`, third round `1/2`, so the localization parameter will be `[1,3,1]`. 
+We will use FRI with degree bound `256`. At first bound, we shrink the domain by `1/2^1`, second round `1/2^3`, third
+round `1/2`, so the localization parameter will be `[1,3,1]`.
 
 ```rust
 let fri_parameters = FRIParameters::new(
@@ -757,7 +840,7 @@ let fri_parameters = FRIParameters::new(
 );
 ```
 
-We will run the LDT using 3 FRI queries: 
+We will run the LDT using 3 FRI queries:
 
 ```rust
 let ldt_parameter = LinearCombinationLDTParameters {
@@ -766,7 +849,7 @@ let ldt_parameter = LinearCombinationLDTParameters {
 };
 ```
 
-Then, let's define all things needed for prover: 
+Then, let's define all things needed for prover:
 
 ```rust
 let sponge = PoseidonSponge::new(&poseidon_parameters());
@@ -805,20 +888,21 @@ let proof = BCSProof::generate::<
 .expect("fail to generate proof");
 ```
 
-Proof is serializable regardless of implementation of prover and verifier. We can also check the proof size in bytes: 
+Proof is serializable regardless of implementation of prover and verifier. We can also check the proof size in bytes:
 
 ```rust
 println!("Proof Size: {} bytes", proof.serialized_size());
 ```
 
-Finally let's verify if the proof is correct! As we already generated some prover parameters, let's do some cheating by deriving verifier parameter from prover parameter. In real circumstance, just making them again using same code. 
+Finally let's verify if the proof is correct! As we already generated some prover parameters, let's do some cheating by
+deriving verifier parameter from prover parameter. In real circumstance, just making them again using same code.
 
 ```rust
 let sponge = PoseidonSponge::new(&poseidon_parameters());
 let verifier_param = prover_param.to_verifier_param();
 ```
 
-Verifying a proof is also "one line": 
+Verifying a proof is also "one line":
 
 ```rust
 let result = BCSVerifier::verify::<SumcheckExample<Fr>, LinearCombinationLDT<Fr>, _>(
@@ -833,17 +917,18 @@ let result = BCSVerifier::verify::<SumcheckExample<Fr>, LinearCombinationLDT<Fr>
 assert!(result);
 ```
 
-And that's it! You've learned how to write RS-IOP using this library! 
+And that's it! You've learned how to write RS-IOP using this library!
 
 #### Under the hood
 
-You might be curious on what exact does `BCSProver::prove` do. To see what goes under the hood, go to `ark-bcs` project path, and run the example with `print-trace` feature enabled: 
+You might be curious on what exact does `BCSProver::prove` do. To see what goes under the hood, go to `ark-bcs` project
+path, and run the example with `print-trace` feature enabled:
 
 ```shell
 cargo run --package ark-bcs --example sumcheck --features test_utils
 ```
 
-At first few rounds, we can see `SumcheckExample::prove` is being run: 
+At first few rounds, we can see `SumcheckExample::prove` is being run:
 
 ```log
 Oct 02 21:19:58.208  INFO submit_prover_current_round{namespace=[BCS Proof Generation: Commit Phase] at src\bcs\prover.rs:89:29}: ark_bcs::bcs::transcript: [two polynomials for sumcheck] at examples\sumcheck\main.rs:132:53
@@ -852,7 +937,7 @@ Oct 02 21:19:58.830  INFO submit_prover_current_round{namespace=[second sumcheck
 [sumcheck hx, px] at examples\sumcheck\simple_sumcheck.rs:144:59
 ```
 
-Then BCS, BCS will run LDT commit phase, and attach message oracle to a separate LDT transcript. 
+Then BCS, BCS will run LDT commit phase, and attach message oracle to a separate LDT transcript.
 
 ```
 Oct 02 21:19:59.134  INFO submit_verifier_current_round{namespace=[LDT Prove] at src\ldt\rl_ldt.rs:60:41}: ark_bcs::bcs::transcript: [ldt random coefficeints] at src\ldt\rl_ldt.rs:71:55
@@ -881,7 +966,7 @@ Oct 04 20:29:33.557  INFO query_coset{coset_index=[17]}: ark_bcs::iop::message: 
 Oct 04 20:29:33.557  INFO query_coset{coset_index=[1]}: ark_bcs::iop::message: [rl_ldt query fri message] at src\ldt\rl_ldt.rs:321:59
 ```
 
-Finally, BCS will run `SumcheckExample::query_and_decide` to run the verifier and record query responses. 
+Finally, BCS will run `SumcheckExample::query_and_decide` to run the verifier and record query responses.
 
 ```
 Oct 04 20:29:33.558  INFO query{position=[429]}: ark_bcs::iop::message: [sumcheck query] at examples\sumcheck\simple_sumcheck.rs:207:30
@@ -890,13 +975,16 @@ Oct 04 20:29:33.559  INFO query{position=[83]}: ark_bcs::iop::message: [sumcheck
 Oct 04 20:29:33.560  INFO query{position=[83]}: ark_bcs::iop::message: [oracle access to poly in sumcheck] at examples\sumcheck\simple_sumcheck.rs:215:108
 ```
 
-You can check what `BCSVerifier::verify` did in a similar way. 
+You can check what `BCSVerifier::verify` did in a similar way.
 
 ## Bonus: Write circuits for the Verifier
 
-`ark-bcs` also provides framework to write circuits for RS-IOP verifier. The circuits generated will be R1CS constraints, and can be fed to any SNARKs that implements `Snark` trait defined in [`ark-snark`](https://github.com/arkworks-rs/snark/tree/master/snark). Let's now write constraints of verifier of the example sumcheck protocol!
+`ark-bcs` also provides framework to write circuits for RS-IOP verifier. The circuits generated will be R1CS
+constraints, and can be fed to any SNARKs that implements `Snark` trait defined
+in [`ark-snark`](https://github.com/arkworks-rs/snark/tree/master/snark). Let's now write constraints of verifier of the
+example sumcheck protocol!
 
-First, let's define the variable for sumcheck public input: 
+First, let's define the variable for sumcheck public input:
 
 ```rust
 pub struct SumcheckPublicInputVar<CF: PrimeField + Absorb> {
@@ -911,7 +999,8 @@ impl<CF: PrimeField + Absorb> SumcheckPublicInputVar<CF> {
 }
 ```
 
-Next, we will implement `IOPVerifierWithGadget` trait for `SimpleSumcheck`. The output of verifier circuit will be a `Boolean` variable.
+Next, we will implement `IOPVerifierWithGadget` trait for `SimpleSumcheck`. The output of verifier circuit will be
+a `Boolean` variable.
 
 ```rust
 impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, CF>
@@ -921,7 +1010,7 @@ impl<CF: PrimeField + Absorb, S: SpongeWithGadget<CF>> IOPVerifierWithGadget<S, 
     type PublicInputVar = SumcheckPublicInputVar<CF>;
 ```
 
-Then, we will implement those two functions. 
+Then, we will implement those two functions.
 
 ```rust
 fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
@@ -947,22 +1036,26 @@ fn query_and_decide_var(
 ) -> Result<Self::VerifierOutputVar, SynthesisError>
 ```
 
-The code should be quite similar to native code. Try to implement them yourself! 
+The code should be quite similar to native code. Try to implement them yourself!
 
-*Hint: In native code, when we want to sample an integer (e.g`u32`), we first call `sponge.squeeze_bits`, and convert those bits to an integer in little endian order. In constraints, when calculate `query_point`, we use `pow_le` that directly takes the squeezed bits, interpreted in little endian order.*
+*Hint: In native code, when we want to sample an integer (e.g`u32`), we first call `sponge.squeeze_bits`, and convert
+those bits to an integer in little endian order. In constraints, when calculate `query_point`, we use `pow_le` that
+directly takes the squeezed bits, interpreted in little endian order.*
 
-You can check our implementation at https://github.com/arkworks-rs/bcs/blob/main/examples/sumcheck/simple_sumcheck.rs. 
+You can check our implementation at https://github.com/arkworks-rs/bcs/blob/main/examples/sumcheck/simple_sumcheck.rs.
 
-Writing main code for the protocol is also quite similar to the native version, and you can out implementation at https://github.com/arkworks-rs/bcs/blob/work/examples/sumcheck/constraints.rs. 
+Writing main code for the protocol is also quite similar to the native version, and you can out implementation
+at https://github.com/arkworks-rs/bcs/blob/work/examples/sumcheck/constraints.rs.
 
-Now let's write a constraints synthesizer. We will need those info to generate our circuit: 
+Now let's write a constraints synthesizer. We will need those info to generate our circuit:
 
 ```rust
 struct SumcheckExampleVerification {
     // Constants embedded into the circuit: some parameters, for example
     param: Parameter<Fr>,
-    poseidon_param: PoseidonParameters<Fr>, /* for simplicity, same poseidon parameter is used
-                                             * for both merkle tree, and sponge */
+    poseidon_param: PoseidonParameters<Fr>,
+    /* for simplicity, same poseidon parameter is used
+                                                * for both merkle tree, and sponge */
     ldt_param: LinearCombinationLDTParameters<Fr>,
 
     // public input is the public input known by the verifier
@@ -973,10 +1066,13 @@ struct SumcheckExampleVerification {
 }
 ```
 
-Additionally, let's define the merkle tree config used in our circuit. For now we need to have two separate struct (one for native code, and one for constraints). The code will be simpler in the future (see https://github.com/arkworks-rs/crypto-primitives/pull/68). 
+Additionally, let's define the merkle tree config used in our circuit. For now we need to have two separate struct (one
+for native code, and one for constraints). The code will be simpler in the future (
+see https://github.com/arkworks-rs/crypto-primitives/pull/68).
 
 ```rust
 pub(crate) struct FieldMTConfig;
+
 impl Config for FieldMTConfig {
     type Leaf = [Fr];
     type LeafDigest = Fr;
@@ -987,6 +1083,7 @@ impl Config for FieldMTConfig {
 }
 
 pub(crate) struct FieldMTConfigGadget;
+
 impl ConfigGadget<FieldMTConfig, Fr> for FieldMTConfigGadget {
     type Leaf = [FpVar<Fr>];
     type LeafDigest = FpVar<Fr>;
@@ -997,7 +1094,7 @@ impl ConfigGadget<FieldMTConfig, Fr> for FieldMTConfigGadget {
 }
 ```
 
-Next, let's generate the constraints, first we allocate some parameters as constant. 
+Next, let's generate the constraints, first we allocate some parameters as constant.
 
 ```rust
 impl ConstraintSynthesizer<Fr> for SumcheckExampleVerification {
@@ -1013,7 +1110,7 @@ impl ConstraintSynthesizer<Fr> for SumcheckExampleVerification {
         };
 ```
 
-Then, we allocate public inputs, which is the public inputs variable for the main protocol. 
+Then, we allocate public inputs, which is the public inputs variable for the main protocol.
 
 ```rust
         // first, allocate public inputs
@@ -1022,7 +1119,7 @@ Then, we allocate public inputs, which is the public inputs variable for the mai
         })?;
 ```
 
-Then, we allocate proof as a private input. 
+Then, we allocate proof as a private input.
 
 ```rust
         // allocate proof
@@ -1034,31 +1131,32 @@ Finally, let's constrain the `proof_var` using the verifier gadget we just wrote
 
 ```rust
         // write constraints to enforce the proof correctness
-        let result = BCSVerifierGadget::verify::<
-            SumcheckExample<Fr>,
-            LinearCombinationLDT<Fr>,
-            PoseidonSponge<Fr>,
-        >(
-            ark_relations::ns!(cs, "proof verification").cs(),
-            PoseidonSpongeVar::new(cs.clone(), &self.poseidon_param),
-            &proof_var,
-            &vp_var,
-            &self.param,
-            &self.ldt_param,
-            &mt_hash_param_var,
-        )?;
+let result = BCSVerifierGadget::verify::<
+SumcheckExample<Fr>,
+LinearCombinationLDT<Fr>,
+PoseidonSponge<Fr>,
+> (
+ark_relations::ns!(cs, "proof verification").cs(),
+PoseidonSpongeVar::new(cs.clone(), & self .poseidon_param),
+& proof_var,
+& vp_var,
+& self .param,
+& self .ldt_param,
+& mt_hash_param_var,
+) ?;
 
-        result.enforce_equal(&Boolean::TRUE)?;
-        Ok(())
-    }
+result.enforce_equal( & Boolean::TRUE) ?;
+Ok(())
+}
 }
 ```
 
-And that's it! 
+And that's it!
 
 ## Further Reading: Multi-round example
 
-There's an alternative implementation of the example protocol, which contains multiple prover and verifier rounds in the root namespace. The specification of this alternative protocol is like this: 
+There's an alternative implementation of the example protocol, which contains multiple prover and verifier rounds in the
+root namespace. The specification of this alternative protocol is like this:
 
 | Prover                                            | Verifier                                 |
 | ------------------------------------------------- | ---------------------------------------- |
@@ -1069,7 +1167,10 @@ There's an alternative implementation of the example protocol, which contains mu
 | Send evaluations`r1*poly1`over evaluation domain. |                                          |
 | Invoke univariate sumcheck on `r1*poly1`          | Invoke univariate sumcheck on `r1*poly1` |
 
-Note that if original protocol where we sent `r0*poly0`, `r1*poly1` in one round, each query for those two polynomials share one authentication path, which can reduces the proof size. The proof size for multi-round example `~1KB` larger than original example. 
+Note that if original protocol where we sent `r0*poly0`, `r1*poly1` in one round, each query for those two polynomials
+share one authentication path, which can reduces the proof size. The proof size for multi-round example `~1KB` larger
+than original example.
 
-Code can be found in https://github.com/arkworks-rs/bcs/blob/main/examples/sumcheck/multiround_example.rs. If should look very similar to the protocol you just learned. 
+Code can be found in https://github.com/arkworks-rs/bcs/blob/main/examples/sumcheck/multiround_example.rs. If should
+look very similar to the protocol you just learned. 
 

@@ -225,7 +225,6 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for Simpl
     }
 }
 
-#[cfg(feature = "r1cs")]
 pub mod constraints {
     use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
     use ark_ff::PrimeField;

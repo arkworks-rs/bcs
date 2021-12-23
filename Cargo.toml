@@ -1,39 +1,8 @@
-[package]
-name = "ark-bcs"
-version = "0.3.0"
-authors = [
-    "arkworks contributors"
+[workspace]
+members = [
+    "ark-bcs",
+    "examples/*"
 ]
-description = "A library for Interactive Oracle Proof System and BCS Transform"
-repository = "https://github.com/arkworks-rs/ark-bcs"
-documentation = "https://docs.rs/ark-bcs"
-keywords = ["cryptography"]
-categories = ["cryptography"]
-include = ["Cargo.toml", "src", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
-license = "MIT/Apache-2.0"
-edition = "2018"
-
-[dependencies]
-ark-serialize = { version = "^0.3.0", default-features = false, features = ["derive"] }
-ark-ff = { version = "^0.3.0", default-features = false }
-ark-poly = { version = "^0.3.0", default-features = false }
-ark-sponge = { version = "^0.3.0", default-features = false }
-ark-crypto-primitives = { version = "^0.3.0", default-features = false }
-ark-std = { version = "^0.3.0", default-features = false }
-ark-ldt = { git = "https://github.com/arkworks-rs/ldt", branch = "main", default-features = false }
-
-ark-relations = { version = "^0.3.0", default-features = false, optional = true }
-ark-r1cs-std = { version = "^0.3.1", default-features = false, optional = true }
-
-tracing = { version = "0.1", default-features = false, features = ["attributes"] }
-derivative = { version = "2.0", features = ["use_core"] }
-hashbrown = "0.11.2"
-
-[dev-dependencies]
-ark-ed-on-bls12-381 = { version = "^0.3.0", default-features = false }
-ark-bls12-381 = { version = "^0.3.0", default-features = false, features = ["curve"] }
-ark-bls12-377 = { version = "^0.3.0", default-features = false, features = ["curve"] }
-tracing-subscriber = { version = "0.3", default-features = false }
 
 [profile.release]
 opt-level = 3
@@ -48,23 +17,7 @@ debug-assertions = true
 incremental = true
 debug = true
 
-[features]
-default = ["std", "parallel"]
-std = ["ark-serialize/std", "ark-ff/std", "ark-poly/std", "ark-sponge/std", "ark-crypto-primitives/std",
-    "ark-std/std", "ark-relations/std", "ark-r1cs-std/std", "ark-ldt/std", "tracing-subscriber/default"]
-r1cs = ["ark-relations", "ark-r1cs-std", "ark-sponge/r1cs", "ark-crypto-primitives/r1cs", "ark-ldt/r1cs"]
-parallel = ["std", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel"]
-test_utils = ["std"]
-
 [patch.crates-io]
 ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main" }
 ark-sponge = { git = "https://github.com/arkworks-rs/sponge" }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
-
-[[example]]
-name = "sumcheck"
-required-features = ["test_utils"]
-
-
-
-
