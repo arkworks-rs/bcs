@@ -2,7 +2,7 @@ use std::ops::Mul;
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::univariate::DensePolynomial;
-use ark_poly::UVPolynomial;
+use ark_poly::{Polynomial, UVPolynomial};
 
 /// Vanishing polynomial for a multiplicative coset H where |H| is a power of 2.
 /// As H is a coset, every element can be described as b*g^i and therefore
@@ -64,14 +64,14 @@ impl<F: PrimeField> VanishingPoly<F> {
             let num_distinct_eval = order_s / order_h;
             let evaluation_repetitions = order_h as usize;
             let mut cur = shift_to_order_h;
-            (0..num_distinct_eval).map(|i| {
+            (0..num_distinct_eval).map(|_| {
                 let result = cur - self.shift;
                 cur = cur * coset_gen_to_order_h;
                 result
             }).collect::<Vec<_>>().repeat(evaluation_repetitions)
         }else{
             let mut cur = shift_to_order_h;
-            (0..order_s).map(|i|{
+            (0..order_s).map(|_|{
                 let result = cur - self.shift;
                 cur = cur * coset_gen_to_order_h;
                 result
@@ -95,11 +95,17 @@ impl<F: PrimeField> VanishingPoly<F> {
     }
 }
 
-impl<F: PrimeField> Mul<DensePolynomial<F>> for VanishingPoly<F> {
+impl<F: PrimeField> Mul<&DensePolynomial<F>> for VanishingPoly<F> {
     type Output = DensePolynomial<F>;
 
-    fn mul(self, rhs: DensePolynomial<F>) -> DensePolynomial<F> {
-        todo!()
+    fn mul(self, rhs: &DensePolynomial<F>) -> DensePolynomial<F> {
+        // (x^|H| - b^|H|) * f(x) = x^|H| * f(x) - b^|H| * f(x)
+        let mut result_coeffs = vec![F::zero(); rhs.degree() + self.degree + 1];
+
+        // result += x^|H| * f(x)
+        result_coeffs[self.degree..self.degree + rhs.coeffs.len()].copy_from_slice(&rhs.coeffs);
+        result_coeffs[0..rhs.coeffs.len()].iter_mut().zip(rhs.coeffs.iter()).for_each(|(x, &a)| *x -= a * self.shift);
+        DensePolynomial::from_coefficients_vec(result_coeffs)
     }
 }
 
@@ -160,6 +166,22 @@ mod tests{
         let point = F::rand(&mut rng);
         let expected = vp.evaluation_at_point(point);
         let actual = vp.dense_poly().evaluate(&point);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_mul(){
+        let mut rng = test_rng();
+        let vp_domain = Radix2CosetDomain::new_radix2_coset(256, F::rand(&mut rng));
+        let vp = VanishingPoly::new(vp_domain);
+
+        let poly = DensePolynomial::<F>::rand(17, &mut rng);
+
+        let point = F::rand(&mut rng);
+
+        let expected = vp.evaluation_at_point(point) * poly.evaluate(&point);
+        let actual = (vp * &poly).evaluate(&point);
+
         assert_eq!(actual, expected);
     }
 
