@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "ark-bcs",
+    "sumcheck",
     "examples/*"
 ]
 
