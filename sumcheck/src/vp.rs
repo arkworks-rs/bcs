@@ -2,6 +2,7 @@ use std::ops::Mul;
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::univariate::DensePolynomial;
+use ark_poly::UVPolynomial;
 
 /// Vanishing polynomial for a multiplicative coset H where |H| is a power of 2.
 /// As H is a coset, every element can be described as b*g^i and therefore
@@ -87,7 +88,10 @@ impl<F: PrimeField> VanishingPoly<F> {
     }
 
     pub fn dense_poly(&self) -> DensePolynomial<F> {
-        todo!()
+        let mut coeffs = vec![F::zero(); self.degree + 1];
+        coeffs[0] = -self.shift;
+        coeffs[self.degree] = F::one();
+        DensePolynomial::from_coefficients_vec(coeffs)
     }
 }
 
@@ -115,6 +119,7 @@ impl<F: PrimeField> DivVanishingPoly<F> for DensePolynomial<F> {
 #[cfg(test)]
 mod tests{
     use ark_ff::Field;
+    use ark_poly::Polynomial;
     use ark_std::{test_rng, UniformRand};
     use super::*;
     type F = ark_bls12_381::Fr;
@@ -144,6 +149,18 @@ mod tests{
 
         // for now, it's not possible to have |S| % |H| != 0 or |H| % |S| != 0, because they are both power of 2.
 
+    }
+
+    #[test]
+    fn test_dense_poly(){
+        let mut rng = test_rng();
+        let vp_domain = Radix2CosetDomain::new_radix2_coset(256, F::rand(&mut rng));
+        let vp = VanishingPoly::new(vp_domain);
+
+        let point = F::rand(&mut rng);
+        let expected = vp.evaluation_at_point(point);
+        let actual = vp.dense_poly().evaluate(&point);
+        assert_eq!(actual, expected);
     }
 
 
