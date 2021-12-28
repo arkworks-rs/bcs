@@ -142,14 +142,14 @@ impl<F: PrimeField> DivVanishingPoly<F> for DensePolynomial<F> {
         // 2|H|} + a_i * S^2 * x^{i - 3|H|} + ...+ a_i * S^{k-1} * x^{i - k|H|}
         // where k is the maximum int such that i - k|H| >= 0
         let mut quotient_vec = self.coeffs[vp.degree..].to_vec();
-        let mut z_0 = vp.shift;
+        let mut s_pow = vp.shift;
         for r in 1..(self.len() / vp.degree) {
             // add a_i * S^{r + 1 -1} * x^{i - (r+1)|H|}
             quotient_vec
                 .iter_mut()
                 .zip(&self.coeffs[vp.degree * (r + 1)..])
-                .for_each(|(s, &c)| *s += c * z_0);
-            z_0 = z_0 * vp.shift;
+                .for_each(|(s, &c)| *s += c * s_pow);
+            s_pow = s_pow * vp.shift;
         }
 
         // remainder = self - quotient * vp
