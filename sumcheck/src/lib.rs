@@ -1,10 +1,10 @@
-pub mod vp;
+use ark_ff::PrimeField;
+use ark_ldt::domain::Radix2CosetDomain;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+pub mod vp;
+pub mod util;
+
+/// Univariate Sumcheck Protocol with a fixed summation domain
+pub struct UnivariateSumcheck<F: PrimeField>{
+    pub summation_domain: Radix2CosetDomain<F>
 }
