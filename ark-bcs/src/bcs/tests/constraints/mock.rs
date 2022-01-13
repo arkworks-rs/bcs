@@ -142,7 +142,6 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         namespace: NameSpace,
         _verifier_parameter: &Self::VerifierParameter,
         _public_input_var: &Self::PublicInputVar,
-        _oracle_refs: &Self::OracleRefs,
         _sponge: &mut S::Var,
         transcript_messages: &mut MessagesCollectionVar<CF>,
     ) -> Result<Self::VerifierOutputVar, SynthesisError> {

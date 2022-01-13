@@ -5,7 +5,6 @@ use crate::{
     iop::{
         bookkeeper::NameSpace,
         constraints::{message::MessagesCollectionVar, IOPVerifierWithGadget},
-        verifier::IOPVerifierWithNoOracleRefs,
     },
     ldt::{constraints::LDTWithGadget, NoLDT},
 };
@@ -52,7 +51,7 @@ where
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
+        V: IOPVerifierWithGadget<S, CF>,
         L: LDTWithGadget<CF>,
         S: SpongeWithGadget<CF>,
     {
@@ -216,7 +215,7 @@ where
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
+        V: IOPVerifierWithGadget<S, CF>,
         S: SpongeWithGadget<CF>,
     {
         Self::verify::<V, NoLDT<CF>, S>(
@@ -245,7 +244,7 @@ where
         ldt_codeword_localization_parameter: usize,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
+        V: IOPVerifierWithGadget<S, CF>,
         S: SpongeWithGadget<CF>,
     {
         Self::verify::<V, NoLDT<CF>, S>(

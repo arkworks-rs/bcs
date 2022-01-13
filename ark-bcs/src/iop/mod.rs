@@ -13,29 +13,6 @@ pub mod prover;
 /// Public coin IOP verifier
 pub mod verifier;
 
-/// A collection of oracle references from other protocols
-/// used by current prover.
-pub trait ProverOracleRefs: Clone + Debug {
-    ///  A improper subset of `self` that will be used by verifier.
-    type VerifierOracleRefs: VerifierOracleRefs;
-    /// Derive Verifier state at the beginning of `query_and_decide` function
-    /// using prover state at the end of commit phase.
-    fn to_verifier_oracle_refs(&self) -> Self::VerifierOracleRefs;
-}
-
-impl ProverOracleRefs for () {
-    type VerifierOracleRefs = ();
-
-    fn to_verifier_oracle_refs(&self) -> Self::VerifierOracleRefs {
-        ()
-    }
-}
-
-/// A collection of oracle references from other protocols
-/// used by current prover.
-pub trait VerifierOracleRefs: Clone + Debug {}
-impl<T: Clone + Debug> VerifierOracleRefs for T {}
-
 /// Prover parameter used by IOP Prover.
 pub trait ProverParam: Clone + Debug {
     /// Verifier state should be a improper subset of `self`.

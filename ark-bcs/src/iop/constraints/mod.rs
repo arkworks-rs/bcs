@@ -66,7 +66,6 @@ where
         namespace: NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         public_input_var: &Self::PublicInputVar,
-        oracle_refs: &Self::OracleRefs,
         sponge: &mut S::Var,
         transcript_messages: &mut MessagesCollectionVar<'a, CF>,
     ) -> Result<Self::VerifierOutputVar, SynthesisError>;

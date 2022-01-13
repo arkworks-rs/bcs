@@ -1,10 +1,6 @@
 use crate::{
-    bcs::{prover::BCSProof, transcript::SimulationTranscript, MTHashParameters},
-    iop::{
-        bookkeeper::NameSpace,
-        message::MessagesCollection,
-        verifier::{IOPVerifier, IOPVerifierWithNoOracleRefs},
-    },
+    bcs::{prover::BCSProof, simulation_transcript::SimulationTranscript, MTHashParameters},
+    iop::{bookkeeper::NameSpace, message::MessagesCollection, verifier::IOPVerifier},
     ldt::{NoLDT, LDT},
     Error,
 };
@@ -43,7 +39,7 @@ where
         hash_params: MTHashParameters<MT>,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifierWithNoOracleRefs<S, F>,
+        V: IOPVerifier<S, F>,
         L: LDT<F>,
         S: CryptographicSponge,
     {
@@ -75,7 +71,7 @@ where
             .clone()
             .into_iter()
             .map(|x| {
-                transcript.prover_messages_info[x.index]
+                transcript.expected_prover_messages_info[x.index]
                     .reed_solomon_code_degree_bound
                     .len()
             })
@@ -98,10 +94,16 @@ where
         // start query phase
 
         // prover message view helps record verify query
+        assert_eq!(
+            proof.prover_iop_messages_by_round.len(),
+            transcript.expected_prover_messages_info.len(),
+            "incorrect rounds in commit phase"
+        );
         let prover_message_view = proof
             .prover_iop_messages_by_round
             .iter()
-            .map(|m| m.get_view())
+            .zip(transcript.expected_prover_messages_info.iter())
+            .map(|(m, info)| m.get_view(info.clone()))
             .collect::<Vec<_>>();
 
         let mut transcript_messages = MessagesCollection::new(
@@ -131,7 +133,6 @@ where
             root_namespace,
             verifier_parameter,
             public_input,
-            &(),
             &mut sponge,
             &mut transcript_messages,
         )?;
@@ -205,7 +206,7 @@ where
         hash_params: MTHashParameters<MT>,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifier<S, F> + IOPVerifierWithNoOracleRefs<S, F>,
+        V: IOPVerifier<S, F>,
         S: CryptographicSponge,
     {
         Self::verify::<V, NoLDT<_>, S>(
@@ -232,7 +233,7 @@ where
         ldt_codeword_localization_parameter: usize,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifier<S, F> + IOPVerifierWithNoOracleRefs<S, F>,
+        V: IOPVerifier<S, F>,
         S: CryptographicSponge,
     {
         Self::verify::<V, NoLDT<_>, S>(

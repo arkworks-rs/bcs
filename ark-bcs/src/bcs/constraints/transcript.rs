@@ -152,7 +152,7 @@ where
         tracer: TraceInfo,
     ) -> Result<MsgRoundRef, SynthesisError> {
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
-            expected_message_info.localization_parameter = self.ldt_localization_parameter();
+            expected_message_info.localization_parameter = self.codeword_localization_parameter();
         }
 
         let index = self.current_prover_round;
@@ -197,8 +197,8 @@ where
         trace: TraceInfo,
     ) -> MsgRoundRef {
         let (codeword_domain, localization_param) = (
-            self.ldt_codeword_domain(),
-            self.ldt_localization_parameter(),
+            self.codeword_domain(),
+            self.codeword_localization_parameter(),
         );
         let virtual_oracle = VirtualOracleVar::new(
             coset_evaluator,
@@ -324,7 +324,7 @@ where
     ///
     /// ## Panics
     /// This function panics if LDT is not enabled.
-    fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
+    fn codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")
     }
 
@@ -334,7 +334,7 @@ where
     /// ## Panics
     /// This function panics if LDT is not enabled or localization parameter is
     /// not supported by LDT.
-    fn ldt_localization_parameter(&self) -> usize {
+    fn codeword_localization_parameter(&self) -> usize {
         self.ldt_localization_parameter
             .expect("LDT not enabled or localization parameter is not supported by LDT")
     }

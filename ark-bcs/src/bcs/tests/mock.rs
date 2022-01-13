@@ -1,11 +1,5 @@
 use crate::{
-    bcs::{
-        tests::FieldMTConfig,
-        transcript::{
-            test_utils::check_commit_phase_correctness, LDTInfo, SimulationTranscript, Transcript,
-        },
-        MTHashParameters,
-    },
+    bcs::transcript::{LDTInfo, Transcript},
     iop::{
         bookkeeper::NameSpace,
         message::{MessagesCollection, ProverRoundMessageInfo, VerifierMessage},
@@ -13,17 +7,15 @@ use crate::{
         prover::IOPProver,
         verifier::IOPVerifier,
     },
-    ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
-    test_utils::poseidon_parameters,
     Error,
 };
-use ark_bls12_381::fr::Fr;
+use crate::{bcs::simulation_transcript::SimulationTranscript, iop::message::CosetQueryResult};
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::{PrimeField, ToConstraintField};
-use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
+use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::{univariate::DensePolynomial, UVPolynomial};
-use ark_sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge, FieldElementSize};
-use ark_std::{marker::PhantomData, test_rng, vec, vec::Vec, One};
+use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
+use ark_std::{marker::PhantomData, test_rng, vec, vec::Vec};
 use tracing::Level;
 
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
@@ -36,7 +28,7 @@ fn mock_virtual_oracle_for_query<F: PrimeField, O: RoundOracle<F>>(
     iop_messages: &mut MessagesCollection<F, O>,
     queries: &[usize],
     cosets: &[Radix2CosetDomain<F>],
-) -> Vec<Vec<Vec<F>>> {
+) -> CosetQueryResult<F> {
     let span = tracing::span!(Level::INFO, "virtual oracle");
     let _enter = span.enter();
     // calculate f(x) * (x^2 + 2x + 1)
@@ -81,13 +73,11 @@ fn mock_virtual_oracle_for_prove<F: PrimeField>(
 
 impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
     type ProverParameter = ();
-    type RoundOracleRefs = ();
     type PublicInput = ();
     type PrivateInput = ();
 
     fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
         namespace: NameSpace,
-        _oracle_refs: &Self::RoundOracleRefs,
         _public_input: &Self::PublicInput,
         _private_input: &Self::PrivateInput,
         transcript: &mut Transcript<MT, S, F>,
@@ -102,19 +92,19 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
         let mut rng = test_rng();
 
         // prover send
-        let msg1 = (0..4).map(|_| F::rand(&mut rng));
-        transcript.send_message(msg1);
-        let msg2 = (0..256).map(|_| F::rand(&mut rng));
+        let msg1 = (0..4).map(|_| F::rand(&mut rng)).collect::<Vec<_>>();
+        // transcript.send_message(msg1);
+        let msg2 = (0..256).map(|_| F::rand(&mut rng)).collect::<Vec<_>>();
+        // transcript
+        //     .send_message_oracle_with_localization(msg2, 2)
+        //     .unwrap();
+        let msg3 = (0..256).map(|_| F::rand(&mut rng)).collect::<Vec<_>>();
         transcript
-            .send_message_oracle_with_localization(msg2, 2)
-            .unwrap();
-        let msg3 = (0..256).map(|_| F::rand(&mut rng));
-        transcript
-            .send_message_oracle_with_localization(msg3, 2)
-            .unwrap();
-        transcript
-            .submit_prover_current_round(namespace, iop_trace!("mock send"))
-            .unwrap();
+            .add_prover_round_with_custom_length_and_localization(256, 2)
+            .send_short_message(msg1)
+            .send_oracle_message_without_degree_bound(msg2)
+            .send_oracle_message_without_degree_bound(msg3)
+            .submit(namespace, iop_trace!("mock send"))?;
 
         // verifier send
         let vm1 = transcript.squeeze_verifier_field_elements(&[
@@ -130,19 +120,30 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
         transcript.submit_verifier_current_round(namespace, iop_trace!("mock send2"));
 
         // prover send
+        // let msg1 = vm1.into_iter().map(|x| x.square());
+        // transcript.send_message(msg1);
+        // let msg2 = (0..256u128).map(|x| {
+        //     let rhs: F = vm2.to_field_elements().unwrap()[0];
+        //     F::from(x) + rhs
+        // });
+        // transcript.send_message_oracle(msg2).unwrap();
+        // transcript
+        //     .submit_prover_current_round(namespace, iop_trace!("mock send2"))
+        //     .unwrap();
+
         let msg1 = vm1.into_iter().map(|x| x.square());
-        transcript.send_message(msg1);
         let msg2 = (0..256u128).map(|x| {
             let rhs: F = vm2.to_field_elements().unwrap()[0];
             F::from(x) + rhs
         });
-        transcript.send_message_oracle(msg2).unwrap();
         transcript
-            .submit_prover_current_round(namespace, iop_trace!("mock send2"))
-            .unwrap();
+            .add_prover_round_with_custom_length_and_localization(256, 0)
+            .send_short_message(msg1)
+            .send_oracle_message_without_degree_bound(msg2)
+            .submit(namespace, iop_trace!("mock send2"))?;
 
         // prover send 2
-        let msg1 = (0..6).map(|_| F::rand(&mut rng));
+        let msg1 = (0..6).map(|_| F::rand(&mut rng)).collect::<Vec<_>>();
         let msg2 = DensePolynomial::from_coefficients_vec(vec![
             F::from(0x12345u128),
             F::from(0x23456u128),
@@ -150,11 +151,16 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
             F::from(0x45678u128),
             F::from(0x56789u128),
         ]);
-        transcript.send_message(msg1);
-        transcript.send_univariate_polynomial(8, &msg2)?;
+        // transcript.send_message(msg1);
+        // transcript.send_univariate_polynomial(8, &msg2)?;
+        // transcript
+        //     .submit_prover_current_round(namespace, iop_trace!("mock send3"))
+        //     .unwrap();
         transcript
-            .submit_prover_current_round(namespace, iop_trace!("mock send3"))
-            .unwrap();
+            .add_prover_round_with_codeword_domain()
+            .send_short_message(msg1)
+            .send_univariate_polynomial(&msg2, 8)
+            .submit(namespace, iop_trace!("mock send3"))?;
 
         // prover send virtual oracle
         // always make sure arguments have type!
@@ -167,7 +173,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
         );
 
         let virtual_oracle_evaluations = mock_virtual_oracle_for_prove(
-            transcript.ldt_codeword_domain(),
+            transcript.codeword_domain(),
             transcript
                 .get_previously_sent_prover_rs_code((namespace, 2), 0)
                 .to_vec(),
@@ -195,7 +201,6 @@ pub(crate) struct MockTest1Verifier<F: PrimeField + Absorb> {
 impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockTest1Verifier<F> {
     type VerifierOutput = bool;
     type VerifierParameter = ();
-    type OracleRefs = ();
     type PublicInput = ();
 
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>>(
@@ -208,13 +213,18 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         let span = tracing::span!(Level::INFO, "main register");
         let _enter = span.enter();
         // prover send
-        let expected_info = ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: vec![],
-            num_message_oracles: 2,
-            num_short_messages: 1,
-            oracle_length: 256,
-            localization_parameter: 2,
-        };
+        // let expected_info = ProverRoundMessageInfo {
+        //     reed_solomon_code_degree_bound: vec![],
+        //     num_message_oracles: 2,
+        //     num_short_messages: 1,
+        //     leaves_type: LeavesType::Custom,
+        //     length: 256,
+        //     localization_parameter: 2,
+        // };
+        let expected_info = ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 2)
+            .with_num_message_oracles(2)
+            .with_num_short_messages(1)
+            .build();
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // verifier send
@@ -231,23 +241,31 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         // prover send
-        let expected_info = ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: vec![],
-            num_message_oracles: 1,
-            num_short_messages: 1,
-            oracle_length: 256,
-            localization_parameter: 0,
-        };
+        // let expected_info = ProverRoundMessageInfo {
+        //     reed_solomon_code_degree_bound: vec![],
+        //     num_message_oracles: 1,
+        //     num_short_messages: 1,
+        //     oracle_length: 256,
+        //     localization_parameter: 0,
+        // };
+        let expected_info = ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 0)
+            .with_num_message_oracles(1)
+            .with_num_short_messages(1)
+            .build();
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // prover send2
-        let expected_info = ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: vec![8],
-            num_message_oracles: 0,
-            num_short_messages: 1,
-            oracle_length: 128,
-            localization_parameter: 0, // managed by LDT
-        };
+        // let expected_info = ProverRoundMessageInfo {
+        //     reed_solomon_code_degree_bound: vec![8],
+        //     num_message_oracles: 0,
+        //     num_short_messages: 1,
+        //     oracle_length: 128,
+        //     localization_parameter: 0, // managed by LDT
+        // };
+        let expected_info = ProverRoundMessageInfo::new_using_codeword_domain(transcript)
+            .with_reed_solomon_codes_degree_bounds(vec![8])
+            .with_num_short_messages(1)
+            .build();
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // prover send virtual oracle
@@ -273,7 +291,6 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         namespace: NameSpace,
         _verifier_parameter: &Self::VerifierParameter,
         _public_input: &Self::PublicInput,
-        _verifier_state: &Self::OracleRefs,
         _sponge: &mut S,
         transcript_messages: &mut MessagesCollection<F, O>,
     ) -> Result<Self::VerifierOutput, Error> {
@@ -359,36 +376,4 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
 
         Ok(true)
     }
-}
-
-#[test]
-fn check_mock1_commit_phase() {
-    let fri_parameters = FRIParameters::new(
-        64,
-        vec![1, 2, 1],
-        Radix2CosetDomain::new_radix2_coset(128, Fr::one()),
-    );
-    let ldt_pamameters = LinearCombinationLDTParameters {
-        fri_parameters,
-        num_queries: 1,
-    };
-    let sponge = PoseidonSponge::new(&poseidon_parameters());
-    check_commit_phase_correctness::<
-        Fr,
-        _,
-        FieldMTConfig,
-        MockTestProver<Fr>,
-        MockTest1Verifier<Fr>,
-        LinearCombinationLDT<Fr>,
-    >(
-        sponge,
-        &(),
-        &(),
-        &(),
-        &ldt_pamameters,
-        MTHashParameters {
-            leaf_hash_param: poseidon_parameters(),
-            inner_hash_param: poseidon_parameters(),
-        },
-    );
 }

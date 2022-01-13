@@ -2,18 +2,19 @@ use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
 
 use crate::{
-    bcs::transcript::SimulationTranscript,
     iop::{
-        message::MessagesCollection, prover::IOPProver, ProverOracleRefs, ProverParam,
-        VerifierOracleRefs, VerifierParam,
+        message::MessagesCollection, prover::IOPProver, ProverParam,
+         VerifierParam,
     },
     Error,
 };
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
+use crate::bcs::simulation_transcript::SimulationTranscript;
 
 use super::{bookkeeper::NameSpace, oracles::RoundOracle};
 
-/// The verifier for public coin IOP has two phases.
+/// The verifier for public coin IOP has two phases.  This is intended to be used as an endpoint protocol. Any subprotocol does not need to implement this trait.
+/// Any implementation of this trait can be transformed to SNARG by BCS.
 /// * **Commit Phase**: Verifier send message that is uniformly sampled from a
 ///   random oracle. Verifier
 /// will receive prover oracle, that can use used to query later. This protocol
@@ -32,9 +33,6 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// `register_iop_structure`, and can affect transcript structure
     /// (e.g. number of rounds and degree bound).
     type VerifierParameter: VerifierParam;
-    /// A collection of oracle references from other protocols
-    /// used by current verifier.
-    type OracleRefs: VerifierOracleRefs;
     /// Public input. Public input cannot be accessed in
     /// `register_iop_structure`, and thus cannot affect transcript
     /// structure (e.g. number of rounds).
@@ -62,7 +60,6 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
         namespace: NameSpace,
         verifier_parameter: &Self::VerifierParameter,
         public_input: &Self::PublicInput,
-        oracle_refs: &Self::OracleRefs,
         sponge: &mut S,
         transcript_messages: &mut MessagesCollection<F, O>,
     ) -> Result<Self::VerifierOutput, Error>;
@@ -84,7 +81,6 @@ where
         S,
         F,
         VerifierParameter = <P::ProverParameter as ProverParam>::VerifierParameter,
-        OracleRefs = <P::RoundOracleRefs as ProverOracleRefs>::VerifierOracleRefs,
         PublicInput = P::PublicInput,
     >,
 {
@@ -96,32 +92,7 @@ where
         S,
         F,
         VerifierParameter = <P::ProverParameter as ProverParam>::VerifierParameter,
-        OracleRefs = <P::RoundOracleRefs as ProverOracleRefs>::VerifierOracleRefs,
         PublicInput = P::PublicInput,
     >,
-{
-}
-
-/// `IOPVerifierWithNoOracleRefs` is an auto-implemented trait. User does not
-/// need to derive this trait manually.
-///
-/// This trait is an extension for `IOPVerifier`, which requires that the
-/// verifier do not need to have oracle access to messages sent in other
-/// namespaces in the same transcript. Most protocols that is not a subprotocol
-/// satisfy this property.
-///
-/// Protocols that implements this trait can be used for BCS transform.
-///
-/// Any prover that `RoundOracleRefs = ()` will implement this trait
-/// automatically.
-pub trait IOPVerifierWithNoOracleRefs<S: CryptographicSponge, F: PrimeField + Absorb>:
-    IOPVerifier<S, F, OracleRefs = ()>
-{
-}
-impl<
-        S: CryptographicSponge,
-        F: PrimeField + Absorb,
-        Protocol: IOPVerifier<S, F, OracleRefs = ()>,
-    > IOPVerifierWithNoOracleRefs<S, F> for Protocol
 {
 }

@@ -48,7 +48,6 @@ impl<F: PrimeField> AllocVar<SuccinctRoundMessage<F>, F> for SuccinctRoundMessag
         let cs = cs.into();
         let native = f()?;
         let native = native.borrow();
-        let info = native.info.clone();
         let queried_cosets = native
             .queried_cosets
             .iter()
@@ -69,7 +68,6 @@ impl<F: PrimeField> AllocVar<SuccinctRoundMessage<F>, F> for SuccinctRoundMessag
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            info,
             queried_cosets,
             short_messages,
         })

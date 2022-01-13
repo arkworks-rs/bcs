@@ -1,13 +1,17 @@
-use crate::{bcs::MTHashParameters, iop::bookkeeper::MessageBookkeeper, tracer::TraceInfo, Error};
-use ark_crypto_primitives::{merkle_tree::Config as MTConfig, MerkleTree};
+use crate::prelude::SimulationTranscript;
+use crate::{iop::bookkeeper::MessageBookkeeper, tracer::TraceInfo};
+use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
+use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::vec::Vec;
+use std::iter::FromIterator;
+
+use crate::iop::message::LeavesType::{Custom, UseCodewordDomain};
 use tracing::info;
 
 use super::{
     bookkeeper::{BookkeeperContainer, ToMsgRoundRef},
-    oracles::{RecordingRoundOracle, RoundOracle, VirtualOracle},
+    oracles::{RoundOracle, VirtualOracle},
 };
 
 /// Contains location of round oracles in a transcript.
@@ -169,7 +173,7 @@ impl<'a, F: PrimeField, O: RoundOracle<F>> AtProverRound<'a, F, O> {
     /// Return the queried coset at `coset_index` of all oracles in this round.
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
     /// in this coset.
-    pub fn query_coset(&mut self, positions: &[usize], tracer: TraceInfo) -> Vec<Vec<Vec<F>>> {
+    pub fn query_coset(&mut self, positions: &[usize], tracer: TraceInfo) -> CosetQueryResult<F> {
         let _self = &mut self._self;
         let round = self.round;
         if !round.is_virtual {
@@ -204,108 +208,78 @@ impl<'a, F: PrimeField, O: RoundOracle<F>> AtProverRound<'a, F, O> {
     }
 }
 
-pub(crate) struct PendingProverMessage<F: PrimeField> {
-    /// Oracle evaluations with a degree bound.
-    pub(crate) reed_solomon_codes: Vec<(Vec<F>, usize)>,
-    /// Message oracles without a degree bound
-    pub(crate) message_oracles: Vec<Vec<F>>,
-    /// Messages without oracle sent in current round
-    pub(crate) short_messages: Vec<Vec<F>>,
-    /// length of each oracle message. `oracle_length` is 0 if in this round,
-    /// prover sends only short messages.
-    pub(crate) oracle_length: usize,
-    /// localization parameter is log2(coset_size)
-    /// Set it to zero to disable leaf as coset.
-    pub(crate) localization_parameter: usize,
-}
+/// The result of a coset query. `result[i][j][k]` is coset index `i` -> oracle
+/// index `j` -> element `k`
+#[repr(transparent)]
+pub struct CosetQueryResult<T: Clone>(pub Vec<Vec<Vec<T>>>);
 
-impl<F: PrimeField> Default for PendingProverMessage<F> {
-    fn default() -> Self {
-        Self {
-            reed_solomon_codes: Vec::new(),
-            message_oracles: Vec::new(),
-            short_messages: Vec::new(),
-            oracle_length: 0,
-            localization_parameter: 0,
-        }
+impl<T: Clone> CosetQueryResult<T> {
+    /// `result[i][j]` is coset index `coset_index` -> oracle index `i` ->
+    /// element `j`
+    pub fn at_coset_index(&self, coset_index: usize) -> &[Vec<T>] {
+        &self.0[coset_index]
+    }
+
+    /// `result[i][j]` is coset index `coset_index` -> oracle index
+    /// `oracle_index` -> element `j`
+    pub fn at_oracle_index(&self, oracle_index: usize) -> impl Iterator<Item = &Vec<T>> {
+        self.0.iter().map(move |coset| &coset[oracle_index])
+    }
+
+    /// `result[i][j]` is coset index `coset_index` -> oracle index
+    /// `oracle_index` -> element `j`
+    pub fn at_oracle_index_owned(self, oracle_index: usize) -> impl Iterator<Item = Vec<T>> {
+        self.0
+            .into_iter()
+            .map(move |coset| coset[oracle_index].to_vec())
+    }
+
+    /// assume this query response has only one coset query, return this coset
+    /// result. `result[i]` is coset evaluations of oracle `i`.
+    pub fn assume_single_coset(mut self) -> Vec<Vec<T>> {
+        assert_eq!(self.0.len(), 1);
+        self.0.pop().unwrap()
+    }
+
+    /// iterate over coset index. For each element, `element[i][j]` is oracle
+    /// index `i` -> element `j`
+    pub fn iter(&self) -> impl Iterator<Item = &Vec<Vec<T>>> {
+        self.0.iter()
+    }
+
+    /// number of cosets
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Return `self` query_result of a single oracle.
+    /// `query_result[i][j]` is coset index `i` -> element `j`
+    pub fn from_single_oracle_result(query_result: Vec<Vec<T>>) -> Self {
+        query_result.into_iter().map(|coset| vec![coset]).collect()
     }
 }
 
-impl<F: PrimeField> PendingProverMessage<F> {
-    fn has_oracle(&self) -> bool {
-        self.oracle_length != 0
+impl<T: Clone> From<Vec<Vec<Vec<T>>>> for CosetQueryResult<T> {
+    fn from(v: Vec<Vec<Vec<T>>>) -> Self {
+        Self(v)
     }
+}
 
-    /// Generate a merkle tree of `Self` where each leaf is a coset.
-    /// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the
-    /// leaf will be `[oracle[0][3], oracle[0][6], oracle[0][9],
-    /// oracle[1][3], oracle[1][6], oracle[1][9]]`
-    pub(crate) fn into_merkle_tree_and_recording_oracle<P: MTConfig<Leaf = [F]>>(
-        self, // all RS-codes, all message oracles
-        hash_params: &MTHashParameters<P>,
-    ) -> Result<(Option<MerkleTree<P>>, RecordingRoundOracle<F>), Error> {
-        let all_coset_elements = self.generate_all_cosets();
-        let flattened_leaves = all_coset_elements
-            .iter()
-            .map(|oracles| oracles.iter().flatten().map(|x| *x).collect::<Vec<_>>());
-        let mt = if self.has_oracle() {
-            Some(MerkleTree::new(
-                &hash_params.leaf_hash_param,
-                &hash_params.inner_hash_param,
-                flattened_leaves,
-            )?)
-        } else {
-            None
-        };
-        let info = ProverRoundMessageInfo {
-            oracle_length: self.oracle_length,
-            reed_solomon_code_degree_bound: self
-                .reed_solomon_codes
-                .iter()
-                .map(|(_, degree)| *degree)
-                .collect(),
-            localization_parameter: self.localization_parameter,
-            num_short_messages: self.short_messages.len(),
-            num_message_oracles: self.message_oracles.len(),
-        };
-        let recording_oracle = RecordingRoundOracle {
-            info,
-            reed_solomon_codes: self.reed_solomon_codes,
-            message_oracles: self.message_oracles,
-            short_messages: self.short_messages,
-            all_coset_elements,
-            queried_coset_index: Vec::new(),
-        };
-        Ok((mt, recording_oracle))
+impl<T: Clone> FromIterator<Vec<Vec<T>>> for CosetQueryResult<T> {
+    fn from_iter<I: IntoIterator<Item = Vec<Vec<T>>>>(iter: I) -> Self {
+        // item is evaluation of multiple oracles on one coset
+        Self(iter.into_iter().collect())
     }
+}
 
-    /// Generate a un-flattened merkle tree leaves
-    ///
-    /// result axes:`[coset index, oracle index, element index in coset]`
-    pub(crate) fn generate_all_cosets(&self) -> Vec<Vec<Vec<F>>> {
-        if !self.has_oracle() {
-            return Vec::new();
-        }
-        let coset_size = 1 << self.localization_parameter;
-        debug_assert_eq!(self.oracle_length % coset_size, 0);
-        let num_cosets = self.oracle_length / coset_size;
-        let stride = num_cosets;
-        // axes: [coset index, oracle index, element index in coset]
-        // absolute position = coset index + stride * element_index
-        (0..num_cosets)
-            .map(|coset_index| {
-                self.reed_solomon_codes
-                    .iter()
-                    .map(|(oracle, _)| oracle)
-                    .chain(self.message_oracles.iter())
-                    .map(|oracle| {
-                        (0..coset_size)
-                            .map(|element_index| oracle[coset_index + stride * element_index])
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>()
+impl<T: Clone> IntoIterator for CosetQueryResult<T> {
+    type Item = Vec<Vec<T>>;
+    type IntoIter = ark_std::vec::IntoIter<Vec<Vec<T>>>;
+
+    /// iterate over coset index. For each element, `element[i][j]` is oracle
+    /// index `i` -> element `j`
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -319,7 +293,7 @@ impl<F: PrimeField> PendingProverMessage<F> {
 
 /// Contains structure and degree bound information about prover round messages,
 /// but does not contain real messages.
-#[derive(Eq, PartialEq, Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct ProverRoundMessageInfo {
     /// Degree bounds of oracle evaluations, in order.
     pub reed_solomon_code_degree_bound: Vec<usize>,
@@ -329,30 +303,120 @@ pub struct ProverRoundMessageInfo {
     /// Number of short messages. Those messages will be included in proof in
     /// entirety.
     pub num_short_messages: usize,
-    /// Length of each message oracles in current round.
-    pub oracle_length: usize,
-    /// log2(coset size)
-    /// Set it to zero to disable leaf as coset.
+    /// The type of leaves: whether it uses codeword domain or custom length and localization.
+    pub leaves_type: LeavesType,
+    /// Number of elements in each oracle in this round.
+    pub length: usize,
+    /// Localization parameter for this round. When serializing to a merkle tree, each leaf is a hash of `2 ^ localization_parameter` elements.
+    /// For example, if we have elements `[1,2,3,4,5,6,7,8]` and localization parameter is 1, then the serialized merkle tree leaves will be
+    /// `[H(1,5), H(2,6), H(3,7), H(4,8)]`.   
     pub localization_parameter: usize,
 }
 
+/// Builds a `ProverRoundMessageInfo` from a `ProverRoundMessageInfoBuilder`.
+pub struct ProverRoundMessageInfoBuilder{
+    reed_solomon_code_degree_bound: Vec<usize>,
+    num_message_oracles: usize,
+    num_short_messages: usize,
+    length: usize,
+    localization_parameter: usize,
+    leaves_type: LeavesType,
+}
+
 impl ProverRoundMessageInfo {
-    /// Return a new round message information.
+    /// Create a builder for prover round message info.
+    /// * `leaves_options`: `UseCodewordDomain | Custom`
+    /// * `length`: length of codeword
+    /// * `localization_parameter`: localization parameter
     pub fn new(
-        reed_solomon_code_degree_bound: Vec<usize>,
-        num_message_oracles: usize,
-        num_short_messages: usize,
-        oracle_length: usize,
+        leaves_options: LeavesType,
+        length: usize,
         localization_parameter: usize,
-    ) -> Self {
-        ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound,
-            num_message_oracles,
-            num_short_messages,
-            oracle_length,
+    ) -> ProverRoundMessageInfoBuilder {
+        ProverRoundMessageInfoBuilder {
+            reed_solomon_code_degree_bound: vec![],
+            num_message_oracles: 0,
+            num_short_messages: 0,
+            leaves_type: leaves_options,
+            length,
             localization_parameter,
         }
     }
+
+    /// Builds prover round message info using codeword domain.
+    pub fn new_using_codeword_domain<P, S, F>(
+        transcript: &mut SimulationTranscript<P, S, F>,
+    ) -> ProverRoundMessageInfoBuilder
+    where
+        P: Config<Leaf = [F]>,
+        S: CryptographicSponge,
+        F: PrimeField + Absorb,
+        P::InnerDigest: Absorb,
+    {
+        let length = transcript
+            .ldt_codeword_domain
+            .expect("codeword domain not set")
+            .size();
+        let localization_parameter = transcript
+            .ldt_localization_parameter
+            .expect("codeword localization parameter not set");
+        Self::new(UseCodewordDomain, length, localization_parameter)
+    }
+
+    /// Builds prover round message info using custom length and localization.
+    pub fn new_using_custom_length_and_localization(
+        length: usize,
+        localization_parameter: usize,
+    ) -> ProverRoundMessageInfoBuilder {
+        Self::new(Custom, length, localization_parameter)
+    }
+}
+
+impl ProverRoundMessageInfoBuilder
+{
+    /// Degree bounds of oracle evaluations, in order.
+    pub fn with_reed_solomon_codes_degree_bounds(mut self, degrees: Vec<usize>) -> Self
+    {
+        if self.leaves_type == Custom {
+            panic!("Cannot set oracle with degree bounds when leaves_options is Custom");
+        }
+        self.reed_solomon_code_degree_bound = degrees;
+        self
+    }
+    /// Number of message oracles without degree bound. Those oracles will not
+    /// be processed by LDT.
+    pub fn with_num_message_oracles(mut self, num: usize) -> Self {
+        self.num_message_oracles = num;
+        self
+    }
+    /// Number of short messages. Those messages will be included in proof in
+    /// entirety.
+    pub fn with_num_short_messages(mut self, num: usize) -> Self {
+        self.num_short_messages = num;
+        self
+    }
+
+    /// Builds a `ProverRoundMessageInfo` from this builder.
+    pub fn build(self) -> ProverRoundMessageInfo {
+        ProverRoundMessageInfo {
+            reed_solomon_code_degree_bound: self.reed_solomon_code_degree_bound,
+            num_message_oracles: self.num_message_oracles,
+            num_short_messages: self.num_short_messages,
+            leaves_type: self.leaves_type,
+            length: self.length,
+            localization_parameter: self.localization_parameter,
+        }
+    }
+}
+
+/// Specify the length and localization parameter of an oracle.
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+pub enum LeavesType {
+    /// Indicates that this round message uses same domain as codeword domain.
+    UseCodewordDomain,
+    /// Indicates that this round message uses custom length and localization.
+    /// In this case, oracles with degree bound cannot be used in this round.
+    Custom,
 }
 
 impl ProverRoundMessageInfo {

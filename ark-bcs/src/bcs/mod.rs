@@ -2,8 +2,10 @@ use ark_crypto_primitives::merkle_tree::{Config as MTConfig, LeafParam, TwoToOne
 
 /// BCS prover.
 pub mod prover;
-/// BCS transcript used by IOP interface.
+/// BCS transcript used by IOP Prover.
 pub mod transcript;
+/// BCS transcript used by IOP Verifier.
+pub mod simulation_transcript;
 /// BCS verifier.
 pub mod verifier;
 

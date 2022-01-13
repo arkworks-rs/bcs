@@ -6,8 +6,10 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 
 use super::message::{MessagesCollection, ProverRoundMessageInfo};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
+use crate::iop::message::{CosetQueryResult, LeavesType};
 use ark_std::{boxed::Box, vec::Vec};
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, Read, Write, SerializationError};
+
 /// A trait for all oracle messages (including RS-code oracles, Non RS-code
 /// oracles, and IP short messages) sent in one round. Those oracles (except IP
 /// short messages) need to have same length.
@@ -27,7 +29,7 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     fn query(&mut self, position: &[usize]) -> Vec<Vec<F>> {
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
-        let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
+        let log_num_cosets = ark_std::log2(self.get_info().length) as usize - log_coset_size;
         let (coset_index, element_index_in_coset) =
             point_query_to_coset_query(position, log_num_cosets);
 
@@ -40,14 +42,14 @@ pub trait RoundOracle<F: PrimeField>: Sized {
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
     /// in this coset.
     #[tracing::instrument(skip(self))]
-    fn query_coset(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
+    fn query_coset(&mut self, coset_index: &[usize]) -> CosetQueryResult<F> {
         self.query_coset_without_tracer(coset_index)
     }
 
     /// Return the queried coset at `coset_index` of all oracles, but without
     /// tracing information. `result[i][j][k]` is coset index `i` -> oracle
     /// index `j` -> element `k` in this coset.
-    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>>;
+    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> CosetQueryResult<F>;
 
     /// Number of reed_solomon_codes oracles in this round.
     fn num_reed_solomon_codes_oracles(&self) -> usize;
@@ -86,7 +88,7 @@ fn point_query_to_coset_query(
 
 /// Given queried coset elements, recovered the original point query responses.
 fn coset_query_response_to_point_query_response<F: PrimeField>(
-    queried_coset: Vec<Vec<Vec<F>>>,
+    queried_coset: CosetQueryResult<F>,
     element_index_in_coset: Vec<usize>,
 ) -> Vec<Vec<F>> {
     queried_coset
@@ -142,14 +144,12 @@ impl<F: PrimeField> RecordingRoundOracle<F> {
 
     /// Return a succinct oracle, which only contains queried responses.
     pub fn get_succinct(&self) -> SuccinctRoundMessage<F> {
-        let info = self.get_info();
         let queried_cosets = self
             .queried_coset_index
             .iter()
             .map(|coset_index| self.all_coset_elements[*coset_index].clone())
             .collect::<Vec<_>>();
         SuccinctRoundMessage {
-            info,
             queried_cosets,
             short_messages: self.short_messages.clone(),
         }
@@ -161,7 +161,7 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
         &self.short_messages[index]
     }
 
-    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
+    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> CosetQueryResult<F> {
         // record the coset query
         self.queried_coset_index.extend_from_slice(coset_index);
         let result = coset_index
@@ -169,7 +169,7 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
             .map(|coset_index| {
                 self.all_coset_elements[*coset_index % self.all_coset_elements.len()].clone()
             })
-            .collect::<Vec<_>>();
+            .collect();
         result
     }
 
@@ -178,7 +178,7 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
     }
 
     fn oracle_length(&self) -> usize {
-        self.info.oracle_length
+        self.info.length
     }
 
     fn get_info(&self) -> ProverRoundMessageInfo {
@@ -189,8 +189,6 @@ impl<F: PrimeField> RoundOracle<F> for RecordingRoundOracle<F> {
 /// Succinct Round message that is going to be included in the proof.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct SuccinctRoundMessage<F: PrimeField> {
-    /// Oracle Info
-    pub info: ProverRoundMessageInfo,
     /// Queried cosets. Axes `[query order, oracle index (RS-code first),
     /// element position in coset]`
     pub queried_cosets: Vec<Vec<Vec<F>>>,
@@ -202,8 +200,9 @@ pub struct SuccinctRoundMessage<F: PrimeField> {
 impl<F: PrimeField> SuccinctRoundMessage<F> {
     /// Return a view of `self` such that the view records queries to the
     /// oracle.
-    pub fn get_view(&self) -> SuccinctRoundOracle<F> {
+    pub fn get_view(&self, info: ProverRoundMessageInfo) -> SuccinctRoundOracle<F> {
         SuccinctRoundOracle {
+            info,
             underlying_message: &self,
             coset_queries: Vec::new(),
             current_query_pos: 0,
@@ -216,6 +215,8 @@ impl<F: PrimeField> SuccinctRoundMessage<F> {
 #[derive(Clone)]
 pub struct SuccinctRoundOracle<'a, F: PrimeField> {
     pub(crate) underlying_message: &'a SuccinctRoundMessage<F>,
+    /// Round Message Info expected by verifier
+    pub info: ProverRoundMessageInfo,
     /// Supposed queries of the verifier in order.
     pub coset_queries: Vec<usize>,
     current_query_pos: usize,
@@ -226,7 +227,7 @@ impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracle<'a, F> {
         &self.underlying_message.short_messages[index]
     }
 
-    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> Vec<Vec<Vec<F>>> {
+    fn query_coset_without_tracer(&mut self, coset_index: &[usize]) -> CosetQueryResult<F> {
         self.coset_queries.extend_from_slice(coset_index);
         assert!(
             self.current_query_pos + coset_index.len()
@@ -237,22 +238,22 @@ impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracle<'a, F> {
             [self.current_query_pos..self.current_query_pos + coset_index.len()]
             .to_vec();
         self.current_query_pos += coset_index.len();
-        result
+        result.into()
     }
 
     fn num_reed_solomon_codes_oracles(&self) -> usize {
-        self.underlying_message
+        self
             .info
             .reed_solomon_code_degree_bound
             .len()
     }
 
     fn oracle_length(&self) -> usize {
-        self.underlying_message.info.oracle_length
+        self.info.length
     }
 
     fn get_info(&self) -> ProverRoundMessageInfo {
-        self.underlying_message.info.clone()
+        self.info.clone()
     }
 }
 
@@ -264,7 +265,7 @@ pub type CosetEvaluator<F, O> = Box<
             &mut MessagesCollection<F, O>, // iop_messages
             &[usize],                      // query_position as coset_index
             &[Radix2CosetDomain<F>],       // query cosets
-        ) -> Vec<Vec<Vec<F>>>
+        ) -> CosetQueryResult<F>
         + 'static, /* result[i][j][k]` is coset index `i` -> oracle index `j`
                     * -> element `k`
                     * in this coset. */
@@ -321,7 +322,7 @@ impl<F: PrimeField, O: RoundOracle<F>> VirtualOracle<F, O> {
         &self,
         coset_index: &[usize],
         iop_messages: &mut MessagesCollection<F, O>,
-    ) -> Vec<Vec<Vec<F>>> {
+    ) -> CosetQueryResult<F> {
         // convert coset index to cosets
         let queried_cosets = coset_index
             .iter()
@@ -338,11 +339,11 @@ impl<F: PrimeField, O: RoundOracle<F>> VirtualOracle<F, O> {
     /// Get information about this oracle.
     pub fn get_info(&self) -> ProverRoundMessageInfo {
         ProverRoundMessageInfo::new(
-            self.test_bound.clone(),
-            0,
-            0,
+            LeavesType::UseCodewordDomain,
             self.codeword_domain.size(),
             self.localization_param,
         )
+        .with_reed_solomon_codes_degree_bounds(self.test_bound.clone())
+        .build()
     }
 }
