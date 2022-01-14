@@ -55,13 +55,12 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
                     let next_domain = current_domain.fold(localization_curr);
                     transcript.receive_prover_current_round(
                         namespace,
-                        ProverRoundMessageInfo {
-                            reed_solomon_code_degree_bound: Vec::default(), // none
-                            num_message_oracles: 1,
-                            num_short_messages: 0,
-                            localization_parameter: localization_next as usize,
-                            oracle_length: next_domain.size(),
-                        },
+                        ProverRoundMessageInfo::new_using_custom_length_and_localization(
+                            next_domain.size(),
+                            localization_next as usize,
+                        )
+                        .with_num_message_oracles(1)
+                        .build(),
                         iop_trace!("LDT prover message"),
                     )?;
 
@@ -76,14 +75,10 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
         transcript.submit_verifier_current_round(namespace, iop_trace!());
         transcript.receive_prover_current_round(
             namespace,
-            ProverRoundMessageInfo {
-                reed_solomon_code_degree_bound: Vec::default(),
-                num_message_oracles: 0,
-                num_short_messages: 1,
-                localization_parameter: 0, // ignored
-                oracle_length: 0,          // ignored
-            },
-            iop_trace!("LDT final polynomial"),
+            ProverRoundMessageInfo::new_using_custom_length_and_localization(0, 0)
+                .with_num_short_messages(1)
+                .build(),
+            iop_trace!("LDT final polynomial")
         )?;
 
         Ok(())
@@ -143,8 +138,7 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
                                 &[query_indices[0].clone()],
                                 iop_trace!("rl_ldt query codewords"),
                             )?
-                            .pop()
-                            .unwrap()
+                            .assume_single_coset()
                             .into_iter()
                             .map(|round| round.into_iter());
                         let degrees = transcript_messages
@@ -200,8 +194,7 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
                                 &[query_index.clone()],
                                 iop_trace!("rl_ldt query fri message"),
                             )?
-                            .pop()
-                            .unwrap(); // get the first coset position (only one position)
+                            .assume_single_coset(); // get the first coset position (only one position)
                         assert_eq!(response.len(), 1);
                         Ok(response.pop().unwrap())
                     })

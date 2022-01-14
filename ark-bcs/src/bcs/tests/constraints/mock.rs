@@ -78,13 +78,10 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         MTG::InnerDigest: AbsorbGadget<CF>,
     {
         // prover send
-        let expected_info = ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: vec![],
-            num_message_oracles: 2,
-            num_short_messages: 1,
-            oracle_length: 256,
-            localization_parameter: 2,
-        };
+        let expected_info =ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 2)
+            .with_num_message_oracles(2)
+            .with_num_short_messages(1)
+            .build();
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         // verifier send
@@ -97,23 +94,17 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         // prover send
-        let expected_info = ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: vec![],
-            num_message_oracles: 1,
-            num_short_messages: 1,
-            oracle_length: 256,
-            localization_parameter: 0,
-        };
+        let expected_info = ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 0)
+        .with_num_message_oracles(1)
+        .with_num_short_messages(1)
+        .build();
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         // prover send2
-        let expected_info = ProverRoundMessageInfo {
-            reed_solomon_code_degree_bound: vec![8],
-            num_message_oracles: 0,
-            num_short_messages: 1,
-            oracle_length: 128,
-            localization_parameter: 0,
-        };
+        let expected_info =  ProverRoundMessageInfo::new_using_codeword_domain(transcript)
+            .with_reed_solomon_codes_degree_bounds(vec![8])
+            .with_num_short_messages(1)
+            .build();
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         // prover send virtual oracle

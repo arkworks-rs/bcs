@@ -279,7 +279,7 @@ where
             self.verifier_messages.push(round_msg);
             self.attach_latest_verifier_round_to_namespace(namespace, trace)
         } else {
-            panic!("Current pending message is not prover message!")
+            unreachable!() // TODO: refactor PendingMessage structure
         }
     }
 

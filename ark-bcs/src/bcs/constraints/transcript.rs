@@ -4,7 +4,7 @@ use crate::{
         bookkeeper::{MessageBookkeeper, NameSpace},
         constraints::{
             message::VerifierMessageVar,
-            oracles::{CosetVarEvaluator, SuccinctRoundMessageVar, VirtualOracleVar},
+            oracles::{CosetVarEvaluator, VirtualOracleVar},
         },
         message::{MsgRoundRef, ProverRoundMessageInfo},
     },
@@ -20,6 +20,7 @@ use ark_sponge::{
     Absorb,
 };
 use ark_std::{mem::take, vec::Vec};
+use crate::iop::message::LeavesType;
 
 /// R1CS Variable for simulation transcript used by verifier.
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
@@ -32,9 +33,10 @@ where
     F: Absorb,
     MTG::InnerDigest: AbsorbGadget<F>,
 {
-    pub(crate) prover_messages_info: Vec<ProverRoundMessageInfo>,
-    prover_mt_roots: &'a [Option<MTG::InnerDigest>],
-    prover_short_messages: Vec<&'a Vec<Vec<FpVar<F>>>>,
+    pub(crate) expected_prover_messages_info: Vec<ProverRoundMessageInfo>,
+
+    pub(crate) proof: &'a BCSProofVar<MT, MTG, F>,
+
     pub(crate) sponge: S::Var,
     pub(crate) current_prover_round: usize,
     pub(crate) reconstructed_verifier_messages: Vec<Vec<VerifierMessageVar<F>>>,
@@ -66,27 +68,16 @@ where
         ldt_localization_parameter: Option<usize>,
         trace: TraceInfo,
     ) -> Self {
-        let prover_short_messages: Vec<_> = bcs_proof
-            .prover_iop_messages_by_round
-            .iter()
-            .map(|msg| &msg.short_messages)
-            .collect();
-        let prover_messages_info: Vec<_> = bcs_proof
-            .prover_iop_messages_by_round
-            .iter()
-            .map(|msg| msg.info.clone())
-            .collect();
         Self {
-            prover_short_messages,
-            prover_messages_info,
-            prover_mt_roots: &bcs_proof.prover_messages_mt_root,
-            sponge,
-            current_prover_round: 0,
-            bookkeeper: MessageBookkeeper::new(trace),
-            reconstructed_verifier_messages: Vec::new(),
-            pending_verifier_messages: Vec::new(),
+            proof: bcs_proof,
+            expected_prover_messages_info: Vec::new(),
             ldt_codeword_domain,
             ldt_localization_parameter,
+            sponge,
+            current_prover_round: 0,
+            reconstructed_verifier_messages: Vec::new(),
+            pending_verifier_messages: Vec::new(),
+            bookkeeper: MessageBookkeeper::new(trace),
             registered_virtual_oracles: Vec::new(),
         }
     }
@@ -94,41 +85,6 @@ where
     /// Create a new namespace in this transcript
     pub fn new_namespace(&mut self, current_namespace: NameSpace, trace: TraceInfo) -> NameSpace {
         self.bookkeeper.new_namespace(trace, current_namespace.id)
-    }
-
-    /// Create a simulation transcript from a list of prover messages, its
-    /// corresponding merkle tree, sponge variable, and LDT information,
-    ///
-    /// `ldt_info` may panic if `NoLDT` is used.
-    pub fn from_prover_messages(
-        prover_iop_messages_by_round: &'a [SuccinctRoundMessageVar<F>],
-        prover_iop_messages_mt_roots_by_round: &'a [Option<MTG::InnerDigest>],
-        sponge_var: S::Var,
-        ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
-        ldt_localization_parameter: Option<usize>,
-        trace: TraceInfo,
-    ) -> Self {
-        let prover_short_messages = prover_iop_messages_by_round
-            .iter()
-            .map(|msg| &msg.short_messages)
-            .collect::<Vec<_>>();
-        let prover_messages_info = prover_iop_messages_by_round
-            .iter()
-            .map(|msg| msg.get_view().get_info().clone())
-            .collect();
-        Self {
-            prover_short_messages,
-            prover_messages_info,
-            prover_mt_roots: prover_iop_messages_mt_roots_by_round,
-            sponge: sponge_var,
-            current_prover_round: 0,
-            bookkeeper: MessageBookkeeper::new(trace),
-            reconstructed_verifier_messages: Vec::new(),
-            pending_verifier_messages: Vec::new(),
-            ldt_codeword_domain,
-            ldt_localization_parameter,
-            registered_virtual_oracles: Vec::new(),
-        }
     }
 
     /// Number of submitted rounds in the transcript
@@ -148,11 +104,13 @@ where
     pub fn receive_prover_current_round(
         &mut self,
         ns: NameSpace,
-        mut expected_message_info: ProverRoundMessageInfo,
-        tracer: TraceInfo,
+        expected_message_info: ProverRoundMessageInfo,
+        trace: TraceInfo,
     ) -> Result<MsgRoundRef, SynthesisError> {
         if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
-            expected_message_info.localization_parameter = self.codeword_localization_parameter();
+            // LDT is used. This prover round must not use custom domain.
+            assert_eq!(expected_message_info.leaves_type, LeavesType::UseCodewordDomain,
+                       "This round contains low-degree oracle, but custom length and localization parameter is used. ");
         }
 
         let index = self.current_prover_round;
@@ -161,30 +119,116 @@ where
         let trace_info = {
             ark_std::format!(
                 "\n Message trace: {}\n Namespace trace: {}",
-                tracer,
+                trace,
                 ns.trace
             )
         };
 
-        if index >= self.prover_messages_info.len() {
+        if index >= self.expected_prover_messages_info.len() {
             panic!(
                 "Verifier tried to receive extra prove round message. {}",
                 trace_info
             );
         }
 
+        // check basic consistency with message received
+        let current_round = &self.proof.prover_iop_messages_by_round[index];
+        let num_short_message_expected = expected_message_info.num_short_messages;
+        let num_short_message_received = current_round.short_messages.len();
+        let num_oracles_expected = expected_message_info.num_oracles();
+        let num_oracles_received = current_round.queried_cosets.get(0).map_or(0, |c| c.len());
+
+        // here are some sanity check to make sure user is not doing wrong thing
+        // check 1: `num_short_messages` and `num_oracles` should be consistent with expected
         assert_eq!(
-            &expected_message_info, &self.prover_messages_info[index],
-            "prover message is not what verifier want at current round"
+            num_short_message_expected, num_short_message_received,
+            "Number of short messages received is not equal to expected. {}",
+            trace_info
         );
+        assert_eq!(
+            num_oracles_expected, num_oracles_received,
+            "Number of oracles received is not equal to expected. {}",
+            trace_info
+        );
+        // check 2: number of oracles in each query result should be the same
+        current_round.queried_cosets.iter().for_each(|c| {
+            assert_eq!(
+                c.len(),
+                num_oracles_expected,
+                "Number of oracles in each query result is not equal to expected. {}",
+                trace_info
+            );
+        });
+        // check 3: number of rs-codes should not exceed number of oracles
+        assert!(
+            expected_message_info.reed_solomon_code_degree_bound.len() <= num_oracles_expected,
+            "Number of Reed-Solomon codes is greater than number of oracles. {}",
+            trace_info
+        );
+        // check 4: if there are rs-codes, LeavesType should be UseCodewordDomain
+        if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
+            assert_eq!(
+                expected_message_info.leaves_type,
+                LeavesType::UseCodewordDomain,
+                "If there are Reed-Solomon codes, leaves type should be UseCodewordDomain. {}",
+                trace_info
+            );
+        }
+        // check 5: if LeavesType is UseCodewordDomain, then length and localization parameter should be same as length and localization for transcript
+        if expected_message_info.leaves_type == LeavesType::UseCodewordDomain {
+            assert_eq!(
+                expected_message_info.length,
+                self.ldt_codeword_domain.expect("codeword domain is not set").size(),
+                "If leaves type is UseCodewordDomain, then length and localization parameter should be same as length and localization for transcript. {}",
+                trace_info
+            );
+            assert_eq!(
+                expected_message_info.localization_parameter,
+                self.ldt_localization_parameter.expect("localization parameter is not set"),
+                "If leaves type is UseCodewordDomain, then length and localization parameter should be same as length and localization for transcript. {}",
+                trace_info
+            );
+        }
+
+        // check 6.1: if there are no message oracles, length and localization parameter should be 0
+        if num_oracles_expected == 0 {
+            assert_eq!(
+                expected_message_info.length, 0,
+                "If there are no message oracles, length should be 0. {}",
+                trace_info
+            );
+            assert_eq!(
+                expected_message_info.localization_parameter, 0,
+                "If there are no message oracles, localization parameter should be 0. {}",
+                trace_info
+            );
+        }
+        // check 6.2: if there are message oracles length should be power of 2, and 2^localization_parameter should <= length
+        else {
+            assert!(
+                expected_message_info.length.is_power_of_two(),
+                "Length should be power of 2. {}",
+                trace_info
+            );
+            assert!(
+                (1 << expected_message_info.localization_parameter) <= expected_message_info.length,
+                "2^localization_parameter should <= oracle length. {}",
+                trace_info
+            );
+        }
 
         // absorb merkle tree root, if any
-        self.sponge.absorb(&self.prover_mt_roots[index])?;
+        self.sponge
+            .absorb(&self.proof.prover_messages_mt_root[index])?;
         // absorb short messages for this round, if any
-        self.prover_short_messages[index]
+        self.proof.prover_iop_messages_by_round[index]
+            .short_messages
             .iter()
             .try_for_each(|msg| self.sponge.absorb(msg))?;
-        Ok(self.attach_latest_prover_round_to_namespace(ns, false, tracer))
+        // attach prover info to transcript
+        self.expected_prover_messages_info
+            .push(expected_message_info);
+        Ok(self.attach_latest_prover_round_to_namespace(ns, false, trace))
     }
 
     /// register a virtual oracle constraints specified by coset evaluator
@@ -200,6 +244,7 @@ where
             self.codeword_domain(),
             self.codeword_localization_parameter(),
         );
+        assert!(!self.is_pending_message_available());
         let virtual_oracle = VirtualOracleVar::new(
             coset_evaluator,
             codeword_domain,

@@ -18,10 +18,11 @@ ark-poly = { version = "^0.3.0", default-features = false }
 ark-sponge = { version = "^0.3.0", default-features = false }
 ark-crypto-primitives = { version = "^0.3.0", default-features = false }
 ark-std = { version = "^0.3.0", default-features = false }
-ark-bcs = { git = "https://github.com/arkworks-rs/bcs", branch = "vo", default-features = false }
 ark-ldt = { git = "https://github.com/arkworks-rs/ldt", branch = "main", default-features = false }
 ark-relations = { version = "^0.3.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.3.1", default-features = false, optional = true }
+
+ark-bcs = { path = "../ark-bcs", default-features = false }
 
 tracing = { version = "0.1", default-features = false, features = ["attributes"] }
 derivative = { version = "2.0", features = ["use_core"] }

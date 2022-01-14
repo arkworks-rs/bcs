@@ -12,14 +12,13 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use ark_std::{boxed::Box, vec::Vec};
+use crate::iop::message::{CosetQueryResult, LeavesType};
 
 use super::message::MessagesCollectionVar;
 
 #[derive(Clone)]
 /// Round oracle variable that contains only queried leaves.
 pub struct SuccinctRoundMessageVar<F: PrimeField> {
-    /// Oracle Info
-    pub info: ProverRoundMessageInfo,
     /// Leaves at query indices.
     pub queried_cosets: Vec<Vec<Vec<FpVar<F>>>>,
     // note that queries will be provided by verifier instead
@@ -30,8 +29,9 @@ pub struct SuccinctRoundMessageVar<F: PrimeField> {
 impl<F: PrimeField> SuccinctRoundMessageVar<F> {
     /// Return a view of succinct round oracle var. View contains a reference to
     /// the oracle, as well as recorded queries and position pointer.
-    pub fn get_view(&self) -> SuccinctRoundOracleVar<F> {
+    pub fn get_view(&self, info: ProverRoundMessageInfo) -> SuccinctRoundOracleVar<F> {
         SuccinctRoundOracleVar {
+            info,
             oracle: &self,
             coset_queries: Vec::new(),
             current_query_pos: 0,
@@ -79,6 +79,8 @@ impl<F: PrimeField> AllocVar<SuccinctRoundMessage<F>, F> for SuccinctRoundMessag
 /// query position.
 pub struct SuccinctRoundOracleVar<'a, F: PrimeField> {
     pub(crate) oracle: &'a SuccinctRoundMessageVar<F>,
+    /// Round Message Info expected by Verifier
+    pub info: ProverRoundMessageInfo,
     /// queries calculated by the verifier
     pub coset_queries: Vec<Vec<Boolean<F>>>,
     current_query_pos: usize,
@@ -93,8 +95,8 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVar<'a, F> {
     ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
-        let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
-        let log_oracle_length = ark_std::log2(self.oracle.info.oracle_length) as usize;
+        let log_num_cosets = ark_std::log2(self.oracle_length()) as usize - log_coset_size;
+        let log_oracle_length = ark_std::log2(self.oracle_length()) as usize;
         assert_eq!(log_oracle_length, log_coset_size + log_num_cosets);
         // pad position to appropriate length
         let position = position
@@ -113,14 +115,14 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVar<'a, F> {
     /// Return the queried coset at `coset_index` of all oracles.
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
     /// in this coset.
-    pub fn query_coset(&mut self, coset_index: &[Vec<Boolean<F>>]) -> Vec<Vec<Vec<FpVar<F>>>> {
+    pub fn query_coset(&mut self, coset_index: &[Vec<Boolean<F>>]) -> CosetQueryResult<FpVar<F>> {
         self.query_coset_without_tracer(coset_index)
     }
 
     fn query_coset_without_tracer(
         &mut self,
         coset_index: &[Vec<Boolean<F>>],
-    ) -> Vec<Vec<Vec<FpVar<F>>>> {
+    ) -> CosetQueryResult<FpVar<F>> {
         self.coset_queries.extend_from_slice(coset_index);
         assert!(
             self.current_query_pos + coset_index.len() <= self.oracle.queried_cosets.len(),
@@ -130,23 +132,23 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVar<'a, F> {
             [self.current_query_pos..self.current_query_pos + coset_index.len()]
             .to_vec();
         self.current_query_pos += coset_index.len();
-        result
+        result.into()
     }
 
     /// Number of reed_solomon_codes oracles in this round.
     pub fn num_reed_solomon_codes_oracles(&self) -> usize {
-        self.get_info().reed_solomon_code_degree_bound.len()
+        self.info.reed_solomon_code_degree_bound.len()
     }
 
     /// length of each oracle
     pub fn oracle_length(&self) -> usize {
-        self.get_info().oracle_length
+        self.info.length
     }
 
     /// Get oracle info, including number of oracles for each type and degree
     /// bound of each RS code oracle.
-    pub fn get_info(&self) -> &ProverRoundMessageInfo {
-        &self.oracle.info
+    pub fn get_info(&self) -> ProverRoundMessageInfo {
+        self.info.clone()
     }
 
     /// Get degree bound of all reed-solomon codes in this round.
@@ -176,7 +178,7 @@ fn point_query_to_coset_query<F: PrimeField>(
 }
 
 fn coset_query_response_to_point_query_response<F: PrimeField>(
-    queried_coset: Vec<Vec<Vec<FpVar<F>>>>,
+    queried_coset: CosetQueryResult<FpVar<F>>,
     element_index_in_coset: Vec<Vec<Boolean<F>>>,
 ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
     queried_coset.into_iter()
@@ -200,7 +202,7 @@ pub type CosetVarEvaluator<CF> = Box<
             &mut MessagesCollectionVar<CF>, // iop messages
             &[Vec<Boolean<CF>>],            // coset queries
             &[Radix2DomainVar<CF>],         // query cosets
-        ) -> Result<Vec<Vec<Vec<FpVar<CF>>>>, SynthesisError>
+        ) -> Result<CosetQueryResult<FpVar<CF>>, SynthesisError>
         + 'static,
 >;
 
@@ -242,7 +244,7 @@ impl<CF: PrimeField> VirtualOracleVar<CF> {
     ) -> Result<Vec<Vec<FpVar<CF>>>, SynthesisError> {
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
-        let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
+        let log_num_cosets = ark_std::log2(self.get_info().length) as usize - log_coset_size;
 
         let (coset_index, element_index_in_coset) =
             point_query_to_coset_query(positions, log_num_cosets);
@@ -258,7 +260,7 @@ impl<CF: PrimeField> VirtualOracleVar<CF> {
         &self,
         coset_index: &[Vec<Boolean<CF>>],
         iop_messages: &mut MessagesCollectionVar<CF>,
-    ) -> Result<Vec<Vec<Vec<FpVar<CF>>>>, SynthesisError> {
+    ) -> Result<CosetQueryResult<FpVar<CF>>, SynthesisError> {
         let codeword_domain_var = Radix2DomainVar::new(
             self.codeword_domain.gen(),
             self.codeword_domain.dim() as u64,
@@ -281,12 +283,12 @@ impl<CF: PrimeField> VirtualOracleVar<CF> {
     /// bound of each RS code oracle.
     pub fn get_info(&self) -> ProverRoundMessageInfo {
         ProverRoundMessageInfo::new(
-            self.test_bound.clone(),
-            0,
-            0,
+            LeavesType::UseCodewordDomain,
             self.codeword_domain.size(),
             self.localization_param,
         )
+            .with_reed_solomon_codes_degree_bounds(self.test_bound.clone())
+            .build()
     }
 }
 

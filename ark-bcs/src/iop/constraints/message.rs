@@ -9,6 +9,7 @@ use ark_ff::PrimeField;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use ark_std::{borrow::Borrow, vec::Vec};
+use crate::iop::message::CosetQueryResult;
 
 use super::oracles::{SuccinctRoundOracleVar, VirtualOracleVar};
 
@@ -169,7 +170,7 @@ impl<'a, 'b, F: PrimeField> AtProverRoundVar<'a, 'b, F> {
         &mut self,
         positions: &[Vec<Boolean<F>>],
         _tracer: TraceInfo,
-    ) -> Result<Vec<Vec<Vec<FpVar<F>>>>, SynthesisError> {
+    ) -> Result<CosetQueryResult<FpVar<F>>, SynthesisError> {
         let round = self.round;
         let _self = &mut self._self;
         if !round.is_virtual {
