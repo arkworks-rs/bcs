@@ -179,7 +179,7 @@ mod tests {
 
     type F = ark_bls12_381::Fr;
 
-    fn test_coset_evaluate_template(vp_coset: Radix2CosetDomain<F>, coset: Radix2CosetDomain<F>) {
+    fn test_coset_evaluate_template(vp_coset: Radix2CosetDomain<F>, coset: Radix2CosetDomain<F>) -> Vec<F> {
         let expected_eval = (0..coset.size())
             .map(|i| {
                 coset.element(i).pow(&[vp_coset.size() as u64])
@@ -188,6 +188,7 @@ mod tests {
             .collect::<Vec<_>>();
         let actual_eval = VanishingPoly::new(vp_coset).evaluation_over_coset(&coset);
         assert_eq!(actual_eval, expected_eval);
+        actual_eval
     }
 
     #[test]
@@ -208,6 +209,16 @@ mod tests {
 
         // for now, it's not possible to have |S| % |H| != 0 or |H| % |S| != 0,
         // because they are both power of 2.
+
+        // more complex case
+        let coset = Radix2CosetDomain::new_radix2_coset(256, F::rand(&mut rng));
+        let eval = test_coset_evaluate_template(vp_domain, coset);
+        (0..(256usize>>2)).for_each(|i| {
+            let (pos, coset) = coset.query_position_to_coset(i, 2);
+            let coset_eval = test_coset_evaluate_template(vp_domain, coset);
+            let expected = pos.into_iter().map(|p| eval[p]).collect::<Vec<_>>();
+            assert_eq!(coset_eval, expected);
+        })
     }
 
     #[test]

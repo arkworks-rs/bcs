@@ -241,6 +241,15 @@ impl<T: Clone> CosetQueryResult<T> {
         self.0.pop().unwrap()
     }
 
+    /// assume this query response has only one oracle, return this coset
+    /// result. `result[i]` is coset evaluations of coset `i`.
+    pub fn assume_single_oracle(self) -> Vec<Vec<T>> {
+        self.0.into_iter().map(|mut coset_eval| {
+            assert_eq!(coset_eval.len(), 1, "has multiple oracle evaluations");
+            coset_eval.pop().unwrap()
+        }).collect()
+    }
+
     /// iterate over coset index. For each element, `element[i][j]` is oracle
     /// index `i` -> element `j`
     pub fn iter(&self) -> impl Iterator<Item = &Vec<Vec<T>>> {
@@ -253,7 +262,7 @@ impl<T: Clone> CosetQueryResult<T> {
     }
 
     /// Return `self` query_result of a single oracle.
-    /// `query_result[i][j]` is coset index `i` -> element `j`
+    /// `query_result[i][j]` is coset index `i` -> element `j`. The shape of returned result will be `(num_cosets, 1, coset_size)`
     pub fn from_single_oracle_result(query_result: Vec<Vec<T>>) -> Self {
         query_result.into_iter().map(|coset| vec![coset]).collect()
     }

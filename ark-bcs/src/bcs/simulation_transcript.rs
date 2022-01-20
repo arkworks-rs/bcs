@@ -248,8 +248,8 @@ where
         // verifier round
         assert!(!self.is_pending_message_available());
         let (codeword_domain, localization_param) = (
-            self.ldt_codeword_domain(),
-            self.ldt_localization_parameter(),
+            self.codeword_domain(),
+            self.localization_parameter(),
         );
         let virtual_oracle = VirtualOracle::new(
             coset_evaluator,
@@ -371,7 +371,7 @@ where
     ///
     /// ## Panics
     /// This function panics if LDT is not enabled.
-    fn ldt_codeword_domain(&self) -> Radix2CosetDomain<F> {
+    pub fn codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")
     }
 
@@ -381,7 +381,7 @@ where
     /// ## Panics
     /// This function panics if LDT is not enabled or localization parameter is
     /// not supported by LDT.
-    fn ldt_localization_parameter(&self) -> usize {
+    pub fn localization_parameter(&self) -> usize {
         self.ldt_localization_parameter
             .expect("LDT not enabled or localization parameter is not supported by LDT")
     }

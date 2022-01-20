@@ -42,6 +42,13 @@ pub struct LinearCombinationLDTParameters<F: PrimeField + Absorb> {
     pub num_queries: usize,
 }
 
+impl<F: PrimeField + Absorb> LinearCombinationLDTParameters<F> {
+    /// Create a new parameter for Linear Combination LDT
+    pub fn new(max_degree_bound: u64, localization_param: Vec<u64>, codeword_domain: Radix2CosetDomain<F>, num_queries: usize) -> Self {
+        LinearCombinationLDTParameters { fri_parameters: FRIParameters::new(max_degree_bound, localization_param, codeword_domain), num_queries }
+    }
+}
+
 impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
     type LDTParameters = LinearCombinationLDTParameters<F>;
 

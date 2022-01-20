@@ -73,6 +73,8 @@ macro_rules! iop_trace {
 
 #[cfg(test)]
 mod compile_tests {
+    use crate::tracer::TraceInfo;
+
     #[test]
     fn test_it_compiles() {
         let _tracer1 = iop_trace!();
@@ -83,5 +85,19 @@ mod compile_tests {
             eprintln!("tracer1: {}", _tracer1);
             eprintln!("tracer2: {}", _tracer2);
         }
+    }
+
+    const TRACE1: TraceInfo = iop_trace!();
+    const TRACE2: TraceInfo = iop_trace!("some message title");
+    const TRACE2_STR: &str = TRACE2.description();
+
+    #[test]
+    fn test_it_compilers_in_const() {
+        #[cfg(feature = "std")]
+            {
+                eprintln!("tracer1: {}", TRACE1);
+                eprintln!("tracer2: {}", TRACE2);
+                eprintln!("tracer2 str: {}", TRACE2_STR);
+            }
     }
 }

@@ -34,15 +34,8 @@ pub(crate) mod test_utils;
 /// Some handy imports for users.
 pub mod prelude;
 
-use ark_crypto_primitives::merkle_tree::Config;
-use ark_ff::PrimeField;
-use ark_sponge::Absorb;
 use ark_std::boxed::Box;
 
 /// Universal Error Type
 pub type Error = Box<dyn ark_std::error::Error>;
 
-/// A trait for defining merkle tree config.
-pub trait IOPMTConfig<F: PrimeField + Absorb>: Config<Leaf=[F]> where Self::InnerDigest: Absorb {
-}
-impl<F: PrimeField + Absorb, T: IOPMTConfig<F>> IOPMTConfig<F> for T where T::InnerDigest: Absorb {}
