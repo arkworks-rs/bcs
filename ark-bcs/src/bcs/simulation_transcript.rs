@@ -5,18 +5,18 @@ use ark_std::vec::Vec;
 use tracing::info;
 
 use crate::iop::message::LeavesType;
+use crate::iop::oracles::VirtualOracle;
 use crate::{
     bcs::prover::BCSProof,
     iop::{
         bookkeeper::{MessageBookkeeper, NameSpace},
         message::{MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
-        oracles::{SuccinctRoundOracle, VirtualOracleWithInfo},
+        oracles::VirtualOracleWithInfo,
     },
     tracer::TraceInfo,
 };
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_std::mem::take;
-use crate::iop::oracles::VirtualOracle;
 
 /// A wrapper for BCS proof, so that verifier can reconstruct verifier messages
 /// by simulating commit phase easily.
@@ -54,7 +54,7 @@ pub struct SimulationTranscript<
     pub(crate) ldt_localization_parameter: Option<usize>,
 
     /// Virtual oracle registered during commit phase simulation.
-    pub(crate) registered_virtual_oracles: Vec<VirtualOracleWithInfo<F, SuccinctRoundOracle<'a, F>>>,
+    pub(crate) registered_virtual_oracles: Vec<VirtualOracleWithInfo<F>>,
 }
 
 impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
@@ -236,24 +236,20 @@ where
     }
 
     /// Register a virtual oracle specified by coset evaluator.
-    pub fn register_prover_virtual_round<VO>(
+    pub fn register_prover_virtual_round<VO: VirtualOracle<F>>(
         &mut self,
         ns: NameSpace,
         oracle: VO,
         test_bound: Vec<usize>,
         constraint_bound: Vec<usize>,
         trace: TraceInfo,
-    ) -> MsgRoundRef
-    where for <'b> VO: VirtualOracle<F, SuccinctRoundOracle<'b, F>>
-    {
+    ) -> MsgRoundRef {
         info!("Register prover virtual oracle: {}", trace);
         // make sure that no virtual oracle is registered when we are halfway sampling
         // verifier round
         assert!(!self.is_pending_message_available());
-        let (codeword_domain, localization_param) = (
-            self.codeword_domain(),
-            self.localization_parameter(),
-        );
+        let (codeword_domain, localization_param) =
+            (self.codeword_domain(), self.localization_parameter());
         let virtual_oracle = VirtualOracleWithInfo::new(
             Box::new(oracle),
             codeword_domain,

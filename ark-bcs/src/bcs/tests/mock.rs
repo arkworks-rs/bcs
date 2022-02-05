@@ -29,9 +29,9 @@ struct MockVirtualOracle<F: PrimeField> {
     _field: PhantomData<F>,
 }
 
-impl<F: PrimeField, O: RoundOracle<F>> VirtualOracle<F, O> for MockVirtualOracle<F> {
+impl<F: PrimeField> VirtualOracle<F> for MockVirtualOracle<F> {
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<usize>)> {
-        vec![(self.round, vec![2])]
+        vec![(self.round, vec![0])] // take first oracle
     }
 
     fn evaluate(
@@ -106,7 +106,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
             let rhs: F = vm2.to_field_elements().unwrap()[0];
             F::from(x) + rhs
         });
-        let prover_oracle_2 = transcript
+        transcript
             .add_prover_round_with_custom_length_and_localization(256, 0)
             .send_short_message(msg1)
             .send_oracle_message_without_degree_bound(msg2)
@@ -122,7 +122,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
             F::from(0x56789u128),
         ]);
 
-        transcript
+        let prover_oracle_2 = transcript
             .add_prover_round_with_codeword_domain()
             .send_short_message(msg1)
             .send_univariate_polynomial(&msg2, 8)
@@ -202,7 +202,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
                 .with_num_message_oracles(1)
                 .with_num_short_messages(1)
                 .build();
-        let prover_oracle_2 =
+
             transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // prover send2
@@ -210,7 +210,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
             .with_reed_solomon_codes_degree_bounds(vec![8])
             .with_num_short_messages(1)
             .build();
-        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
+        let prover_oracle_2 = transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // prover send virtual oracle
         // always make sure arguments have type!

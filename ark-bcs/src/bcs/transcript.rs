@@ -53,7 +53,7 @@ where
     pub prover_message_oracles: Vec<RecordingRoundOracle<F>>,
     /// Virtual oracle registered during commit phase simulation. Each virtual oracle will only have one round.
     pub(crate) registered_virtual_oracles: Vec<(
-        VirtualOracleWithInfo<F, RecordingRoundOracle<F>>,
+        VirtualOracleWithInfo<F>,
         Vec<F>,
     )>,
     /// Each element `merkle_tree_for_each_round[i]` corresponds to the merkle
@@ -146,7 +146,7 @@ where
     /// * `evaluation_on_domain`: evaluation of this virtual round on evaluation
     ///   domain. `evaluation_on_domain[i]` is the evaluation of ith oracle at
     ///   this round.
-    pub fn register_prover_virtual_round<VO: VirtualOracle<F, RecordingRoundOracle<F>>>(
+    pub fn register_prover_virtual_round<VO: VirtualOracle<F>>(
         &mut self,
         ns: NameSpace,
         vo: VO,
@@ -177,7 +177,8 @@ where
                 let mut oracle_evaluations = self.get_previous_sent_prover_rs_codes(round);
                 idxes
                     .into_iter()
-                    .map(|idx| take(&mut oracle_evaluations[idx]))
+                    .map(|idx| take(oracle_evaluations.get_mut(idx).expect("Invalid oracle index")))
+                    .collect::<Vec<_>>()
             })
             .flatten()
             .collect::<Vec<_>>();

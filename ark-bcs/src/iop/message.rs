@@ -43,9 +43,10 @@ impl MsgRoundRef {
 /// Message can be accessed using namespace, or `MsgRoundRef`.
 /// This struct is used by verifier to access prover message oracles and
 /// verifier messages.
-pub struct MessagesCollection<F: PrimeField, O: RoundOracle<F>> {
+pub struct MessagesCollection<F: PrimeField, O: RoundOracle<F>>
+{
     pub(crate) real_oracles: Vec<O>,
-    pub(crate) virtual_oracles: Vec<Option<VirtualOracleWithInfo<F, O>>>,
+    pub(crate) virtual_oracles: Vec<Option<VirtualOracleWithInfo<F>>>,
     pub(crate) verifier_messages: Vec<Vec<VerifierMessage<F>>>,
     pub(crate) bookkeeper: MessageBookkeeper,
 }
@@ -53,7 +54,7 @@ pub struct MessagesCollection<F: PrimeField, O: RoundOracle<F>> {
 impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
     pub(crate) fn new(
         real_oracles: Vec<O>,
-        virtual_oracles: Vec<Option<VirtualOracleWithInfo<F, O>>>,
+        virtual_oracles: Vec<Option<VirtualOracleWithInfo<F>>>,
         verifier_messages: Vec<Vec<VerifierMessage<F>>>,
         bookkeeper: MessageBookkeeper,
     ) -> Self {
@@ -95,7 +96,7 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
     /// Take a virtual oracle and return a shadow `self` that can be used by
     /// virtual oracle. Current `self` will be temporarily unavailable when
     /// querying to prevent circular dependency.
-    fn take_virtual_oracle(&mut self, round: MsgRoundRef) -> (VirtualOracleWithInfo<F, O>, Self) {
+    fn take_virtual_oracle(&mut self, round: MsgRoundRef) -> (VirtualOracleWithInfo<F>, Self) {
         assert!(round.is_virtual);
 
         // move a virtual oracle, and make it temporarily available when querying to
@@ -122,7 +123,7 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
         &mut self,
         shadow_self: Self,
         round: MsgRoundRef,
-        vo: VirtualOracleWithInfo<F, O>,
+        vo: VirtualOracleWithInfo<F>,
     ) {
         self.real_oracles = shadow_self.real_oracles;
         self.virtual_oracles = shadow_self.virtual_oracles;

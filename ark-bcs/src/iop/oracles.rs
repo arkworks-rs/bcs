@@ -257,8 +257,8 @@ impl<'a, F: PrimeField> RoundOracle<F> for SuccinctRoundOracle<'a, F> {
 }
 
 /// A virtual oracle who make query to other virtual or non-virtual oracles.
-pub struct VirtualOracleWithInfo<F: PrimeField, O: RoundOracle<F>> {
-    coset_evaluator: Box<dyn VirtualOracle<F, O>>,
+pub struct VirtualOracleWithInfo<F: PrimeField> {
+    coset_evaluator: Box<dyn VirtualOracle<F>>,
     pub(crate) codeword_domain: Radix2CosetDomain<F>,
     pub(crate) localization_param: usize,
     pub(crate) test_bound: Vec<usize>,
@@ -267,11 +267,11 @@ pub struct VirtualOracleWithInfo<F: PrimeField, O: RoundOracle<F>> {
     // TODO: number of oracles
 }
 
-impl<F: PrimeField, O: RoundOracle<F>> VirtualOracleWithInfo<F, O> {
+impl<F: PrimeField> VirtualOracleWithInfo<F> {
     /// Create a new virtual round given a coset evaluator. Note that one
     /// virtual round can have multiple virtual oracles.
     pub fn new(
-        coset_evaluator: Box<dyn VirtualOracle<F, O>>,
+        coset_evaluator: Box<dyn VirtualOracle<F>>,
         codeword_domain: Radix2CosetDomain<F>,
         localization_param: usize,
         test_bound: Vec<usize>,
@@ -287,7 +287,7 @@ impl<F: PrimeField, O: RoundOracle<F>> VirtualOracleWithInfo<F, O> {
     }
 
     /// Query the virtual oracle points at `positions` in the codeword domain.
-    pub fn query_point(
+    pub fn query_point<O: RoundOracle<F>>(
         &self,
         positions: &[usize],
         iop_messages: &mut MessagesCollection<F, O>,
@@ -303,13 +303,11 @@ impl<F: PrimeField, O: RoundOracle<F>> VirtualOracleWithInfo<F, O> {
     }
 
     /// Query the virtual oracle cosets at `coset_index` in the codeword domain.
-    pub fn query_coset(
+    pub fn query_coset<O: RoundOracle<F>>(
         &self,
         coset_index: &[usize],
         iop_messages: &mut MessagesCollection<F, O>,
-    ) -> CosetQueryResult<F>
-
-    {
+    ) -> CosetQueryResult<F> {
         // first, construct constituent oracles
         let constituent_oracle_handles = self.coset_evaluator.constituent_oracle_handles();
 
@@ -322,7 +320,7 @@ impl<F: PrimeField, O: RoundOracle<F>> VirtualOracleWithInfo<F, O> {
                     idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
                     "idxes must be unique"
                 );
-                let query_responses = iop_messages.prover_round(round).query_coset(
+                let mut query_responses = iop_messages.prover_round(round).query_coset(
                     &coset_index,
                     iop_trace!("constituent oracle for virtual oracle"),
                 );
@@ -330,6 +328,7 @@ impl<F: PrimeField, O: RoundOracle<F>> VirtualOracleWithInfo<F, O> {
                 idxes
                     .into_iter()
                     .map(|idx| query_responses.take_oracle_index(idx))
+                    .collect::<Vec<_>>()
             })
             .flatten()
             .collect::<Vec<_>>();
@@ -367,7 +366,7 @@ impl<F: PrimeField, O: RoundOracle<F>> VirtualOracleWithInfo<F, O> {
 
 /// evaluator for virtual oracle
 /// It is enforced that implementors do not contain any reference with lifetime.
-pub trait VirtualOracle<F: PrimeField, O: RoundOracle<F>>: 'static
+pub trait VirtualOracle<F: PrimeField>: 'static
 {
     /// query constituent oracles as a message round handle, and the indices of oracles needed in that round
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<usize>)>;
