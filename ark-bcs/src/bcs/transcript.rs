@@ -2,18 +2,18 @@ use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::vec::Vec;
+use std::collections::BTreeSet;
 use tracing::info;
 
 use crate::iop::message::LeavesType;
 use crate::iop::message::LeavesType::{Custom, UseCodewordDomain};
+use crate::iop::oracles::VirtualOracle;
 use crate::{
     bcs::MTHashParameters,
     iop::{
         bookkeeper::{MessageBookkeeper, NameSpace, ToMsgRoundRef},
         message::{MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
-        oracles::{
-            CosetEvaluator, RecordingRoundOracle, RoundOracle, SuccinctRoundMessage, VirtualOracle,
-        },
+        oracles::{RecordingRoundOracle, RoundOracle, SuccinctRoundMessage, VirtualOracleWithInfo},
     },
     tracer::TraceInfo,
     Error,
@@ -51,11 +51,11 @@ where
     /// Each merkle tree leaf is a vector which each element correspond to
     /// the same location of different oracles
     pub prover_message_oracles: Vec<RecordingRoundOracle<F>>,
-    /// Virtual oracle registered during commit phase simulation.
-    /// The second element of each tuple has shape `(num_oracles,
-    /// codeword_size)`
-    pub(crate) registered_virtual_oracles:
-        Vec<(VirtualOracle<F, RecordingRoundOracle<F>>, Vec<Vec<F>>)>,
+    /// Virtual oracle registered during commit phase simulation. Each virtual oracle will only have one round.
+    pub(crate) registered_virtual_oracles: Vec<(
+        VirtualOracleWithInfo<F, RecordingRoundOracle<F>>,
+        Vec<F>,
+    )>,
     /// Each element `merkle_tree_for_each_round[i]` corresponds to the merkle
     /// tree for `prover_message_oracles[i]`. If no oracle messages in this
     /// round, merkle tree will be `None`.
@@ -146,11 +146,11 @@ where
     /// * `evaluation_on_domain`: evaluation of this virtual round on evaluation
     ///   domain. `evaluation_on_domain[i]` is the evaluation of ith oracle at
     ///   this round.
-    pub fn register_prover_virtual_round(
+    pub fn register_prover_virtual_round<VO: VirtualOracle<F, RecordingRoundOracle<F>>>(
         &mut self,
         ns: NameSpace,
-        coset_query_evaluator: CosetEvaluator<F, RecordingRoundOracle<F>>,
-        evaluations_on_domain: Vec<Vec<F>>,
+        vo: VO,
+        // evaluations_on_domain: Vec<Vec<F>>,
         test_bound: Vec<usize>,
         constraint_bound: Vec<usize>,
         trace: TraceInfo,
@@ -164,18 +164,30 @@ where
             self.codeword_localization_parameter(),
         );
 
-        // make sure all oracles in `evaluation_on_domain` has the same length as the
-        // size of `codeword_domain`
-        assert!(
-            evaluations_on_domain
-                .iter()
-                .all(|x| x.len() == codeword_domain.size()),
-            "All oracles in evaluation_on_domain should have the same length as the size of \
-             codeword_domain"
-        );
+        // evaluate the virtual oracle on codeword domain TODO
+        // first, get all the oracles needed
+        let oracle_handles = vo.constituent_oracle_handles();
+        let constituent_oracles = oracle_handles
+            .into_iter()
+            .map(|(round, idxes)| {
+                debug_assert!(
+                    idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
+                    "Duplicate oracle index"
+                );
+                let mut oracle_evaluations = self.get_previous_sent_prover_rs_codes(round);
+                idxes
+                    .into_iter()
+                    .map(|idx| take(&mut oracle_evaluations[idx]))
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        debug_assert!(constituent_oracles
+            .iter()
+            .all(|o| o.len() == self.codeword_domain().size()));
+        let vo_evaluations = vo.evaluate(self.codeword_domain(), constituent_oracles);
 
-        let virtual_oracle = VirtualOracle::new(
-            coset_query_evaluator,
+        let virtual_oracle = VirtualOracleWithInfo::new(
+            Box::new(vo),
             codeword_domain,
             localization_param,
             test_bound,
@@ -183,7 +195,7 @@ where
         );
 
         self.registered_virtual_oracles
-            .push((virtual_oracle, evaluations_on_domain));
+            .push((virtual_oracle, vo_evaluations));
         self.attach_latest_prover_round_to_namespace(ns, true, trace)
     }
 
@@ -215,7 +227,8 @@ where
     pub fn get_previously_sent_prover_rs_code(&self, at: impl ToMsgRoundRef, index: usize) -> &[F] {
         let msg_ref = at.to_prover_msg_round_ref(&self.bookkeeper);
         if msg_ref.is_virtual {
-            &self.registered_virtual_oracles[msg_ref.index].1[index]
+            assert_eq!(index, 0, "virtual round only has one oracle per round");
+            &self.registered_virtual_oracles[msg_ref.index].1
         } else {
             &self.prover_message_oracles[msg_ref.index].reed_solomon_codes[index].0
         }
@@ -230,7 +243,7 @@ where
     pub fn get_previous_sent_prover_rs_codes(&self, at: impl ToMsgRoundRef) -> Vec<Vec<F>> {
         let msg_ref = at.to_prover_msg_round_ref(&self.bookkeeper);
         if msg_ref.is_virtual {
-            self.registered_virtual_oracles[msg_ref.index].1.clone()
+            vec![self.registered_virtual_oracles[msg_ref.index].1.clone()]
         } else {
             self.prover_message_oracles[msg_ref.index]
                 .reed_solomon_codes

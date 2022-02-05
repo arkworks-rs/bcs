@@ -11,7 +11,7 @@ use tracing::info;
 
 use super::{
     bookkeeper::{BookkeeperContainer, ToMsgRoundRef},
-    oracles::{RoundOracle, VirtualOracle},
+    oracles::{RoundOracle, VirtualOracleWithInfo},
 };
 
 /// Contains location of round oracles in a transcript.
@@ -45,7 +45,7 @@ impl MsgRoundRef {
 /// verifier messages.
 pub struct MessagesCollection<F: PrimeField, O: RoundOracle<F>> {
     pub(crate) real_oracles: Vec<O>,
-    pub(crate) virtual_oracles: Vec<Option<VirtualOracle<F, O>>>,
+    pub(crate) virtual_oracles: Vec<Option<VirtualOracleWithInfo<F, O>>>,
     pub(crate) verifier_messages: Vec<Vec<VerifierMessage<F>>>,
     pub(crate) bookkeeper: MessageBookkeeper,
 }
@@ -53,7 +53,7 @@ pub struct MessagesCollection<F: PrimeField, O: RoundOracle<F>> {
 impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
     pub(crate) fn new(
         real_oracles: Vec<O>,
-        virtual_oracles: Vec<Option<VirtualOracle<F, O>>>,
+        virtual_oracles: Vec<Option<VirtualOracleWithInfo<F, O>>>,
         verifier_messages: Vec<Vec<VerifierMessage<F>>>,
         bookkeeper: MessageBookkeeper,
     ) -> Self {
@@ -95,7 +95,7 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
     /// Take a virtual oracle and return a shadow `self` that can be used by
     /// virtual oracle. Current `self` will be temporarily unavailable when
     /// querying to prevent circular dependency.
-    fn take_virtual_oracle(&mut self, round: MsgRoundRef) -> (VirtualOracle<F, O>, Self) {
+    fn take_virtual_oracle(&mut self, round: MsgRoundRef) -> (VirtualOracleWithInfo<F, O>, Self) {
         assert!(round.is_virtual);
 
         // move a virtual oracle, and make it temporarily available when querying to
@@ -122,7 +122,7 @@ impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
         &mut self,
         shadow_self: Self,
         round: MsgRoundRef,
-        vo: VirtualOracle<F, O>,
+        vo: VirtualOracleWithInfo<F, O>,
     ) {
         self.real_oracles = shadow_self.real_oracles;
         self.virtual_oracles = shadow_self.virtual_oracles;
@@ -228,6 +228,15 @@ impl<T: Clone> CosetQueryResult<T> {
 
     /// `result[i][j]` is coset index `coset_index` -> oracle index
     /// `oracle_index` -> element `j`
+    pub(crate) fn take_oracle_index(
+        &mut self,
+        oracle_index: usize,
+    ) -> Vec<Vec<T>> {
+        self.0.iter_mut().map(move |coset| ark_std::mem::take(&mut coset[oracle_index])).collect()
+    }
+
+    /// `result[i][j]` is coset index `coset_index` -> oracle index
+    /// `oracle_index` -> element `j`
     pub fn at_oracle_index_owned(self, oracle_index: usize) -> impl Iterator<Item = Vec<T>> {
         self.0
             .into_iter()
@@ -244,10 +253,13 @@ impl<T: Clone> CosetQueryResult<T> {
     /// assume this query response has only one oracle, return this coset
     /// result. `result[i]` is coset evaluations of coset `i`.
     pub fn assume_single_oracle(self) -> Vec<Vec<T>> {
-        self.0.into_iter().map(|mut coset_eval| {
-            assert_eq!(coset_eval.len(), 1, "has multiple oracle evaluations");
-            coset_eval.pop().unwrap()
-        }).collect()
+        self.0
+            .into_iter()
+            .map(|mut coset_eval| {
+                assert_eq!(coset_eval.len(), 1, "has multiple oracle evaluations");
+                coset_eval.pop().unwrap()
+            })
+            .collect()
     }
 
     /// iterate over coset index. For each element, `element[i][j]` is oracle
@@ -323,7 +335,7 @@ pub struct ProverRoundMessageInfo {
 }
 
 /// Builds a `ProverRoundMessageInfo` from a `ProverRoundMessageInfoBuilder`.
-pub struct ProverRoundMessageInfoBuilder{
+pub struct ProverRoundMessageInfoBuilder {
     reed_solomon_code_degree_bound: Vec<usize>,
     num_message_oracles: usize,
     num_short_messages: usize,
@@ -381,11 +393,9 @@ impl ProverRoundMessageInfo {
     }
 }
 
-impl ProverRoundMessageInfoBuilder
-{
+impl ProverRoundMessageInfoBuilder {
     /// Degree bounds of oracle evaluations, in order.
-    pub fn with_reed_solomon_codes_degree_bounds(mut self, degrees: Vec<usize>) -> Self
-    {
+    pub fn with_reed_solomon_codes_degree_bounds(mut self, degrees: Vec<usize>) -> Self {
         if self.leaves_type == Custom {
             panic!("Cannot set oracle with degree bounds when leaves_options is Custom");
         }

@@ -10,12 +10,13 @@ use crate::{
     iop::{
         bookkeeper::{MessageBookkeeper, NameSpace},
         message::{MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
-        oracles::{CosetEvaluator, SuccinctRoundOracle, VirtualOracle},
+        oracles::{SuccinctRoundOracle, VirtualOracleWithInfo},
     },
     tracer::TraceInfo,
 };
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_std::mem::take;
+use crate::iop::oracles::VirtualOracle;
 
 /// A wrapper for BCS proof, so that verifier can reconstruct verifier messages
 /// by simulating commit phase easily.
@@ -53,7 +54,7 @@ pub struct SimulationTranscript<
     pub(crate) ldt_localization_parameter: Option<usize>,
 
     /// Virtual oracle registered during commit phase simulation.
-    pub(crate) registered_virtual_oracles: Vec<VirtualOracle<F, SuccinctRoundOracle<'a, F>>>,
+    pub(crate) registered_virtual_oracles: Vec<VirtualOracleWithInfo<F, SuccinctRoundOracle<'a, F>>>,
 }
 
 impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
@@ -235,14 +236,16 @@ where
     }
 
     /// Register a virtual oracle specified by coset evaluator.
-    pub fn register_prover_virtual_round(
+    pub fn register_prover_virtual_round<VO>(
         &mut self,
         ns: NameSpace,
-        coset_evaluator: CosetEvaluator<F, SuccinctRoundOracle<'a, F>>,
+        oracle: VO,
         test_bound: Vec<usize>,
         constraint_bound: Vec<usize>,
         trace: TraceInfo,
-    ) -> MsgRoundRef {
+    ) -> MsgRoundRef
+    where for <'b> VO: VirtualOracle<F, SuccinctRoundOracle<'b, F>>
+    {
         info!("Register prover virtual oracle: {}", trace);
         // make sure that no virtual oracle is registered when we are halfway sampling
         // verifier round
@@ -251,8 +254,8 @@ where
             self.codeword_domain(),
             self.localization_parameter(),
         );
-        let virtual_oracle = VirtualOracle::new(
-            coset_evaluator,
+        let virtual_oracle = VirtualOracleWithInfo::new(
+            Box::new(oracle),
             codeword_domain,
             localization_param,
             test_bound,
