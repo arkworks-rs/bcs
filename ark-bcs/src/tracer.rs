@@ -32,6 +32,17 @@ impl Debug for TraceInfo {
     }
 }
 
+impl Default for TraceInfo {
+    fn default() -> Self {
+        Self {
+            description: None,
+            file_name: "Dummy",
+            line: 0,
+            column: 0,
+        }
+    }
+}
+
 impl TraceInfo {
     /// Returns a new `TraceInfo`. Note that this function should not be
     /// directly called. Instead, use `iop_trace!` instead.

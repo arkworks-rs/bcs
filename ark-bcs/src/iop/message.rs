@@ -1,3 +1,4 @@
+
 use crate::prelude::SimulationTranscript;
 use crate::{iop::bookkeeper::MessageBookkeeper, tracer::TraceInfo};
 use ark_crypto_primitives::merkle_tree::Config;
@@ -15,7 +16,7 @@ use super::{
 };
 
 /// Contains location of round oracles in a transcript.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct MsgRoundRef {
     pub(crate) index: usize,
     pub(crate) trace: TraceInfo,
@@ -36,6 +37,39 @@ impl MsgRoundRef {
     /// Get the trace for the round oracle reference.
     pub fn trace(&self) -> TraceInfo {
         self.trace
+    }
+}
+
+/// A Message Round can contain multiple oracles with same evaluation domain. The oracle index represents the position of the
+/// oracle in that message round. Oracles with degree bound come first and oracles with degree bound come last.
+///
+/// For example, if in one round user first add bounded oracle A, unbounded oracle B and then bounded oracle C, then
+/// * the index of `A` will be `{0, bounded}`
+/// * the index of `B` will be `{1, unbounded}`
+/// * the index of `C` will be `{2, bounded}`
+#[derive(Derivative, Debug, Copy, Clone, Default)]
+#[derivative(PartialEq, Eq, PartialOrd, Ord)]
+pub struct OracleIndex {
+    /// The index of the oracle in the message round.
+    pub idx: usize,
+    /// Whether the oracle is bounded or unbounded.
+    #[derivative(PartialEq = "ignore", PartialOrd = "ignore", Ord = "ignore")]
+    pub bounded: bool,
+}
+
+impl OracleIndex {
+    /// Returns a new `OracleIndex`
+    pub fn new(index: usize, bounded: bool) -> Self {
+        OracleIndex { idx: index, bounded }
+    }
+}
+
+impl From<(usize, bool)> for OracleIndex {
+    fn from(tuple: (usize, bool)) -> Self {
+        OracleIndex {
+            idx: tuple.0,
+            bounded: tuple.1,
+        }
     }
 }
 
@@ -225,15 +259,6 @@ impl<T: Clone> CosetQueryResult<T> {
     /// `oracle_index` -> element `j`
     pub fn at_oracle_index(&self, oracle_index: usize) -> impl Iterator<Item = &Vec<T>> {
         self.0.iter().map(move |coset| &coset[oracle_index])
-    }
-
-    /// `result[i][j]` is coset index `coset_index` -> oracle index
-    /// `oracle_index` -> element `j`
-    pub(crate) fn take_oracle_index(
-        &mut self,
-        oracle_index: usize,
-    ) -> Vec<Vec<T>> {
-        self.0.iter_mut().map(move |coset| ark_std::mem::take(&mut coset[oracle_index])).collect()
     }
 
     /// `result[i][j]` is coset index `coset_index` -> oracle index

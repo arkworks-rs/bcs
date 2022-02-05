@@ -13,7 +13,7 @@ debug = true
 panic = "abort"
 
 [profile.test]
-opt-level = 3
+opt-level = 1
 debug-assertions = true
 incremental = true
 debug = true

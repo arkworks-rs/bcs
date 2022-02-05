@@ -2,13 +2,14 @@ use crate::{
     vp::{DivVanishingPoly, VanishingPoly},
     UnivariateSumcheck,
 };
-use ark_bcs::iop::oracles::{RecordingRoundOracle, SuccinctRoundOracle};
+use ark_bcs::iop::message::OracleIndex;
+use ark_bcs::iop::oracles::VirtualOracle;
 use ark_bcs::prelude::{ProverRoundMessageInfo, SimulationTranscript};
 use ark_bcs::{
     bcs::transcript::{LDTInfo, Transcript},
-    iop::{bookkeeper::NameSpace, message::CosetQueryResult, oracles::RoundOracle},
+    iop::bookkeeper::NameSpace,
     iop_trace,
-    prelude::{MessagesCollection, MsgRoundRef},
+    prelude::MsgRoundRef,
 };
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
@@ -17,17 +18,22 @@ use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge};
 
 #[derive(Debug, Clone, Copy)]
-pub struct SumcheckPOracle<F: PrimeField + Absorb> {
+pub struct SumcheckPOracle<F: PrimeField> {
     pub summation_domain: Radix2CosetDomain<F>,
 
     pub claimed_sum: F,
     pub order_h_inv_times_claimed_sum: F,
+
+    pub h_handle: (MsgRoundRef, OracleIndex),
+    pub f_handle: (MsgRoundRef, OracleIndex),
 }
 
-impl<F: PrimeField + Absorb> SumcheckPOracle<F> {
+impl<F: PrimeField> SumcheckPOracle<F> {
     pub fn new(
         summation_domain: Radix2CosetDomain<F>,
         claimed_sum: F,
+        h_handle: (MsgRoundRef, OracleIndex),
+        f_handle: (MsgRoundRef, OracleIndex),
     ) -> Self {
         let order_h_inv_times_claimed_sum =
             F::from(summation_domain.size() as u64).inverse().unwrap() * claimed_sum;
@@ -35,63 +41,27 @@ impl<F: PrimeField + Absorb> SumcheckPOracle<F> {
             summation_domain,
             claimed_sum,
             order_h_inv_times_claimed_sum,
+            h_handle,
+            f_handle,
         }
     }
+}
 
-    /// evaluate the low-degree oracle, whose degree is `|H| - 2`
-    pub fn evaluate_oracle_query<O: RoundOracle<F>>(
-        &self,
-        h_oracle: (MsgRoundRef, usize), // (round, oracle index): is oracle message (not LDTed)
-        f_oracle: (MsgRoundRef, usize), // (round, oracle index)
-        msgs: &mut MessagesCollection<F, O>,
-        coset_indices: &[usize],
-        cosets: &[Radix2CosetDomain<F>], // ret[i][j] is the j-th element of the i-th coset
-    ) -> CosetQueryResult<F> {
-        // axes: coset index, coset element index
-        let h_eval = msgs
-            .prover_round(h_oracle.0)
-            .query_coset(coset_indices, iop_trace!("query h"))
-            .at_oracle_index_owned(h_oracle.1);
-        let f_eval = msgs
-            .prover_round(f_oracle.0)
-            .query_coset(coset_indices, iop_trace!("query f"))
-            .at_oracle_index_owned(f_oracle.1);
-
-        self.evaluate_oracle_query_inner(h_eval, f_eval, cosets)
+impl<F: PrimeField> VirtualOracle<F> for SumcheckPOracle<F> {
+    fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)> {
+        vec![
+            (self.h_handle.0, vec![self.h_handle.1]),
+            (self.f_handle.0, vec![self.f_handle.1]),
+        ]
     }
 
-    pub fn evaluate_oracle_query_inner(
+    fn evaluate(
         &self,
-        h_eval: impl IntoIterator<Item = Vec<F>>,
-        f_eval: impl IntoIterator<Item = Vec<F>>,
-        cosets: &[Radix2CosetDomain<F>],
-    ) -> CosetQueryResult<F> {
-        // In the multiplicative case this is computing p in RS[L, (|H|-1) / L],
-        //  where p as described in the paper is:
-        //  p(x) = (|H| * f(x) - mu - |H| * Z_H(x) * h(x)) * (x^-1)
-        //
-        //  It is equivalent to check if the following is low degree:
-        //  p'(x) = |H|^{-1}p(x)
-        //        = (f(x) - |H|^{-1} * mu - Z_H(x) * h(x)) * (x^-1)
-        //  We use the latter due to the reduced prover time.
-
-        // for each coset:
-        let result = f_eval
-            .into_iter()
-            .zip(h_eval)
-            .zip(cosets.iter())
-            .map(|((f, h), coset)| self.evaluate_whole_oracle(&h, &f, *coset))
-            .collect::<Vec<Vec<_>>>();
-        CosetQueryResult::from_single_oracle_result(result)
-    }
-
-    /// Evaluate the low-degree virtual oracle on the whole codeword domain. This is useful for prover to run LDT because LDT need have access to the whole oracle.
-    pub fn evaluate_whole_oracle(
-        &self,
-        h_eval: &[F],
-        f_eval: &[F],
         coset_domain: Radix2CosetDomain<F>,
+        constituent_oracles: &[Vec<F>],
     ) -> Vec<F> {
+        let h_eval = &constituent_oracles[0];
+        let f_eval = &constituent_oracles[1];
         let mut cur_x_inv = coset_domain.offset.inverse().unwrap();
         let z_h_eval =
             VanishingPoly::new(self.summation_domain).evaluation_over_coset(&coset_domain);
@@ -151,7 +121,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
     /// Send sumcheck message via transcript
     ///
     /// * `f`: coefficient of polynomial `f` to sum at domain `H`
-    /// * `f_in_transcript`: where is `f` in transcript, represented as a round reference and an oracle index in that round
+    /// * `f_handlet`: where is `f` in transcript, represented as a round reference and an oracle index in that round
     /// * `is_f_bounded`: whether `f` has degree bound
     /// # Panics
     /// Panics if there is a pending message not sent.
@@ -160,8 +130,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
         transcript: &mut Transcript<P, S, F>,
         ns: NameSpace,
         f_coeff: &DensePolynomial<F>,
-        f_in_transcript: (MsgRoundRef, usize),
-        is_f_bounded: bool,
+        f_handle: (MsgRoundRef, OracleIndex),
         claimed_sum: F,
     ) where
         P::InnerDigest: Absorb,
@@ -169,7 +138,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
         let h = self.calculate_h(f_coeff);
         // TODO: do we do LDT on h?
         let h_eval = transcript.codeword_domain().evaluate(&h);
-        let h_handle = transcript
+        let h_round = transcript
             .add_prover_round_with_codeword_domain()
             .send_oracle_message_without_degree_bound(h_eval.clone())
             .submit(ns, iop_trace!("h oracle"))
@@ -179,30 +148,14 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
         let g_oracle = SumcheckPOracle::new(
             self.summation_domain,
             claimed_sum,
+            (h_round, (0, false).into()),
+            f_handle,
         );
-        let g_vo = move |msg: &mut MessagesCollection<F, RecordingRoundOracle<F>>,
-                         query: &[usize],
-                         query_cosets: &[Radix2CosetDomain<F>]| {
-            g_oracle.evaluate_oracle_query((h_handle, 0), f_in_transcript, msg, query, query_cosets)
-        };
-        let f_eval = if is_f_bounded {
-            &transcript
-                .get_previously_sent_prover_round(f_in_transcript.0)
-                .reed_solomon_codes()[f_in_transcript.1]
-                .0
-        } else {
-            &transcript
-                .get_previously_sent_prover_round(f_in_transcript.0)
-                .message_oracles()[f_in_transcript.1]
-        };
-        let g_vo_whole =
-            g_oracle.evaluate_whole_oracle(&h_eval, &f_eval, transcript.codeword_domain());
 
         let test_bound = self.degree_bound_of_g();
         transcript.register_prover_virtual_round(
             ns,
-            Box::new(g_vo),
-            vec![g_vo_whole],
+            g_oracle,
             vec![test_bound],
             vec![test_bound],
             iop_trace!("g oracle"),
@@ -214,7 +167,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
         &self,
         transcript: &mut SimulationTranscript<P, S, F>,
         ns: NameSpace,
-        f_in_transcript: (MsgRoundRef, usize),
+        f_handle: (MsgRoundRef, OracleIndex),
         claimed_sum: F,
     ) where
         P::InnerDigest: Absorb,
@@ -230,16 +183,13 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
         let g_oracle = SumcheckPOracle::new(
             self.summation_domain,
             claimed_sum,
+            (h_handle, (0, false).into()),
+            f_handle,
         );
-        let g_vo = move |msg: &mut MessagesCollection<F, SuccinctRoundOracle<F>>,
-                         query: &[usize],
-                         query_cosets: &[Radix2CosetDomain<F>]| {
-            g_oracle.evaluate_oracle_query((h_handle, 0), f_in_transcript, msg, query, query_cosets)
-        };
         let test_bound = self.degree_bound_of_g();
         transcript.register_prover_virtual_round(
             ns,
-            Box::new(g_vo),
+            g_oracle,
             vec![test_bound],
             vec![test_bound],
             iop_trace!("g oracle"),
@@ -265,8 +215,10 @@ mod tests {
     use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};
     use ark_ldt::domain::Radix2CosetDomain;
     use ark_poly::Polynomial;
-    use ark_sponge::poseidon::{PoseidonSponge};
+    use ark_sponge::poseidon::PoseidonSponge;
     use ark_std::{test_rng, One};
+    use ark_bcs::iop::oracles::RoundOracle;
+    use ark_bcs::prelude::MessagesCollection;
 
     #[test]
     fn test_actual_sum() {
@@ -297,71 +249,30 @@ mod tests {
         //     .iter()
         //     .map(|x| *x * Fr::from(summation_domain.size() as u64).inverse().unwrap()).collect::<Vec<_>>();
 
+        let dummy_handle = (MsgRoundRef::default(), OracleIndex::default());
+
         let h_eval = codeword_domain.evaluate(&h);
         let f_eval = codeword_domain.evaluate(&f);
+        let cons = [h_eval, f_eval];
 
-        let g_oracle = SumcheckPOracle::new(summation_domain, actual_sum);
-        let p = g_oracle.evaluate_whole_oracle(&h_eval, &f_eval, codeword_domain);
+        let g_oracle =
+            SumcheckPOracle::new(summation_domain, actual_sum, dummy_handle, dummy_handle);
+        let p = g_oracle.evaluate(codeword_domain, &cons);
 
         let p_coeff = codeword_domain.interpolate(p);
         assert_eq!(p_coeff.degree(), summation_domain.size() - 2);
 
         // if claimed sum is wrong, the degree of `g` will be large.
-        let wrong_g_oracle =
-            SumcheckPOracle::new(summation_domain,  actual_sum + Fr::one());
-        let p = wrong_g_oracle.evaluate_whole_oracle(&h_eval, &f_eval, codeword_domain);
+        let wrong_g_oracle = SumcheckPOracle::new(
+            summation_domain,
+            actual_sum + Fr::one(),
+            dummy_handle,
+            dummy_handle,
+        );
+        let p = wrong_g_oracle.evaluate(codeword_domain, &cons);
 
         let p_coeff = codeword_domain.interpolate(p);
         assert!(p_coeff.degree() > summation_domain.size() - 2);
-    }
-
-    #[test]
-    fn test_p_query_oracle() {
-        let mut rng = test_rng();
-        let summation_domain = Radix2CosetDomain::new_radix2_coset(64, Fr::from(123u64));
-        let f = DensePolynomial::rand(100, &mut rng);
-        let sumcheck = UnivariateSumcheck { summation_domain };
-        let (h, _, actual_sum) = sumcheck.calculate_h_g_and_actual_sum(&f);
-
-        let codeword_domain = Radix2CosetDomain::new_radix2_coset(128, Fr::from(256u64));
-
-        let h_eval = codeword_domain.evaluate(&h);
-        let f_eval = codeword_domain.evaluate(&f);
-
-        let g_oracle = SumcheckPOracle::new(summation_domain,  actual_sum);
-        let p = g_oracle.evaluate_whole_oracle(&h_eval, &f_eval, codeword_domain);
-
-        let localization = 2usize;
-        let num_cosets = codeword_domain.size() >> localization;
-        let coset_indices = (0..num_cosets).collect::<Vec<_>>();
-        let cosets = coset_indices
-            .iter()
-            .map(|i| codeword_domain.query_position_to_coset(*i, localization))
-            .collect::<Vec<_>>();
-
-        let h_eval_cosets = cosets
-            .iter()
-            .map(|(indices, _)| indices.iter().map(|i| h_eval[*i]).collect::<Vec<_>>())
-            .collect::<Vec<_>>();
-        let f_eval_cosets = cosets
-            .iter()
-            .map(|(indices, _)| indices.iter().map(|i| f_eval[*i]).collect::<Vec<_>>())
-            .collect::<Vec<_>>();
-
-        let actual_evals = g_oracle
-            .evaluate_oracle_query_inner(
-                h_eval_cosets,
-                f_eval_cosets,
-                &cosets.iter().map(|x| x.1).collect::<Vec<_>>(),
-            )
-            .assume_single_oracle();
-        let expected_evals = cosets
-            .iter()
-            .map(|(pos, _)| pos.iter().map(|i| p[*i]).collect::<Vec<_>>())
-            .collect::<Vec<_>>();
-
-        assert_eq!(actual_evals.len(), expected_evals.len());
-        assert_eq!(actual_evals, expected_evals);
     }
 
     pub struct MockProtocol;
@@ -421,8 +332,7 @@ mod tests {
                 transcript,
                 sumcheck_ns,
                 &prover_parameter.poly,
-                (poly_handle, 0),
-                false,
+                (poly_handle, OracleIndex::new(0, false)),
                 prover_parameter.claimed_sum,
             );
             Ok(())
@@ -456,7 +366,7 @@ mod tests {
             sumcheck.register_sumcheck_commit_phase(
                 transcript,
                 sumcheck_ns,
-                (poly_handle, 0),
+                (poly_handle, OracleIndex::new(0, false)),
                 verifier_parameter.claimed_sum,
             );
         }

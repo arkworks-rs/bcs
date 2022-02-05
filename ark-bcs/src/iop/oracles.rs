@@ -5,9 +5,10 @@
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use std::collections::BTreeSet;
+use std::mem::take;
 
 use super::message::{MessagesCollection, ProverRoundMessageInfo};
-use crate::iop::message::{CosetQueryResult, LeavesType};
+use crate::iop::message::{CosetQueryResult, LeavesType, OracleIndex};
 use crate::prelude::MsgRoundRef;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::{boxed::Box, vec::Vec};
@@ -320,18 +321,26 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
                     idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
                     "idxes must be unique"
                 );
-                let mut query_responses = iop_messages.prover_round(round).query_coset(
+                let query_responses = iop_messages.prover_round(round).query_coset(
                     &coset_index,
                     iop_trace!("constituent oracle for virtual oracle"),
                 );
 
-                idxes
-                    .into_iter()
-                    .map(|idx| query_responses.take_oracle_index(idx))
-                    .collect::<Vec<_>>()
+                query_responses.into_iter() // iterate over cosets
+                    .map(|mut c| { // shape (num_oracles_in_this_round, num_elements_in_coset)
+                        idxes.iter().map(|idx| take(&mut c[idx.idx])).collect::<Vec<_>>() // shape (num_oracles_needed_for_this_round, num_elements_in_coset) 
+                    }).collect::<Vec<_>>()
+                // shape: (num_cosets, num_oracles_needed_for_this_round, num_elements_in_coset)
             })
-            .flatten()
-            .collect::<Vec<_>>();
+            .fold(vec![vec![]; coset_index.len()], |mut acc, r| {
+                // shape of r is (num_cosets, num_oracles_needed_for_this_round, num_elements_in_coset)
+                // result shape: (num_cosets, num_oracles_needed_for_all_rounds, num_elements_in_coset)
+                acc.iter_mut().zip(r).for_each(|(a, r)| {
+                    a.extend(r);
+                });
+                acc
+            });
+        // shape: (num_cosets, num_oracles_needed_for_all_rounds, num_elements_in_coset)
 
         // convert coset index to cosets
         let queried_cosets = coset_index
@@ -343,11 +352,11 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
             })
             .collect::<Vec<_>>();
 
-        let query_result = constituent_oracles
-            .into_iter()
-            .zip(queried_cosets)
-            .map(|(cons, coset)| self.coset_evaluator.evaluate(coset, cons))
-            .collect::<Vec<Vec<_>>>();
+        let query_result =
+            constituent_oracles.into_iter().zip(
+                queried_cosets)
+                .map(|(cons, coset)| self.coset_evaluator.evaluate(coset, &cons))
+                .collect::<Vec<Vec<_>>>();
 
         CosetQueryResult::from_single_oracle_result(query_result)
     }
@@ -359,21 +368,20 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
             self.codeword_domain.size(),
             self.localization_param,
         )
-        .with_reed_solomon_codes_degree_bounds(self.test_bound.clone())
-        .build()
+            .with_reed_solomon_codes_degree_bounds(self.test_bound.clone())
+            .build()
     }
 }
 
 /// evaluator for virtual oracle
 /// It is enforced that implementors do not contain any reference with lifetime.
-pub trait VirtualOracle<F: PrimeField>: 'static
-{
+pub trait VirtualOracle<F: PrimeField>: 'static {
     /// query constituent oracles as a message round handle, and the indices of oracles needed in that round
-    fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<usize>)>;
+    fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
     /// evaluate this virtual oracle, using evaluations of constituent oracles on `coset_domain`
     fn evaluate(
         &self,
         coset_domain: Radix2CosetDomain<F>,
-        constituent_oracles: Vec<Vec<F>>,
+        constituent_oracles: &[Vec<F>],
     ) -> Vec<F>;
 }

@@ -19,6 +19,7 @@ use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::{marker::PhantomData, test_rng, vec, vec::Vec};
 use tracing::Level;
+use crate::iop::message::OracleIndex;
 
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
@@ -30,24 +31,24 @@ struct MockVirtualOracle<F: PrimeField> {
 }
 
 impl<F: PrimeField> VirtualOracle<F> for MockVirtualOracle<F> {
-    fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<usize>)> {
-        vec![(self.round, vec![0])] // take first oracle
+    fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)> {
+        vec![(self.round, vec![(0, true).into()])] // take first oracle with degree bound
     }
 
     fn evaluate(
         &self,
         coset_domain: Radix2CosetDomain<F>,
-        mut constituent_oracles: Vec<Vec<F>>,
+        constituent_oracles: &[Vec<F>],
     ) -> Vec<F> {
         // calculate f(x) * (x^2 + 2x + 1)
-        let msg2_points = constituent_oracles.pop().unwrap();
+        let msg2_points = &constituent_oracles[0];
         let poly = DensePolynomial::from_coefficients_vec(vec![F::one(), F::from(2u64), F::one()]);
         let eval = coset_domain.evaluate(&poly);
         assert_eq!(msg2_points.len(), eval.len());
         msg2_points
-            .into_iter()
+            .iter()
             .zip(eval)
-            .map(|(x, y)| x * y)
+            .map(|(&x, y)| x * y)
             .collect()
     }
 }

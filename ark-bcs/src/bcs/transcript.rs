@@ -5,7 +5,7 @@ use ark_std::vec::Vec;
 use std::collections::BTreeSet;
 use tracing::info;
 
-use crate::iop::message::LeavesType;
+use crate::iop::message::{LeavesType, OracleIndex};
 use crate::iop::message::LeavesType::{Custom, UseCodewordDomain};
 use crate::iop::oracles::VirtualOracle;
 use crate::{
@@ -174,10 +174,12 @@ where
                     idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
                     "Duplicate oracle index"
                 );
-                let mut oracle_evaluations = self.get_previous_sent_prover_rs_codes(round);
+
                 idxes
                     .into_iter()
-                    .map(|idx| take(oracle_evaluations.get_mut(idx).expect("Invalid oracle index")))
+                    .map(|idx| {
+                        self.get_previously_sent_prover_oracle(round, idx).to_vec()
+                    })
                     .collect::<Vec<_>>()
             })
             .flatten()
@@ -185,7 +187,7 @@ where
         debug_assert!(constituent_oracles
             .iter()
             .all(|o| o.len() == self.codeword_domain().size()));
-        let vo_evaluations = vo.evaluate(self.codeword_domain(), constituent_oracles);
+        let vo_evaluations = vo.evaluate(self.codeword_domain(), &constituent_oracles);
 
         let virtual_oracle = VirtualOracleWithInfo::new(
             Box::new(vo),
@@ -200,38 +202,24 @@ where
         self.attach_latest_prover_round_to_namespace(ns, true, trace)
     }
 
-    /// Access previously received verifier round using a reference. This
-    /// function is useful when the prover wants to have access to messages
-    /// sent from other protocols.
-    ///
-    /// TODO: rethink about this because we have virtual oracle.
-    /// Probably we can have `get_previously_sent_codeword` (panic if virtual),
-    /// and `get_previously_sent_prover_round_info`
-    pub fn get_previously_sent_prover_round(
-        &self,
-        msg_ref: impl ToMsgRoundRef,
-    ) -> &RecordingRoundOracle<F> {
-        let msg_ref = msg_ref.to_prover_msg_round_ref(&self.bookkeeper);
-        if !msg_ref.is_virtual {
-            &self.prover_message_oracles[msg_ref.index]
-        } else {
-            panic!("This round is virtual. ")
-        }
-    }
-
     /// Get low-degree oracle evaluations at index `x` or requested round.
     ///
     /// For example, if in requested round, prover send low-degree oracle `[p0,
     /// p1, p2, ...]`, non low-degree oracle `[q0, q1, ...]`,
     /// `get_previously_sent_prover_rs_code(at, index)` will return evaluation
     /// of `p_index` at domain.
-    pub fn get_previously_sent_prover_rs_code(&self, at: impl ToMsgRoundRef, index: usize) -> &[F] {
+    pub fn get_previously_sent_prover_oracle(&self, at: impl ToMsgRoundRef, index: OracleIndex) -> &[F] {
         let msg_ref = at.to_prover_msg_round_ref(&self.bookkeeper);
         if msg_ref.is_virtual {
-            assert_eq!(index, 0, "virtual round only has one oracle per round");
+            assert_eq!(index.bounded, true, "virtual round does not have oracles without degree bound");
+            assert_eq!(index.idx, 0, "virtual round only has one oracle per round");
             &self.registered_virtual_oracles[msg_ref.index].1
         } else {
-            &self.prover_message_oracles[msg_ref.index].reed_solomon_codes[index].0
+            match index.bounded {
+                true =>&self.prover_message_oracles[msg_ref.index].reed_solomon_codes[index.idx].0,
+                false =>&self.prover_message_oracles[msg_ref.index].message_oracles[index.idx],
+            }
+
         }
     }
 
