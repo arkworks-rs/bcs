@@ -204,11 +204,14 @@ mod tests {
     use super::*;
     use crate::test_util::poseidon_parameters;
     use ark_bcs::bcs::prover::BCSProof;
+    use ark_bcs::bcs::verifier::BCSVerifier;
     use ark_bcs::bcs::MTHashParameters;
+    use ark_bcs::iop::oracles::RoundOracle;
     use ark_bcs::iop::prover::IOPProver;
     use ark_bcs::iop::verifier::IOPVerifier;
     use ark_bcs::iop::ProverParam;
     use ark_bcs::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
+    use ark_bcs::prelude::MessagesCollection;
     use ark_bcs::Error;
     use ark_bls12_381::Fr;
     use ark_crypto_primitives::crh::poseidon;
@@ -217,8 +220,6 @@ mod tests {
     use ark_poly::Polynomial;
     use ark_sponge::poseidon::PoseidonSponge;
     use ark_std::{test_rng, One};
-    use ark_bcs::iop::oracles::RoundOracle;
-    use ark_bcs::prelude::MessagesCollection;
 
     #[test]
     fn test_actual_sum() {
@@ -415,8 +416,8 @@ mod tests {
             inner_hash_param: poseidon_parameters(),
         };
 
-        let _ = BCSProof::generate::<MockProtocol, MockProtocol, LinearCombinationLDT<Fr>, _>(
-            sponge,
+        let proof = BCSProof::generate::<MockProtocol, MockProtocol, LinearCombinationLDT<Fr>, _>(
+            sponge.clone(),
             &(),
             &(),
             &MockProverParam {
@@ -425,9 +426,22 @@ mod tests {
                 claimed_sum,
             },
             &ldt_param,
-            mt_hash_param,
-        );
+            mt_hash_param.clone(),
+        )
+        .unwrap();
 
         // should not panic
+        BCSVerifier::verify::<MockProtocol, LinearCombinationLDT<Fr>, _>(
+            sponge,
+            &proof,
+            &(),
+            &MockVerifierParam {
+                summation_domain,
+                claimed_sum,
+            },
+            &ldt_param,
+            mt_hash_param,
+        )
+        .unwrap();
     }
 }
