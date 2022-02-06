@@ -75,7 +75,7 @@ impl<F: PrimeField> VirtualOracle<F> for SumcheckPOracle<F> {
             .zip(z_h_eval)
             .map(|((f, h), z_h)| {
                 let result = (*f - self.order_h_inv_times_claimed_sum - z_h * *h) * cur_x_inv;
-                cur_x_inv = cur_x_inv * gen_inv;
+                cur_x_inv *= gen_inv;
                 result
             })
             .collect::<Vec<_>>()
@@ -140,7 +140,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
         let h_eval = transcript.codeword_domain().evaluate(&h);
         let h_round = transcript
             .add_prover_round_with_codeword_domain()
-            .send_oracle_message_without_degree_bound(h_eval.clone())
+            .send_oracle_message_without_degree_bound(h_eval)
             .submit(ns, iop_trace!("h oracle"))
             .unwrap();
 
@@ -296,8 +296,8 @@ mod tests {
 
         fn to_verifier_param(&self) -> Self::VerifierParameter {
             MockVerifierParam {
-                summation_domain: self.summation_domain.clone(),
-                claimed_sum: self.claimed_sum.clone(),
+                summation_domain: self.summation_domain,
+                claimed_sum: self.claimed_sum,
             }
         }
     }

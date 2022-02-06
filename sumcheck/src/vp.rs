@@ -69,7 +69,7 @@ impl<F: PrimeField> VanishingPoly<F> {
             (0..num_distinct_eval)
                 .map(|_| {
                     let result = cur - self.shift;
-                    cur = cur * coset_gen_to_order_h;
+                    cur *= coset_gen_to_order_h;
                     result
                 })
                 .collect::<Vec<_>>()
@@ -79,7 +79,7 @@ impl<F: PrimeField> VanishingPoly<F> {
             (0..order_s)
                 .map(|_| {
                     let result = cur - self.shift;
-                    cur = cur * coset_gen_to_order_h;
+                    cur *= coset_gen_to_order_h;
                     result
                 })
                 .collect()
@@ -149,7 +149,7 @@ impl<F: PrimeField> DivVanishingPoly<F> for DensePolynomial<F> {
                 .iter_mut()
                 .zip(&self.coeffs[vp.degree * (r + 1)..])
                 .for_each(|(s, &c)| *s += c * s_pow);
-            s_pow = s_pow * vp.shift;
+            s_pow *= vp.shift;
         }
 
         // remainder = self - quotient * vp
