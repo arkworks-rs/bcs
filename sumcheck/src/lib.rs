@@ -4,6 +4,8 @@ use ark_sponge::Absorb;
 
 pub mod vp;
 pub mod protocol;
+#[cfg(feature = "r1cs")]
+pub mod constraints;
 #[cfg(test)]
 pub(crate) mod test_util;
 

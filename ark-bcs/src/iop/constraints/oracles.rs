@@ -2,7 +2,7 @@ use ark_std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::mem::take;
 
-use crate::iop::message::{CosetQueryResult, LeavesType};
+use crate::iop::message::{CosetQueryResult, LeavesType, OracleIndex};
 use crate::iop::oracles::VirtualOracle;
 use crate::iop::{message::ProverRoundMessageInfo, oracles::SuccinctRoundMessage};
 use ark_ff::PrimeField;
@@ -16,6 +16,7 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use ark_std::{boxed::Box, vec::Vec};
+use crate::prelude::MsgRoundRef;
 
 use super::message::MessagesCollectionVar;
 
@@ -330,7 +331,10 @@ fn fit_bits_to_length<F: PrimeField>(bits: &[Boolean<F>], length: usize) -> Vec<
 }
 
 /// An extension trait for `VirtualOracle`, which adds supports for R1CS constraints.
-pub trait VirtualOracleVar<CF: PrimeField>: VirtualOracle<CF> {
+pub trait VirtualOracleVar<CF: PrimeField>: 'static {
+    /// query constituent oracles as a message round handle, and the indices of oracles needed in that round
+    fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
+    
     /// generate new constraints to evaluate this virtual oracle, using evaluations of constituent oracles on `coset_domain`
     fn evaluate_var(
         &self,

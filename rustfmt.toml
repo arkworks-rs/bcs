@@ -1,6 +1,6 @@
 condense_wildcard_suffixes = true
 edition = "2018"
-imports_granularity = "Crate"
+imports_granularity = "Module"
 match_block_trailing_comma = true
 normalize_comments = true
 reorder_imports = true

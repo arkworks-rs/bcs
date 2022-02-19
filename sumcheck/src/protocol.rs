@@ -276,17 +276,17 @@ mod tests {
         assert!(p_coeff.degree() > summation_domain.size() - 2);
     }
 
-    pub struct MockProtocol;
+    pub(crate) struct MockProtocol;
 
     #[derive(Clone, Debug)]
-    pub struct MockProverParam {
+    pub(crate) struct MockProverParam {
         pub poly: DensePolynomial<Fr>,
         pub claimed_sum: Fr,
         pub summation_domain: Radix2CosetDomain<Fr>,
     }
 
     #[derive(Clone, Debug)]
-    pub struct MockVerifierParam {
+    pub(crate) struct MockVerifierParam {
         pub summation_domain: Radix2CosetDomain<Fr>,
         pub claimed_sum: Fr,
     }
