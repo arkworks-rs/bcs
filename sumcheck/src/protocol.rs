@@ -136,7 +136,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
         P::InnerDigest: Absorb,
     {
         let h = self.calculate_h(f_coeff);
-        // TODO: do we do LDT on h?
+
         let h_eval = transcript.codeword_domain().evaluate(&h);
         let h_round = transcript
             .add_prover_round_with_codeword_domain()

@@ -1,3 +1,5 @@
+use crate::bcs::tests::mock::BCSTestVirtualOracle;
+use crate::iop::constraints::oracles::VirtualOracleVar;
 use crate::{
     bcs::{constraints::transcript::SimulationTranscriptVar, tests::mock::MockTest1Verifier},
     iop::{
@@ -23,43 +25,27 @@ use ark_sponge::{
     Absorb,
 };
 use ark_std::{test_rng, vec, vec::Vec};
-use tracing::Level;
 
-/// multiply the first oracle of the message 2 by x^2 + 2x + 1
-fn mock_virtual_oracle_for_query<F: PrimeField>(
-    namespace: NameSpace,
-    iop_messages: &mut MessagesCollectionVar<F>,
-    queries: &[Vec<Boolean<F>>],
-    cosets: &[Radix2DomainVar<F>],
-) -> Result<Vec<Vec<Vec<FpVar<F>>>>, SynthesisError> {
-    let span = tracing::span!(Level::INFO, "virtual oracle");
-    let _enter = span.enter();
-
-    let msg2_points = iop_messages
-        .prover_round((namespace, 2))
-        .query_coset(queries, iop_trace!("mock virtual oracle"))?;
-    assert_eq!(msg2_points.len(), cosets.len());
-    msg2_points
-        .into_iter()
-        .zip(cosets.iter())
-        .map(|(msg2_points, coset)| {
-            let poly = DensePolynomialVar::from_coefficients_vec(vec![
-                FpVar::Constant(F::one()),
-                FpVar::Constant(F::from(2u64)),
-                FpVar::Constant(F::one()),
-            ]);
-            let coset_points = coset.elements();
-            let eval = coset_points
-                .iter()
-                .map(|x| poly.evaluate(x))
-                .collect::<Result<Vec<_>, _>>()?;
-            let result = msg2_points[0].iter() // take first oracle
-                .zip(eval.iter())
-                .map(|(point, eval)| point * eval)
-                .collect::<Vec<_>>();
-            Ok(vec![result])
-        })
-        .collect::<Result<Vec<_>, _>>()
+impl<F: PrimeField> VirtualOracleVar<F> for BCSTestVirtualOracle<F> {
+    fn evaluate_var(
+        &self,
+        coset_domain: Radix2DomainVar<F>,
+        constituent_oracles: &[Vec<FpVar<F>>],
+    ) -> Result<Vec<FpVar<F>>, SynthesisError> {
+        let msg2_points = &constituent_oracles[0];
+        let poly_var = DensePolynomialVar::from_coefficients_vec(vec![
+            FpVar::Constant(F::from(1u64)),
+            FpVar::Constant(F::from(2u64)),
+            FpVar::Constant(F::from(1u64)),
+        ]);
+        let eval = coset_domain
+            .elements()
+            .into_iter()
+            .map(|x| poly_var.evaluate(&x))
+            .collect::<Result<Vec<_>, SynthesisError>>()?;
+        assert_eq!(eval.len(), msg2_points.len());
+        Ok(msg2_points.iter().zip(eval).map(|(x, y)| x * y).collect())
+    }
 }
 
 impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, CF>
@@ -78,10 +64,11 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         MTG::InnerDigest: AbsorbGadget<CF>,
     {
         // prover send
-        let expected_info =ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 2)
-            .with_num_message_oracles(2)
-            .with_num_short_messages(1)
-            .build();
+        let expected_info =
+            ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 2)
+                .with_num_message_oracles(2)
+                .with_num_short_messages(1)
+                .build();
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         // verifier send
@@ -94,32 +81,28 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
         transcript.submit_verifier_current_round(namespace, iop_trace!());
 
         // prover send
-        let expected_info = ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 0)
-        .with_num_message_oracles(1)
-        .with_num_short_messages(1)
-        .build();
+        let expected_info =
+            ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 0)
+                .with_num_message_oracles(1)
+                .with_num_short_messages(1)
+                .build();
         transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         // prover send2
-        let expected_info =  ProverRoundMessageInfo::new_using_codeword_domain(transcript)
+        let expected_info = ProverRoundMessageInfo::new_using_codeword_domain(transcript)
             .with_reed_solomon_codes_degree_bounds(vec![8])
             .with_num_short_messages(1)
             .build();
-        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
+        let prover_oracle_2 =
+            transcript.receive_prover_current_round(namespace, expected_info, iop_trace!())?;
 
         // prover send virtual oracle
-        // always make sure arguments have type!
-        let coset_eval = Box::new(
-            move |iop_messages: &mut MessagesCollectionVar<CF>,
-                  queries: &[Vec<Boolean<CF>>],
-                  cosets: &[Radix2DomainVar<CF>]| {
-                mock_virtual_oracle_for_query(namespace, iop_messages, queries, cosets)
-            },
-        );
+
+        let vo = BCSTestVirtualOracle::new(prover_oracle_2);
 
         transcript.register_prover_virtual_round(
             namespace,
-            coset_eval,
+            vo,
             vec![10],
             vec![10],
             iop_trace!("mock vo"),

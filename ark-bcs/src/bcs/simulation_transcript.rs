@@ -4,6 +4,7 @@ use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::vec::Vec;
 use tracing::info;
 
+use crate::bcs::transcript::LDTInfo;
 use crate::iop::message::LeavesType;
 use crate::iop::oracles::VirtualOracle;
 use crate::{
@@ -56,6 +57,7 @@ pub struct SimulationTranscript<
     /// Virtual oracle registered during commit phase simulation.
     pub(crate) registered_virtual_oracles: Vec<VirtualOracleWithInfo<F>>,
 }
+
 
 impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
     SimulationTranscript<'a, P, S, F>
@@ -249,7 +251,7 @@ where
         // verifier round
         assert!(!self.is_pending_message_available());
         let (codeword_domain, localization_param) =
-            (self.codeword_domain(), self.localization_parameter());
+            (self.codeword_domain(), self.codeword_localization_parameter());
         let virtual_oracle = VirtualOracleWithInfo::new(
             Box::new(oracle),
             codeword_domain,
@@ -359,29 +361,18 @@ where
     }
 }
 
-impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
-    SimulationTranscript<'a, P, S, F>
-where
-    P::InnerDigest: Absorb,
-{
-    /// Return the codeword domain used by LDT.
-    ///
-    /// **Any low degree oracle will use this domain as evaluation domain.**
-    ///
-    /// ## Panics
-    /// This function panics if LDT is not enabled.
-    pub fn codeword_domain(&self) -> Radix2CosetDomain<F> {
+impl<
+    'a,
+    P: MTConfig<Leaf=[F]>,
+    S: CryptographicSponge,
+    F: PrimeField + Absorb,
+> LDTInfo<F> for SimulationTranscript<'a, P, S, F> where
+    P::InnerDigest: Absorb, {
+    fn codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")
     }
 
-    /// Return the localization parameter used by LDT. Localization parameter is
-    /// the size of query coset of the codeword.
-    ///
-    /// ## Panics
-    /// This function panics if LDT is not enabled or localization parameter is
-    /// not supported by LDT.
-    pub fn localization_parameter(&self) -> usize {
-        self.ldt_localization_parameter
-            .expect("LDT not enabled or localization parameter is not supported by LDT")
+    fn codeword_localization_parameter(&self) -> usize {
+        self.ldt_localization_parameter.expect("LDT not enabled")
     }
 }

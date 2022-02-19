@@ -25,12 +25,19 @@ pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
 }
 
-struct MockVirtualOracle<F: PrimeField> {
+pub(crate) struct BCSTestVirtualOracle<F: PrimeField> {
     round: MsgRoundRef,
     _field: PhantomData<F>,
 }
 
-impl<F: PrimeField> VirtualOracle<F> for MockVirtualOracle<F> {
+impl<F: PrimeField> BCSTestVirtualOracle<F> {
+    #[allow(unused)]
+    pub(crate) fn new(round: MsgRoundRef) -> Self {
+        BCSTestVirtualOracle { round, _field: PhantomData }
+    }
+}
+
+impl<F: PrimeField> VirtualOracle<F> for BCSTestVirtualOracle<F> {
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)> {
         vec![(self.round, vec![(0, true).into()])] // take first oracle with degree bound
     }
@@ -131,7 +138,7 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
 
         // prover send virtual oracle
         // always make sure arguments have type!
-        let virtual_oracle = MockVirtualOracle {
+        let virtual_oracle = BCSTestVirtualOracle {
             round: prover_oracle_2,
             _field: PhantomData,
         };
@@ -168,15 +175,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
     {
         let span = tracing::span!(Level::INFO, "main register");
         let _enter = span.enter();
-        // prover send
-        // let expected_info = ProverRoundMessageInfo {
-        //     reed_solomon_code_degree_bound: vec![],
-        //     num_message_oracles: 2,
-        //     num_short_messages: 1,
-        //     leaves_type: LeavesType::Custom,
-        //     length: 256,
-        //     localization_parameter: 2,
-        // };
+
         let expected_info =
             ProverRoundMessageInfo::new_using_custom_length_and_localization(256, 2)
                 .with_num_message_oracles(2)
@@ -216,7 +215,7 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
         // prover send virtual oracle
         // always make sure arguments have type!
 
-        let vo = MockVirtualOracle {
+        let vo = BCSTestVirtualOracle {
             round: prover_oracle_2,
             _field: PhantomData,
         };

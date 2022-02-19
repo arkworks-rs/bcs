@@ -258,7 +258,7 @@ impl<CF: PrimeField> VirtualOracleVarWithInfo<CF> {
             self.codeword_domain.dim() as u64,
             FpVar::Constant(self.codeword_domain.offset),
         )?;
-        let constituent_oracles = constituent_oracle_handles
+        let constituent_oracles = constituent_oracle_handles // TODO: has bug here
             .into_iter()
             .map(|(round, idxes)| {
                 // check idxes have unique elements
@@ -291,7 +291,7 @@ impl<CF: PrimeField> VirtualOracleVarWithInfo<CF> {
 
         let queried_cosets = coset_index
             .iter()
-            .map(|i| codeword_domain_var.query_position_to_coset(&i[..], codeword_domain_var.dim))
+            .map(|i| codeword_domain_var.query_position_to_coset(&i[..], self.localization_param as u64))
             .collect::<Result<Vec<_>, SynthesisError>>()?;
 
         let query_result = constituent_oracles

@@ -4,7 +4,7 @@ use crate::{
         bookkeeper::{MessageBookkeeper, NameSpace},
         constraints::{
             message::VerifierMessageVar,
-            oracles::{CosetVarEvaluator, VirtualOracleVar},
+            oracles::VirtualOracleVarWithInfo,
         },
         message::{MsgRoundRef, ProverRoundMessageInfo},
     },
@@ -20,6 +20,7 @@ use ark_sponge::{
     Absorb,
 };
 use ark_std::{mem::take, vec::Vec};
+use crate::iop::constraints::oracles::VirtualOracleVar;
 use crate::iop::message::LeavesType;
 
 /// R1CS Variable for simulation transcript used by verifier.
@@ -48,7 +49,7 @@ where
     pub(crate) ldt_localization_parameter: Option<usize>,
 
     /// Virtual oracle registered during commit phase simulation
-    pub(crate) registered_virtual_oracles: Vec<VirtualOracleVar<F>>,
+    pub(crate) registered_virtual_oracles: Vec<VirtualOracleVarWithInfo<F>>,
 }
 
 impl<'a, F, MT, MTG, S> SimulationTranscriptVar<'a, F, MT, MTG, S>
@@ -124,7 +125,7 @@ where
             )
         };
 
-        if index >= self.expected_prover_messages_info.len() {
+        if index >= self.proof.prover_iop_messages_by_round.len() {
             panic!(
                 "Verifier tried to receive extra prove round message. {}",
                 trace_info
@@ -232,10 +233,10 @@ where
     }
 
     /// register a virtual oracle constraints specified by coset evaluator
-    pub fn register_prover_virtual_round(
+    pub fn register_prover_virtual_round<VO: VirtualOracleVar<F>>(
         &mut self,
         ns: NameSpace,
-        coset_evaluator: CosetVarEvaluator<F>,
+        oracle: VO,
         test_bound: Vec<usize>,
         constraint_bound: Vec<usize>,
         trace: TraceInfo,
@@ -245,8 +246,8 @@ where
             self.codeword_localization_parameter(),
         );
         assert!(!self.is_pending_message_available());
-        let virtual_oracle = VirtualOracleVar::new(
-            coset_evaluator,
+        let virtual_oracle = VirtualOracleVarWithInfo::new(
+            Box::new(oracle),
             codeword_domain,
             localization_param,
             test_bound,
@@ -261,11 +262,11 @@ where
     pub fn submit_verifier_current_round(
         &mut self,
         namespace: NameSpace,
-        tracer: TraceInfo,
+        trace: TraceInfo,
     ) -> MsgRoundRef {
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifier_messages.push(pending_message);
-        self.attach_latest_verifier_round_to_namespace(namespace, tracer)
+        self.attach_latest_verifier_round_to_namespace(namespace, trace)
     }
 
     /// Squeeze sampled verifier message as field elements. The squeezed

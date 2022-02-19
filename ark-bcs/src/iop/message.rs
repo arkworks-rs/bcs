@@ -1,14 +1,12 @@
 
-use crate::prelude::SimulationTranscript;
 use crate::{iop::bookkeeper::MessageBookkeeper, tracer::TraceInfo};
-use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
-use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::vec::Vec;
 use std::iter::FromIterator;
 
 use crate::iop::message::LeavesType::{Custom, UseCodewordDomain};
 use tracing::info;
+use crate::bcs::transcript::LDTInfo;
 
 use super::{
     bookkeeper::{BookkeeperContainer, ToMsgRoundRef},
@@ -391,22 +389,14 @@ impl ProverRoundMessageInfo {
     }
 
     /// Builds prover round message info using codeword domain.
-    pub fn new_using_codeword_domain<P, S, F>(
-        transcript: &mut SimulationTranscript<P, S, F>,
+    pub fn new_using_codeword_domain<F, T: LDTInfo<F>>(
+        transcript: &mut T,
     ) -> ProverRoundMessageInfoBuilder
     where
-        P: Config<Leaf = [F]>,
-        S: CryptographicSponge,
-        F: PrimeField + Absorb,
-        P::InnerDigest: Absorb,
+        F: PrimeField,
     {
-        let length = transcript
-            .ldt_codeword_domain
-            .expect("codeword domain not set")
-            .size();
-        let localization_parameter = transcript
-            .ldt_localization_parameter
-            .expect("codeword localization parameter not set");
+        let length = transcript.codeword_domain().size();
+        let localization_parameter = transcript.codeword_localization_parameter();
         Self::new(UseCodewordDomain, length, localization_parameter)
     }
 
