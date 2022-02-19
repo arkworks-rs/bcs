@@ -2,19 +2,18 @@ use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge};
 
 use crate::{
-    iop::{
-        message::MessagesCollection, prover::IOPProver, ProverParam,
-         VerifierParam,
-    },
+    bcs::simulation_transcript::SimulationTranscript,
+    iop::{message::MessagesCollection, prover::IOPProver, ProverParam, VerifierParam},
     Error,
 };
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
-use crate::bcs::simulation_transcript::SimulationTranscript;
 
 use super::{bookkeeper::NameSpace, oracles::RoundOracle};
 
-/// The verifier for public coin IOP has two phases.  This is intended to be used as an endpoint protocol. Any subprotocol does not need to implement this trait.
-/// Any implementation of this trait can be transformed to SNARG by BCS.
+/// The verifier for public coin IOP has two phases.  This is intended to be
+/// used as an endpoint protocol. Any subprotocol does not need to implement
+/// this trait. Any implementation of this trait can be transformed to SNARG by
+/// BCS.
 /// * **Commit Phase**: Verifier send message that is uniformly sampled from a
 ///   random oracle. Verifier
 /// will receive prover oracle, that can use used to query later. This protocol

@@ -1,21 +1,23 @@
 use crate::UnivariateSumcheck;
-use ark_bcs::bcs::constraints::transcript::SimulationTranscriptVar;
-use ark_bcs::iop::bookkeeper::NameSpace;
-use ark_bcs::iop::constraints::oracles::VirtualOracleVar;
-use ark_bcs::iop::message::OracleIndex;
-use ark_bcs::iop_trace;
-use ark_bcs::prelude::{MsgRoundRef, ProverRoundMessageInfo};
-use ark_crypto_primitives::merkle_tree::constraints::ConfigGadget;
-use ark_crypto_primitives::merkle_tree::Config;
+use ark_bcs::{
+    bcs::constraints::transcript::SimulationTranscriptVar,
+    iop::{bookkeeper::NameSpace, constraints::oracles::VirtualOracleVar, message::OracleIndex},
+    iop_trace,
+    prelude::{MsgRoundRef, ProverRoundMessageInfo},
+};
+use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_r1cs_std::poly::domain::vanishing_poly::VanishingPolynomial;
-use ark_r1cs_std::poly::domain::Radix2DomainVar;
-use ark_r1cs_std::prelude::*;
+use ark_r1cs_std::{
+    fields::fp::FpVar,
+    poly::domain::{vanishing_poly::VanishingPolynomial, Radix2DomainVar},
+    prelude::*,
+};
 use ark_relations::r1cs::SynthesisError;
-use ark_sponge::constraints::{AbsorbGadget, SpongeWithGadget};
-use ark_sponge::Absorb;
+use ark_sponge::{
+    constraints::{AbsorbGadget, SpongeWithGadget},
+    Absorb,
+};
 
 #[derive(Debug, Clone)]
 pub struct SumcheckPOracleVar<F: PrimeField> {

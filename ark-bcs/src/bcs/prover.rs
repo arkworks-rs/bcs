@@ -2,7 +2,7 @@ use crate::{
     bcs::{transcript::Transcript, MTHashParameters},
     iop::{
         bookkeeper::NameSpace, message::MessagesCollection, oracles::SuccinctRoundMessage,
-         verifier::IOPVerifierForProver, ProverParam,
+        prover::IOPProver, verifier::IOPVerifierForProver, ProverParam,
     },
     ldt::{NoLDT, LDT},
     Error,
@@ -13,7 +13,6 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::vec::Vec;
-use crate::iop::prover::IOPProver;
 
 /// BCSProof contains all prover messages that use succinct oracle, and thus is
 /// itself succinct.
@@ -32,7 +31,7 @@ where
     /// same merkle tree. Each merkle tree leaf is a vector which each
     /// element correspond to the same coset of different oracles.
     pub prover_iop_messages_by_round: Vec<SuccinctRoundMessage<F>>,
-    
+
     /// Merkle tree roots for all prover messages (including main prover and ldt
     /// prover).
     pub prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
@@ -48,7 +47,8 @@ where
     F: PrimeField + Absorb,
     MT::InnerDigest: Absorb,
 {
-    /// Generate proof from any IOPProver and IOPVerifier with consistent parameter and public input.
+    /// Generate proof from any IOPProver and IOPVerifier with consistent
+    /// parameter and public input.
     pub fn generate<V, P, L, S>(
         sponge: S,
         public_input: &P::PublicInput,

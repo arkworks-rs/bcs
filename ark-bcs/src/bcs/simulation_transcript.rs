@@ -4,15 +4,12 @@ use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::vec::Vec;
 use tracing::info;
 
-use crate::bcs::transcript::LDTInfo;
-use crate::iop::message::LeavesType;
-use crate::iop::oracles::VirtualOracle;
 use crate::{
-    bcs::prover::BCSProof,
+    bcs::{prover::BCSProof, transcript::LDTInfo},
     iop::{
         bookkeeper::{MessageBookkeeper, NameSpace},
-        message::{MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
-        oracles::VirtualOracleWithInfo,
+        message::{LeavesType, MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
+        oracles::{VirtualOracle, VirtualOracleWithInfo},
     },
     tracer::TraceInfo,
 };
@@ -57,7 +54,6 @@ pub struct SimulationTranscript<
     /// Virtual oracle registered during commit phase simulation.
     pub(crate) registered_virtual_oracles: Vec<VirtualOracleWithInfo<F>>,
 }
-
 
 impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
     SimulationTranscript<'a, P, S, F>
@@ -145,7 +141,8 @@ where
         let num_oracles_received = current_round.queried_cosets.get(0).map_or(0, |c| c.len());
 
         // here are some sanity check to make sure user is not doing wrong thing
-        // check 1: `num_short_messages` and `num_oracles` should be consistent with expected
+        // check 1: `num_short_messages` and `num_oracles` should be consistent with
+        // expected
         assert_eq!(
             num_short_message_expected, num_short_message_received,
             "Number of short messages received is not equal to expected. {}",
@@ -180,7 +177,8 @@ where
                 trace_info
             );
         }
-        // check 5: if LeavesType is UseCodewordDomain, then length and localization parameter should be same as length and localization for transcript
+        // check 5: if LeavesType is UseCodewordDomain, then length and localization
+        // parameter should be same as length and localization for transcript
         if expected_message_info.leaves_type == LeavesType::UseCodewordDomain {
             assert_eq!(
                 expected_message_info.length,
@@ -196,7 +194,8 @@ where
             );
         }
 
-        // check 6.1: if there are no message oracles, length and localization parameter should be 0
+        // check 6.1: if there are no message oracles, length and localization parameter
+        // should be 0
         if num_oracles_expected == 0 {
             assert_eq!(
                 expected_message_info.length, 0,
@@ -209,7 +208,8 @@ where
                 trace_info
             );
         }
-        // check 6.2: if there are message oracles length should be power of 2, and 2^localization_parameter should <= length
+        // check 6.2: if there are message oracles length should be power of 2, and
+        // 2^localization_parameter should <= length
         else {
             assert!(
                 expected_message_info.length.is_power_of_two(),
@@ -250,8 +250,10 @@ where
         // make sure that no virtual oracle is registered when we are halfway sampling
         // verifier round
         assert!(!self.is_pending_message_available());
-        let (codeword_domain, localization_param) =
-            (self.codeword_domain(), self.codeword_localization_parameter());
+        let (codeword_domain, localization_param) = (
+            self.codeword_domain(),
+            self.codeword_localization_parameter(),
+        );
         let virtual_oracle = VirtualOracleWithInfo::new(
             Box::new(oracle),
             codeword_domain,
@@ -361,13 +363,11 @@ where
     }
 }
 
-impl<
-    'a,
-    P: MTConfig<Leaf=[F]>,
-    S: CryptographicSponge,
-    F: PrimeField + Absorb,
-> LDTInfo<F> for SimulationTranscript<'a, P, S, F> where
-    P::InnerDigest: Absorb, {
+impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb> LDTInfo<F>
+    for SimulationTranscript<'a, P, S, F>
+where
+    P::InnerDigest: Absorb,
+{
     fn codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")
     }

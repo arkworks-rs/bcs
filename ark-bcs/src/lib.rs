@@ -29,13 +29,12 @@ pub mod bcs;
 /// Defines trait for performing LDT.
 pub mod ldt;
 
-#[cfg(test)]
-pub(crate) mod test_utils;
 /// Some handy imports for users.
 pub mod prelude;
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 use ark_std::boxed::Box;
 
 /// Universal Error Type
 pub type Error = Box<dyn ark_std::error::Error>;
-

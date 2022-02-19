@@ -2,14 +2,11 @@ use crate::{
     vp::{DivVanishingPoly, VanishingPoly},
     UnivariateSumcheck,
 };
-use ark_bcs::iop::message::OracleIndex;
-use ark_bcs::iop::oracles::VirtualOracle;
-use ark_bcs::prelude::{ProverRoundMessageInfo, SimulationTranscript};
 use ark_bcs::{
     bcs::transcript::{LDTInfo, Transcript},
-    iop::bookkeeper::NameSpace,
+    iop::{bookkeeper::NameSpace, message::OracleIndex, oracles::VirtualOracle},
     iop_trace,
-    prelude::MsgRoundRef,
+    prelude::{MsgRoundRef, ProverRoundMessageInfo, SimulationTranscript},
 };
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
@@ -121,7 +118,8 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
     /// Send sumcheck message via transcript
     ///
     /// * `f`: coefficient of polynomial `f` to sum at domain `H`
-    /// * `f_handlet`: where is `f` in transcript, represented as a round reference and an oracle index in that round
+    /// * `f_handlet`: where is `f` in transcript, represented as a round
+    ///   reference and an oracle index in that round
     /// * `is_f_bounded`: whether `f` has degree bound
     /// # Panics
     /// Panics if there is a pending message not sent.
@@ -203,19 +201,18 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
 mod tests {
     use super::*;
     use crate::test_util::poseidon_parameters;
-    use ark_bcs::bcs::prover::BCSProof;
-    use ark_bcs::bcs::verifier::BCSVerifier;
-    use ark_bcs::bcs::MTHashParameters;
-    use ark_bcs::iop::oracles::RoundOracle;
-    use ark_bcs::iop::prover::IOPProver;
-    use ark_bcs::iop::verifier::IOPVerifier;
-    use ark_bcs::iop::ProverParam;
-    use ark_bcs::ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters};
-    use ark_bcs::prelude::MessagesCollection;
-    use ark_bcs::Error;
+    use ark_bcs::{
+        bcs::{prover::BCSProof, verifier::BCSVerifier, MTHashParameters},
+        iop::{oracles::RoundOracle, prover::IOPProver, verifier::IOPVerifier, ProverParam},
+        ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+        prelude::MessagesCollection,
+        Error,
+    };
     use ark_bls12_381::Fr;
-    use ark_crypto_primitives::crh::poseidon;
-    use ark_crypto_primitives::merkle_tree::{Config, IdentityDigestConverter};
+    use ark_crypto_primitives::{
+        crh::poseidon,
+        merkle_tree::{Config, IdentityDigestConverter},
+    };
     use ark_ldt::domain::Radix2CosetDomain;
     use ark_poly::Polynomial;
     use ark_sponge::poseidon::PoseidonSponge;
@@ -248,7 +245,8 @@ mod tests {
         // let expected_g_eval_over_h = codeword_domain
         //     .evaluate(&g)
         //     .iter()
-        //     .map(|x| *x * Fr::from(summation_domain.size() as u64).inverse().unwrap()).collect::<Vec<_>>();
+        //     .map(|x| *x * Fr::from(summation_domain.size() as
+        // u64).inverse().unwrap()).collect::<Vec<_>>();
 
         let dummy_handle = (MsgRoundRef::default(), OracleIndex::default());
 

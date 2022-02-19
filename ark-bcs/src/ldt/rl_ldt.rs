@@ -1,6 +1,5 @@
-use crate::bcs::simulation_transcript::SimulationTranscript;
 use crate::{
-    bcs::transcript::Transcript,
+    bcs::{simulation_transcript::SimulationTranscript, transcript::Transcript},
     iop::{
         bookkeeper::{BookkeeperContainer, NameSpace},
         message::{MessagesCollection, MsgRoundRef, ProverRoundMessageInfo},
@@ -44,8 +43,20 @@ pub struct LinearCombinationLDTParameters<F: PrimeField + Absorb> {
 
 impl<F: PrimeField + Absorb> LinearCombinationLDTParameters<F> {
     /// Create a new parameter for Linear Combination LDT
-    pub fn new(max_degree_bound: u64, localization_param: Vec<u64>, codeword_domain: Radix2CosetDomain<F>, num_queries: usize) -> Self {
-        LinearCombinationLDTParameters { fri_parameters: FRIParameters::new(max_degree_bound, localization_param, codeword_domain), num_queries }
+    pub fn new(
+        max_degree_bound: u64,
+        localization_param: Vec<u64>,
+        codeword_domain: Radix2CosetDomain<F>,
+        num_queries: usize,
+    ) -> Self {
+        LinearCombinationLDTParameters {
+            fri_parameters: FRIParameters::new(
+                max_degree_bound,
+                localization_param,
+                codeword_domain,
+            ),
+            num_queries,
+        }
     }
 }
 
@@ -194,7 +205,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         assert!(final_polynomial.coeffs.len() <= (final_poly_degree_bound + 1) as usize);
         // transcript.send_message(final_polynomial.coeffs);
         // transcript
-        //     .submit_prover_current_round(namespace, iop_trace!("ldt final poly coefficients"))?;
+        //     .submit_prover_current_round(namespace, iop_trace!("ldt final poly
+        // coefficients"))?;
         transcript
             .add_prover_round_with_custom_length_and_localization(0, 0)
             .send_short_message(final_polynomial.coeffs)
@@ -544,8 +556,8 @@ mod tests {
                 iop_trace!("ldt test"),
             );
             // transcript
-            //     .send_oracle_evaluations(poly.evaluate_over_domain(evaluation_domain).evals, 69)
-            //     .unwrap();
+            //     .send_oracle_evaluations(poly.evaluate_over_domain(evaluation_domain).
+            // evals, 69)     .unwrap();
             // transcript
             //     .submit_prover_current_round(root_namespace, iop_trace!())
             //     .unwrap();

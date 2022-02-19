@@ -78,7 +78,7 @@ impl<F: PrimeField + Absorb> LDTWithGadget<F> for LinearCombinationLDT<F> {
             ProverRoundMessageInfo::new_using_custom_length_and_localization(0, 0)
                 .with_num_short_messages(1)
                 .build(),
-            iop_trace!("LDT final polynomial")
+            iop_trace!("LDT final polynomial"),
         )?;
 
         Ok(())

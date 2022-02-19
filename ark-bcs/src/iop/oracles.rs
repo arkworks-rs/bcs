@@ -4,12 +4,13 @@
 
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use std::collections::BTreeSet;
-use std::mem::take;
+use std::{collections::BTreeSet, mem::take};
 
 use super::message::{MessagesCollection, ProverRoundMessageInfo};
-use crate::iop::message::{CosetQueryResult, LeavesType, OracleIndex};
-use crate::prelude::MsgRoundRef;
+use crate::{
+    iop::message::{CosetQueryResult, LeavesType, OracleIndex},
+    prelude::MsgRoundRef,
+};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::{boxed::Box, vec::Vec};
 
@@ -312,7 +313,8 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
         // first, construct constituent oracles
         let constituent_oracle_handles = self.coset_evaluator.constituent_oracle_handles();
 
-        // constituent_oracles[i][j][k] is coset_index[i] -> oracle_index[j] -> element_index[k]
+        // constituent_oracles[i][j][k] is coset_index[i] -> oracle_index[j] ->
+        // element_index[k]
         let constituent_oracles = constituent_oracle_handles
             .into_iter()
             .map(|(round, idxes)| {
@@ -330,11 +332,13 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
                     .map(|mut c| { // shape (num_oracles_in_this_round, num_elements_in_coset)
                         idxes.iter().map(|idx| take(&mut c[idx.idx])).collect::<Vec<_>>() // shape (num_oracles_needed_for_this_round, num_elements_in_coset) 
                     }).collect::<Vec<_>>()
-                // shape: (num_cosets, num_oracles_needed_for_this_round, num_elements_in_coset)
+                // shape: (num_cosets, num_oracles_needed_for_this_round,
+                // num_elements_in_coset)
             })
             .fold(vec![vec![]; coset_index.len()], |mut acc, r| {
-                // shape of r is (num_cosets, num_oracles_needed_for_this_round, num_elements_in_coset)
-                // result shape: (num_cosets, num_oracles_needed_for_all_rounds, num_elements_in_coset)
+                // shape of r is (num_cosets, num_oracles_needed_for_this_round,
+                // num_elements_in_coset) result shape: (num_cosets,
+                // num_oracles_needed_for_all_rounds, num_elements_in_coset)
                 acc.iter_mut().zip(r).for_each(|(a, r)| {
                     a.extend(r);
                 });
@@ -352,11 +356,11 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
             })
             .collect::<Vec<_>>();
 
-        let query_result =
-            constituent_oracles.into_iter().zip(
-                queried_cosets)
-                .map(|(cons, coset)| self.coset_evaluator.evaluate(coset, &cons))
-                .collect::<Vec<Vec<_>>>();
+        let query_result = constituent_oracles
+            .into_iter()
+            .zip(queried_cosets)
+            .map(|(cons, coset)| self.coset_evaluator.evaluate(coset, &cons))
+            .collect::<Vec<Vec<_>>>();
 
         CosetQueryResult::from_single_oracle_result(query_result)
     }
@@ -368,17 +372,19 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
             self.codeword_domain.size(),
             self.localization_param,
         )
-            .with_reed_solomon_codes_degree_bounds(self.test_bound.clone())
-            .build()
+        .with_reed_solomon_codes_degree_bounds(self.test_bound.clone())
+        .build()
     }
 }
 
 /// evaluator for virtual oracle
 /// It is enforced that implementors do not contain any reference with lifetime.
 pub trait VirtualOracle<F: PrimeField>: 'static {
-    /// query constituent oracles as a message round handle, and the indices of oracles needed in that round
+    /// query constituent oracles as a message round handle, and the indices of
+    /// oracles needed in that round
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
-    /// evaluate this virtual oracle, using evaluations of constituent oracles on `coset_domain`
+    /// evaluate this virtual oracle, using evaluations of constituent oracles
+    /// on `coset_domain`
     fn evaluate(
         &self,
         coset_domain: Radix2CosetDomain<F>,

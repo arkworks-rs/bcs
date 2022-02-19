@@ -1,7 +1,7 @@
 use crate::{
     iop::{
         bookkeeper::{BookkeeperContainer, MessageBookkeeper, ToMsgRoundRef},
-        message::{MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
+        message::{CosetQueryResult, MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
     },
     tracer::TraceInfo,
 };
@@ -9,7 +9,6 @@ use ark_ff::PrimeField;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use ark_std::{borrow::Borrow, vec::Vec};
-use crate::iop::message::CosetQueryResult;
 
 use super::oracles::{SuccinctRoundOracleVar, VirtualOracleVarWithInfo};
 
@@ -255,21 +254,21 @@ impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {
                     .map(|x| FpVar::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::FieldElements(var?))
-            }
+            },
             VerifierMessage::Bits(bits) => {
                 let var: Result<Vec<_>, _> = bits
                     .iter()
                     .map(|x| Boolean::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bits(var?))
-            }
+            },
             VerifierMessage::Bytes(bytes) => {
                 let var: Result<Vec<_>, _> = bytes
                     .iter()
                     .map(|x| UInt8::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bytes(var?))
-            }
+            },
         }
     }
 }

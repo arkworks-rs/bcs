@@ -1,12 +1,13 @@
-
 use crate::{iop::bookkeeper::MessageBookkeeper, tracer::TraceInfo};
 use ark_ff::PrimeField;
 use ark_std::vec::Vec;
 use std::iter::FromIterator;
 
-use crate::iop::message::LeavesType::{Custom, UseCodewordDomain};
+use crate::{
+    bcs::transcript::LDTInfo,
+    iop::message::LeavesType::{Custom, UseCodewordDomain},
+};
 use tracing::info;
-use crate::bcs::transcript::LDTInfo;
 
 use super::{
     bookkeeper::{BookkeeperContainer, ToMsgRoundRef},
@@ -38,10 +39,13 @@ impl MsgRoundRef {
     }
 }
 
-/// A Message Round can contain multiple oracles with same evaluation domain. The oracle index represents the position of the
-/// oracle in that message round. Oracles with degree bound come first and oracles with degree bound come last.
+/// A Message Round can contain multiple oracles with same evaluation domain.
+/// The oracle index represents the position of the oracle in that message
+/// round. Oracles with degree bound come first and oracles with degree bound
+/// come last.
 ///
-/// For example, if in one round user first add bounded oracle A, unbounded oracle B and then bounded oracle C, then
+/// For example, if in one round user first add bounded oracle A, unbounded
+/// oracle B and then bounded oracle C, then
 /// * the index of `A` will be `{0, bounded}`
 /// * the index of `B` will be `{1, unbounded}`
 /// * the index of `C` will be `{2, bounded}`
@@ -58,7 +62,10 @@ pub struct OracleIndex {
 impl OracleIndex {
     /// Returns a new `OracleIndex`
     pub fn new(index: usize, bounded: bool) -> Self {
-        OracleIndex { idx: index, bounded }
+        OracleIndex {
+            idx: index,
+            bounded,
+        }
     }
 }
 
@@ -75,8 +82,7 @@ impl From<(usize, bool)> for OracleIndex {
 /// Message can be accessed using namespace, or `MsgRoundRef`.
 /// This struct is used by verifier to access prover message oracles and
 /// verifier messages.
-pub struct MessagesCollection<F: PrimeField, O: RoundOracle<F>>
-{
+pub struct MessagesCollection<F: PrimeField, O: RoundOracle<F>> {
     pub(crate) real_oracles: Vec<O>,
     pub(crate) virtual_oracles: Vec<Option<VirtualOracleWithInfo<F>>>,
     pub(crate) verifier_messages: Vec<Vec<VerifierMessage<F>>>,
@@ -298,7 +304,8 @@ impl<T: Clone> CosetQueryResult<T> {
     }
 
     /// Return `self` query_result of a single oracle.
-    /// `query_result[i][j]` is coset index `i` -> element `j`. The shape of returned result will be `(num_cosets, 1, coset_size)`
+    /// `query_result[i][j]` is coset index `i` -> element `j`. The shape of
+    /// returned result will be `(num_cosets, 1, coset_size)`
     pub fn from_single_oracle_result(query_result: Vec<Vec<T>>) -> Self {
         query_result.into_iter().map(|coset| vec![coset]).collect()
     }
@@ -348,13 +355,16 @@ pub struct ProverRoundMessageInfo {
     /// Number of short messages. Those messages will be included in proof in
     /// entirety.
     pub num_short_messages: usize,
-    /// The type of leaves: whether it uses codeword domain or custom length and localization.
+    /// The type of leaves: whether it uses codeword domain or custom length and
+    /// localization.
     pub leaves_type: LeavesType,
     /// Number of elements in each oracle in this round.
     pub length: usize,
-    /// Localization parameter for this round. When serializing to a merkle tree, each leaf is a hash of `2 ^ localization_parameter` elements.
-    /// For example, if we have elements `[1,2,3,4,5,6,7,8]` and localization parameter is 1, then the serialized merkle tree leaves will be
-    /// `[H(1,5), H(2,6), H(3,7), H(4,8)]`.   
+    /// Localization parameter for this round. When serializing to a merkle
+    /// tree, each leaf is a hash of `2 ^ localization_parameter` elements.
+    /// For example, if we have elements `[1,2,3,4,5,6,7,8]` and localization
+    /// parameter is 1, then the serialized merkle tree leaves will be
+    /// `[H(1,5), H(2,6), H(3,7), H(4,8)]`.
     pub localization_parameter: usize,
 }
 

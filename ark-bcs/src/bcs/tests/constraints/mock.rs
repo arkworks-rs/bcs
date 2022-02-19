@@ -1,10 +1,13 @@
-use crate::bcs::tests::mock::BCSTestVirtualOracle;
-use crate::iop::constraints::oracles::VirtualOracleVar;
 use crate::{
-    bcs::{constraints::transcript::SimulationTranscriptVar, tests::mock::MockTest1Verifier},
+    bcs::{
+        constraints::transcript::SimulationTranscriptVar,
+        tests::mock::{BCSTestVirtualOracle, MockTest1Verifier},
+    },
     iop::{
         bookkeeper::NameSpace,
-        constraints::{message::MessagesCollectionVar, IOPVerifierWithGadget},
+        constraints::{
+            message::MessagesCollectionVar, oracles::VirtualOracleVar, IOPVerifierWithGadget,
+        },
         message::ProverRoundMessageInfo,
     },
 };

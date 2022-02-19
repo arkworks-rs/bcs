@@ -4,9 +4,9 @@ use crate::{
         bookkeeper::{MessageBookkeeper, NameSpace},
         constraints::{
             message::VerifierMessageVar,
-            oracles::VirtualOracleVarWithInfo,
+            oracles::{VirtualOracleVar, VirtualOracleVarWithInfo},
         },
-        message::{MsgRoundRef, ProverRoundMessageInfo},
+        message::{LeavesType, MsgRoundRef, ProverRoundMessageInfo},
     },
     tracer::TraceInfo,
 };
@@ -20,8 +20,6 @@ use ark_sponge::{
     Absorb,
 };
 use ark_std::{mem::take, vec::Vec};
-use crate::iop::constraints::oracles::VirtualOracleVar;
-use crate::iop::message::LeavesType;
 
 /// R1CS Variable for simulation transcript used by verifier.
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
@@ -140,7 +138,8 @@ where
         let num_oracles_received = current_round.queried_cosets.get(0).map_or(0, |c| c.len());
 
         // here are some sanity check to make sure user is not doing wrong thing
-        // check 1: `num_short_messages` and `num_oracles` should be consistent with expected
+        // check 1: `num_short_messages` and `num_oracles` should be consistent with
+        // expected
         assert_eq!(
             num_short_message_expected, num_short_message_received,
             "Number of short messages received is not equal to expected. {}",
@@ -175,7 +174,8 @@ where
                 trace_info
             );
         }
-        // check 5: if LeavesType is UseCodewordDomain, then length and localization parameter should be same as length and localization for transcript
+        // check 5: if LeavesType is UseCodewordDomain, then length and localization
+        // parameter should be same as length and localization for transcript
         if expected_message_info.leaves_type == LeavesType::UseCodewordDomain {
             assert_eq!(
                 expected_message_info.length,
@@ -191,7 +191,8 @@ where
             );
         }
 
-        // check 6.1: if there are no message oracles, length and localization parameter should be 0
+        // check 6.1: if there are no message oracles, length and localization parameter
+        // should be 0
         if num_oracles_expected == 0 {
             assert_eq!(
                 expected_message_info.length, 0,
@@ -204,7 +205,8 @@ where
                 trace_info
             );
         }
-        // check 6.2: if there are message oracles length should be power of 2, and 2^localization_parameter should <= length
+        // check 6.2: if there are message oracles length should be power of 2, and
+        // 2^localization_parameter should <= length
         else {
             assert!(
                 expected_message_info.length.is_power_of_two(),

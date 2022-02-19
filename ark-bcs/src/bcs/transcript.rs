@@ -5,15 +5,19 @@ use ark_std::vec::Vec;
 use std::collections::BTreeSet;
 use tracing::info;
 
-use crate::iop::message::{LeavesType, OracleIndex};
-use crate::iop::message::LeavesType::{Custom, UseCodewordDomain};
-use crate::iop::oracles::VirtualOracle;
 use crate::{
     bcs::MTHashParameters,
     iop::{
         bookkeeper::{MessageBookkeeper, NameSpace, ToMsgRoundRef},
-        message::{MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
-        oracles::{RecordingRoundOracle, RoundOracle, SuccinctRoundMessage, VirtualOracleWithInfo},
+        message::{
+            LeavesType,
+            LeavesType::{Custom, UseCodewordDomain},
+            MsgRoundRef, OracleIndex, ProverRoundMessageInfo, VerifierMessage,
+        },
+        oracles::{
+            RecordingRoundOracle, RoundOracle, SuccinctRoundMessage, VirtualOracle,
+            VirtualOracleWithInfo,
+        },
     },
     tracer::TraceInfo,
     Error,
@@ -51,11 +55,9 @@ where
     /// Each merkle tree leaf is a vector which each element correspond to
     /// the same location of different oracles
     pub prover_message_oracles: Vec<RecordingRoundOracle<F>>,
-    /// Virtual oracle registered during commit phase simulation. Each virtual oracle will only have one round.
-    pub(crate) registered_virtual_oracles: Vec<(
-        VirtualOracleWithInfo<F>,
-        Vec<F>,
-    )>,
+    /// Virtual oracle registered during commit phase simulation. Each virtual
+    /// oracle will only have one round.
+    pub(crate) registered_virtual_oracles: Vec<(VirtualOracleWithInfo<F>, Vec<F>)>,
     /// Each element `merkle_tree_for_each_round[i]` corresponds to the merkle
     /// tree for `prover_message_oracles[i]`. If no oracle messages in this
     /// round, merkle tree will be `None`.
@@ -177,9 +179,7 @@ where
 
                 idxes
                     .into_iter()
-                    .map(|idx| {
-                        self.get_previously_sent_prover_oracle(round, idx).to_vec()
-                    })
+                    .map(|idx| self.get_previously_sent_prover_oracle(round, idx).to_vec())
                     .collect::<Vec<_>>()
             })
             .flatten()
@@ -208,18 +208,24 @@ where
     /// p1, p2, ...]`, non low-degree oracle `[q0, q1, ...]`,
     /// `get_previously_sent_prover_rs_code(at, index)` will return evaluation
     /// of `p_index` at domain.
-    pub fn get_previously_sent_prover_oracle(&self, at: impl ToMsgRoundRef, index: OracleIndex) -> &[F] {
+    pub fn get_previously_sent_prover_oracle(
+        &self,
+        at: impl ToMsgRoundRef,
+        index: OracleIndex,
+    ) -> &[F] {
         let msg_ref = at.to_prover_msg_round_ref(&self.bookkeeper);
         if msg_ref.is_virtual {
-            assert_eq!(index.bounded, true, "virtual round does not have oracles without degree bound");
+            assert_eq!(
+                index.bounded, true,
+                "virtual round does not have oracles without degree bound"
+            );
             assert_eq!(index.idx, 0, "virtual round only has one oracle per round");
             &self.registered_virtual_oracles[msg_ref.index].1
         } else {
             match index.bounded {
-                true =>&self.prover_message_oracles[msg_ref.index].reed_solomon_codes[index.idx].0,
-                false =>&self.prover_message_oracles[msg_ref.index].message_oracles[index.idx],
+                true => &self.prover_message_oracles[msg_ref.index].reed_solomon_codes[index.idx].0,
+                false => &self.prover_message_oracles[msg_ref.index].message_oracles[index.idx],
             }
-
         }
     }
 
@@ -401,11 +407,13 @@ where
     F: PrimeField + Absorb,
     P::InnerDigest: Absorb,
 {
-    /// Oracle evaluations with a degree bound. For now, it is required that all `reed_solomon_codes` have the same domain as codeword domain.  
+    /// Oracle evaluations with a degree bound. For now, it is required that all
+    /// `reed_solomon_codes` have the same domain as codeword domain.
     reed_solomon_codes: Vec<(Vec<F>, usize)>,
     /// Message oracles without a degree bound.
     message_oracles: Vec<Vec<F>>,
-    /// Messages without oracle sent in current round. There is no constraint on the length of the messages.
+    /// Messages without oracle sent in current round. There is no constraint on
+    /// the length of the messages.
     short_messages: Vec<Vec<F>>,
     transcript: &'a mut Transcript<P, S, F>,
     leaves_type: LeavesType,
@@ -421,8 +429,8 @@ where
     P::InnerDigest: Absorb,
 {
     /// Send Reed-Solomon codes of a polynomial.
-    /// For now, it is required that all `reed_solomon_codes` have LDT codeword domain.
-    /// # Panics
+    /// For now, it is required that all `reed_solomon_codes` have LDT codeword
+    /// domain. # Panics
     /// - Panics if current round is using custom length and localization.
     /// - Panics if message length is not equal to domain size.
     pub fn send_oracle_evaluations_with_degree_bound(
@@ -440,10 +448,12 @@ where
         self
     }
 
-    /// Send prover message oracles. For now, it is required that all `message_oracles` have the same length as the domain size.
-    /// Also, the localization parameter of the oracles will be determined by transcript.
+    /// Send prover message oracles. For now, it is required that all
+    /// `message_oracles` have the same length as the domain size. Also, the
+    /// localization parameter of the oracles will be determined by transcript.
     /// # Panics
-    ///  Panics if the length of oracle message is not equal to length for current round.
+    ///  Panics if the length of oracle message is not equal to length for
+    /// current round.
     pub fn send_oracle_message_without_degree_bound(
         mut self,
         msg: impl IntoIterator<Item = F>,

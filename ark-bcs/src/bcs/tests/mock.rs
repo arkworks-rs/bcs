@@ -1,15 +1,13 @@
-use crate::bcs::simulation_transcript::SimulationTranscript;
-use crate::iop::oracles::VirtualOracle;
-use crate::prelude::MsgRoundRef;
 use crate::{
-    bcs::transcript::Transcript,
+    bcs::{simulation_transcript::SimulationTranscript, transcript::Transcript},
     iop::{
         bookkeeper::NameSpace,
-        message::{MessagesCollection, ProverRoundMessageInfo, VerifierMessage},
-        oracles::RoundOracle,
+        message::{MessagesCollection, OracleIndex, ProverRoundMessageInfo, VerifierMessage},
+        oracles::{RoundOracle, VirtualOracle},
         prover::IOPProver,
         verifier::IOPVerifier,
     },
+    prelude::MsgRoundRef,
     Error,
 };
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
@@ -19,7 +17,6 @@ use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::{marker::PhantomData, test_rng, vec, vec::Vec};
 use tracing::Level;
-use crate::iop::message::OracleIndex;
 
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
@@ -33,13 +30,17 @@ pub(crate) struct BCSTestVirtualOracle<F: PrimeField> {
 impl<F: PrimeField> BCSTestVirtualOracle<F> {
     #[allow(unused)]
     pub(crate) fn new(round: MsgRoundRef) -> Self {
-        BCSTestVirtualOracle { round, _field: PhantomData }
+        BCSTestVirtualOracle {
+            round,
+            _field: PhantomData,
+        }
     }
 }
 
 impl<F: PrimeField> VirtualOracle<F> for BCSTestVirtualOracle<F> {
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)> {
-        vec![(self.round, vec![(0, true).into()])] // take first oracle with degree bound
+        vec![(self.round, vec![(0, true).into()])] // take first oracle with
+                                                   // degree bound
     }
 
     fn evaluate(
@@ -52,11 +53,7 @@ impl<F: PrimeField> VirtualOracle<F> for BCSTestVirtualOracle<F> {
         let poly = DensePolynomial::from_coefficients_vec(vec![F::one(), F::from(2u64), F::one()]);
         let eval = coset_domain.evaluate(&poly);
         assert_eq!(msg2_points.len(), eval.len());
-        msg2_points
-            .iter()
-            .zip(eval)
-            .map(|(&x, y)| x * y)
-            .collect()
+        msg2_points.iter().zip(eval).map(|(&x, y)| x * y).collect()
     }
 }
 
@@ -107,7 +104,6 @@ impl<F: PrimeField + Absorb> IOPProver<F> for MockTestProver<F> {
         // verifier send2
         transcript.squeeze_verifier_bits(19);
         transcript.submit_verifier_current_round(namespace, iop_trace!("mock send2"));
-
 
         let msg1 = vm1.into_iter().map(|x| x.square());
         let msg2 = (0..256u128).map(|x| {
@@ -203,14 +199,15 @@ impl<S: CryptographicSponge, F: PrimeField + Absorb> IOPVerifier<S, F> for MockT
                 .with_num_short_messages(1)
                 .build();
 
-            transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
+        transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // prover send2
         let expected_info = ProverRoundMessageInfo::new_using_codeword_domain(transcript)
             .with_reed_solomon_codes_degree_bounds(vec![8])
             .with_num_short_messages(1)
             .build();
-        let prover_oracle_2 = transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
+        let prover_oracle_2 =
+            transcript.receive_prover_current_round(namespace, expected_info, iop_trace!());
 
         // prover send virtual oracle
         // always make sure arguments have type!

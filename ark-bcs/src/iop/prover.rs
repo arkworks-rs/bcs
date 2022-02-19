@@ -5,7 +5,8 @@ use ark_sponge::{Absorb, CryptographicSponge};
 
 use super::bookkeeper::NameSpace;
 
-/// A Prover for Public Coin IOP. This is intended to be used as an endpoint protocol. Any subprotocol does not need to implement this trait.
+/// A Prover for Public Coin IOP. This is intended to be used as an endpoint
+/// protocol. Any subprotocol does not need to implement this trait.
 /// Any implementation of this trait can be transformed to SNARG by BCS.
 pub trait IOPProver<F: PrimeField + Absorb> {
     /// Prover parameter should be a superset of verifier parameter.

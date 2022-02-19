@@ -1,10 +1,13 @@
 use ark_std::borrow::Borrow;
-use std::collections::BTreeSet;
-use std::mem::take;
+use std::{collections::BTreeSet, mem::take};
 
-use crate::iop::message::{CosetQueryResult, LeavesType, OracleIndex};
-use crate::iop::oracles::VirtualOracle;
-use crate::iop::{message::ProverRoundMessageInfo, oracles::SuccinctRoundMessage};
+use crate::{
+    iop::{
+        message::{CosetQueryResult, LeavesType, OracleIndex, ProverRoundMessageInfo},
+        oracles::{SuccinctRoundMessage, VirtualOracle},
+    },
+    prelude::MsgRoundRef,
+};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_r1cs_std::{
@@ -16,7 +19,6 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use ark_std::{boxed::Box, vec::Vec};
-use crate::prelude::MsgRoundRef;
 
 use super::message::MessagesCollectionVar;
 
@@ -276,13 +278,15 @@ impl<CF: PrimeField> VirtualOracleVarWithInfo<CF> {
                     .map(|mut c| { // shape (num_oracles_in_this_round, num_elements_in_coset)
                         idxes.iter().map(|idx| take(&mut c[idx.idx])).collect::<Vec<_>>() // shape (num_oracles_needed_for_this_round, num_elements_in_coset)
                     }).collect::<Vec<_>>())
-                // shape: (num_cosets, num_oracles_needed_for_this_round, num_elements_in_coset)
+                // shape: (num_cosets, num_oracles_needed_for_this_round,
+                // num_elements_in_coset)
             })
             .collect::<Result<Vec<_>, SynthesisError>>()?
             .into_iter()
             .fold(vec![vec![]; coset_index.len()], |mut acc, r| {
-                // shape of r is (num_cosets, num_oracles_needed_for_this_round, num_elements_in_coset)
-                // result shape: (num_cosets, num_oracles_needed_for_all_rounds, num_elements_in_coset)
+                // shape of r is (num_cosets, num_oracles_needed_for_this_round,
+                // num_elements_in_coset) result shape: (num_cosets,
+                // num_oracles_needed_for_all_rounds, num_elements_in_coset)
                 acc.iter_mut().zip(r).for_each(|(a, r)| {
                     a.extend(r);
                 });
@@ -292,7 +296,9 @@ impl<CF: PrimeField> VirtualOracleVarWithInfo<CF> {
 
         let queried_cosets = coset_index
             .iter()
-            .map(|i| codeword_domain_var.query_position_to_coset(&i[..], self.localization_param as u64))
+            .map(|i| {
+                codeword_domain_var.query_position_to_coset(&i[..], self.localization_param as u64)
+            })
             .collect::<Result<Vec<_>, SynthesisError>>()?;
 
         let query_result = constituent_oracles
@@ -330,12 +336,15 @@ fn fit_bits_to_length<F: PrimeField>(bits: &[Boolean<F>], length: usize) -> Vec<
     }
 }
 
-/// An extension trait for `VirtualOracle`, which adds supports for R1CS constraints.
+/// An extension trait for `VirtualOracle`, which adds supports for R1CS
+/// constraints.
 pub trait VirtualOracleVar<CF: PrimeField>: 'static {
-    /// query constituent oracles as a message round handle, and the indices of oracles needed in that round
+    /// query constituent oracles as a message round handle, and the indices of
+    /// oracles needed in that round
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
-    
-    /// generate new constraints to evaluate this virtual oracle, using evaluations of constituent oracles on `coset_domain`
+
+    /// generate new constraints to evaluate this virtual oracle, using
+    /// evaluations of constituent oracles on `coset_domain`
     fn evaluate_var(
         &self,
         coset_domain: Radix2DomainVar<CF>,

@@ -155,8 +155,9 @@ impl<F: PrimeField> DivVanishingPoly<F> for DensePolynomial<F> {
         // remainder = self - quotient * vp
         // = self - quotient * (x^|H| - S)
         // = self.first_H_terms + self.other_terms - quotient * (x^|H| - S)
-        // we know self.other_terms - quotient * x^|H| = 0 because remainder has degree |H|
-        // so, remainder = self.first_H_terms - quotient * (-S) = self.first_H_terms + quotient * s
+        // we know self.other_terms - quotient * x^|H| = 0 because remainder has degree
+        // |H| so, remainder = self.first_H_terms - quotient * (-S) =
+        // self.first_H_terms + quotient * s
         let mut remainder_vec = self.coeffs[..vp.degree].to_vec();
         remainder_vec
             .iter_mut()
@@ -179,7 +180,10 @@ mod tests {
 
     type F = ark_bls12_381::Fr;
 
-    fn test_coset_evaluate_template(vp_coset: Radix2CosetDomain<F>, coset: Radix2CosetDomain<F>) -> Vec<F> {
+    fn test_coset_evaluate_template(
+        vp_coset: Radix2CosetDomain<F>,
+        coset: Radix2CosetDomain<F>,
+    ) -> Vec<F> {
         let expected_eval = (0..coset.size())
             .map(|i| {
                 coset.element(i).pow(&[vp_coset.size() as u64])
@@ -213,7 +217,7 @@ mod tests {
         // more complex case
         let coset = Radix2CosetDomain::new_radix2_coset(256, F::rand(&mut rng));
         let eval = test_coset_evaluate_template(vp_domain, coset);
-        (0..(256usize>>2)).for_each(|i| {
+        (0..(256usize >> 2)).for_each(|i| {
             let (pos, coset) = coset.query_position_to_coset(i, 2);
             let coset_eval = test_coset_evaluate_template(vp_domain, coset);
             let expected = pos.into_iter().map(|p| eval[p]).collect::<Vec<_>>();

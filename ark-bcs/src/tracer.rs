@@ -105,10 +105,10 @@ mod compile_tests {
     #[test]
     fn test_it_compilers_in_const() {
         #[cfg(feature = "std")]
-            {
-                eprintln!("tracer1: {}", TRACE1);
-                eprintln!("tracer2: {}", TRACE2);
-                eprintln!("tracer2 str: {}", TRACE2_STR);
-            }
+        {
+            eprintln!("tracer1: {}", TRACE1);
+            eprintln!("tracer2: {}", TRACE2);
+            eprintln!("tracer2 str: {}", TRACE2_STR);
+        }
     }
 }
