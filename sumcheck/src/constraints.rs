@@ -84,7 +84,7 @@ impl<F: PrimeField> VirtualOracleVar<F> for SumcheckPOracleVar<F> {
             .zip(h_eval)
             .zip(z_h_eval)
             .map(|((f, h), z_h)| {
-                let result = (f - self.order_h_inv_times_claimed_sum - &z_h * h) * &cur_x_inv;
+                let result = (f - &self.order_h_inv_times_claimed_sum - &z_h * h) * &cur_x_inv;
                 cur_x_inv = &cur_x_inv * gen_inv;
                 result
             })
@@ -106,6 +106,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
     ) -> Result<(), SynthesisError>
     where
         MTG::InnerDigest: AbsorbGadget<F>,
+        MT::InnerDigest: Absorb,
     {
         // receive h with no degree bound
         let round_info = ProverRoundMessageInfo::new_using_codeword_domain(transcript)
@@ -128,6 +129,202 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
             vec![test_bound],
             vec![test_bound],
             iop_trace!("g oracle"),
+        );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        protocol::tests::{FieldMTConfig, MockProtocol, MockProverParam, MockVerifierParam},
+        test_util::poseidon_parameters,
+        UnivariateSumcheck,
+    };
+    use ark_bcs::{
+        bcs::{
+            constraints::{
+                proof::BCSProofVar, transcript::SimulationTranscriptVar,
+                verifier::BCSVerifierGadget, MTHashParametersVar,
+            },
+            prover::BCSProof,
+            MTHashParameters,
+        },
+        iop::{
+            bookkeeper::NameSpace,
+            constraints::{message::MessagesCollectionVar, IOPVerifierWithGadget},
+            message::OracleIndex,
+            ProverParam,
+        },
+        iop_trace,
+        ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
+        prelude::ProverRoundMessageInfo,
+    };
+    use ark_bls12_381::Fr;
+    use ark_crypto_primitives::{
+        crh::poseidon::constraints::CRHParametersVar,
+        merkle_tree::{constraints::ConfigGadget, Config, IdentityDigestConverter},
+    };
+    use ark_ldt::domain::Radix2CosetDomain;
+    use ark_poly::{univariate::DensePolynomial, UVPolynomial};
+    use ark_r1cs_std::{
+        alloc::{AllocVar, AllocationMode},
+        fields::fp::FpVar,
+    };
+    use ark_relations::{
+        ns,
+        r1cs::{ConstraintSystem, ConstraintSystemRef, Namespace, SynthesisError},
+    };
+    use ark_sponge::{
+        constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
+        poseidon::{constraints::PoseidonSpongeVar, PoseidonSponge},
+        Absorb, CryptographicSponge,
+    };
+    use ark_std::test_rng;
+    use std::borrow::Borrow;
+
+    #[derive(Clone, Debug)]
+    pub struct MockVerifierParamVar {
+        pub summation_domain: Radix2CosetDomain<Fr>,
+        pub claimed_sum: FpVar<Fr>,
+    }
+
+    impl AllocVar<MockVerifierParam, Fr> for MockVerifierParamVar {
+        fn new_variable<T: Borrow<MockVerifierParam>>(
+            cs: impl Into<Namespace<Fr>>,
+            f: impl FnOnce() -> Result<T, SynthesisError>,
+            mode: AllocationMode,
+        ) -> Result<Self, SynthesisError> {
+            let val = f()?;
+            let val = val.borrow();
+            let var = Self {
+                summation_domain: val.summation_domain,
+                claimed_sum: FpVar::new_variable(cs, || Ok(val.claimed_sum), mode)?,
+            };
+            Ok(var)
+        }
+    }
+
+    impl<S: SpongeWithGadget<Fr>> IOPVerifierWithGadget<S, Fr> for MockProtocol {
+        type VerifierParameterVar = MockVerifierParamVar;
+
+        type VerifierOutputVar = ();
+        type PublicInputVar = ();
+
+        fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, Fr, Leaf = [FpVar<Fr>]>>(
+            namespace: NameSpace,
+            transcript: &mut SimulationTranscriptVar<Fr, MT, MTG, S>,
+            verifier_parameter: &Self::VerifierParameterVar,
+        ) -> Result<(), SynthesisError>
+        where
+            MT::InnerDigest: Absorb,
+            MTG::InnerDigest: AbsorbGadget<Fr>,
+        {
+            let poly_info = ProverRoundMessageInfo::new_using_codeword_domain(transcript)
+                .with_num_message_oracles(1)
+                .build();
+            let poly_handle = transcript.receive_prover_current_round(
+                namespace,
+                poly_info,
+                iop_trace!("poly to sum"),
+            )?;
+            let sumcheck = UnivariateSumcheck {
+                summation_domain: verifier_parameter.summation_domain,
+            };
+            let sumcheck_ns = transcript.new_namespace(namespace, iop_trace!("sumcheck"));
+            sumcheck.register_sumcheck_commit_phase_var(
+                transcript,
+                sumcheck_ns,
+                (poly_handle, OracleIndex::new(0, false)),
+                verifier_parameter.claimed_sum.clone(),
+            )
+        }
+
+        fn query_and_decide_var<'a>(
+            _cs: ConstraintSystemRef<Fr>,
+            _namespace: NameSpace,
+            _verifier_parameter: &Self::VerifierParameterVar,
+            _public_input_var: &Self::PublicInputVar,
+            _sponge: &mut S::Var,
+            _transcript_messages: &mut MessagesCollectionVar<'a, Fr>,
+        ) -> Result<Self::VerifierOutputVar, SynthesisError> {
+            // nothing to do here. LDT is everything.
+            Ok(())
+        }
+    }
+
+    impl ConfigGadget<FieldMTConfig, Fr> for FieldMTConfig {
+        type Leaf = [FpVar<Fr>];
+        type LeafDigest = FpVar<Fr>;
+        type LeafInnerConverter = IdentityDigestConverter<FpVar<Fr>>;
+        type InnerDigest = FpVar<Fr>;
+        type LeafHash = ark_crypto_primitives::crh::poseidon::constraints::CRHGadget<Fr>;
+        type TwoToOneHash =
+            ark_crypto_primitives::crh::poseidon::constraints::TwoToOneCRHGadget<Fr>;
+    }
+
+    #[test]
+    fn test_constraints_end_to_end() {
+        let mut rng = test_rng();
+        let poseidon_param = poseidon_parameters();
+        let sponge = PoseidonSponge::new(&poseidon_param);
+
+        let codeword_domain = Radix2CosetDomain::new_radix2_coset(256, Fr::from(0x12345u128));
+        let ldt_param = LinearCombinationLDTParameters::new(128, vec![1, 2, 1], codeword_domain, 5);
+        let summation_domain = Radix2CosetDomain::new_radix2_coset(32, Fr::from(0x6789u128));
+
+        let poly = DensePolynomial::rand(100, &mut rng);
+
+        let claimed_sum = summation_domain.evaluate(&poly).into_iter().sum::<Fr>();
+
+        let cs = ConstraintSystem::<Fr>::new_ref();
+
+        let mt_hash_param = MTHashParameters::<FieldMTConfig> {
+            leaf_hash_param: poseidon_param.clone(),
+            inner_hash_param: poseidon_param.clone(),
+        };
+
+        let poseidon_param_var =
+            CRHParametersVar::new_constant(cs.clone(), poseidon_parameters()).unwrap();
+
+        let mt_hash_param_var = MTHashParametersVar::<Fr, FieldMTConfig, FieldMTConfig> {
+            leaf_params: poseidon_param_var.clone(),
+            inner_params: poseidon_param_var.clone(),
+        };
+
+        let prover_param = MockProverParam {
+            summation_domain,
+            poly,
+            claimed_sum,
+        };
+
+        let verifier_param = prover_param.to_verifier_param();
+        let verifier_param_var =
+            MockVerifierParamVar::new_witness(ns!(cs, "verifier_param"), || Ok(verifier_param))
+                .unwrap();
+
+        let proof = BCSProof::generate::<MockProtocol, MockProtocol, LinearCombinationLDT<Fr>, _>(
+            sponge.clone(),
+            &(),
+            &(),
+            &prover_param,
+            &ldt_param,
+            mt_hash_param.clone(),
         )
+        .unwrap();
+        let proof_var = BCSProofVar::new_witness(ns!(cs, "proof"), || Ok(proof)).unwrap();
+
+        let sponge_var = PoseidonSpongeVar::new(ns!(cs, "sponge").cs(), &poseidon_param);
+
+        BCSVerifierGadget::verify::<MockProtocol, LinearCombinationLDT<Fr>, PoseidonSponge<Fr>>(
+            cs.clone(),
+            sponge_var,
+            &proof_var,
+            &(),
+            &verifier_param_var,
+            &ldt_param,
+            &mt_hash_param_var,
+        )
+        .unwrap();
     }
 }

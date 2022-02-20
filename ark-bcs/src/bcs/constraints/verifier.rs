@@ -46,7 +46,7 @@ where
         sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
         public_input: &V::PublicInputVar,
-        verifier_parameter: &V::VerifierParameter,
+        verifier_parameter: &V::VerifierParameterVar,
         ldt_params: &L::LDTParameters,
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
@@ -217,7 +217,7 @@ where
         sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
         public_input: &V::PublicInputVar,
-        verifier_parameter: &V::VerifierParameter,
+        verifier_parameter: &V::VerifierParameterVar,
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
@@ -244,7 +244,7 @@ where
         sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
         public_input: &V::PublicInputVar,
-        verifier_parameter: &V::VerifierParameter,
+        verifier_parameter: &V::VerifierParameterVar,
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
         ldt_codeword_domain: Radix2CosetDomain<CF>,
         ldt_codeword_localization_parameter: usize,

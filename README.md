@@ -35,9 +35,7 @@ verification logic can be delayed to query and decision phase.
   verification overhead and number of constraints.
 - Each leaf of an low-degree oracle is a coset instead of an individual field element, which significantly reduces
   merkle tree overhead on FRI query.
-
-Check out the [tutorial](examples/sumcheck-example/README.md) to learn how to write (RS-)IOP using this library.
-
+ 
 ## Build Guide
 
 The library compiles on the `stable` toolchain of the Rust compiler. To install the latest version of Rust, first

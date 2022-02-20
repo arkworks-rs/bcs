@@ -23,7 +23,7 @@ pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
 }
 
 pub(crate) struct BCSTestVirtualOracle<F: PrimeField> {
-    round: MsgRoundRef,
+    pub(crate) round: MsgRoundRef,
     _field: PhantomData<F>,
 }
 

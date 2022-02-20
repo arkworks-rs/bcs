@@ -198,7 +198,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::test_util::poseidon_parameters;
     use ark_bcs::{

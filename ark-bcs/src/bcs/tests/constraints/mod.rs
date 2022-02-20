@@ -34,6 +34,7 @@ use ark_sponge::{
     CryptographicSponge,
 };
 use ark_std::{vec, One};
+use crate::iop::constraints::Nothing;
 
 mod mock;
 
@@ -102,7 +103,7 @@ fn test_bcs() {
     MockTest1Verifier::register_iop_structure_var(
         NameSpace::root(iop_trace!("BCS test")),
         &mut simulation_transcript,
-        &(),
+        &Nothing,
     )
     .unwrap();
 
@@ -117,7 +118,7 @@ fn test_bcs() {
         sponge,
         &bcs_proof_var,
         &(),
-        &(),
+        &Nothing,
         &ldt_parameters,
         &mt_hash_param,
     )

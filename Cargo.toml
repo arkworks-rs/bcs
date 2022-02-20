@@ -2,7 +2,7 @@
 members = [
     "ark-bcs",
     "sumcheck",
-    "examples/*"
+#    "examples/*"
 ]
 
 [profile.release]

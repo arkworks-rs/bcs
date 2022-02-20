@@ -28,8 +28,16 @@ use ark_sponge::{
     Absorb,
 };
 use ark_std::{test_rng, vec, vec::Vec};
+use crate::iop::constraints::Nothing;
+use crate::iop::message::OracleIndex;
+use crate::prelude::MsgRoundRef;
 
 impl<F: PrimeField> VirtualOracleVar<F> for BCSTestVirtualOracle<F> {
+    fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)> {
+        vec![(self.round, vec![(0, true).into()])] // take first oracle with
+        // degree bound
+    }
+
     fn evaluate_var(
         &self,
         coset_domain: Radix2DomainVar<F>,
@@ -54,13 +62,14 @@ impl<F: PrimeField> VirtualOracleVar<F> for BCSTestVirtualOracle<F> {
 impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, CF>
     for MockTest1Verifier<CF>
 {
+    type VerifierParameterVar = Nothing;
     type VerifierOutputVar = Boolean<CF>;
     type PublicInputVar = ();
 
     fn register_iop_structure_var<MT: Config, MTG: ConfigGadget<MT, CF, Leaf = [FpVar<CF>]>>(
         namespace: NameSpace,
         transcript: &mut SimulationTranscriptVar<CF, MT, MTG, S>,
-        _verifier_parameter: &Self::VerifierParameter,
+        _verifier_parameter: &Self::VerifierParameterVar,
     ) -> Result<(), SynthesisError>
     where
         MT::InnerDigest: Absorb,
@@ -117,7 +126,7 @@ impl<S: SpongeWithGadget<CF>, CF: PrimeField + Absorb> IOPVerifierWithGadget<S, 
     fn query_and_decide_var(
         cs: ConstraintSystemRef<CF>,
         namespace: NameSpace,
-        _verifier_parameter: &Self::VerifierParameter,
+        _verifier_parameter: &Self::VerifierParameterVar,
         _public_input_var: &Self::PublicInputVar,
         _sponge: &mut S::Var,
         transcript_messages: &mut MessagesCollectionVar<CF>,

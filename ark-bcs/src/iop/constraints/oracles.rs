@@ -4,7 +4,7 @@ use std::{collections::BTreeSet, mem::take};
 use crate::{
     iop::{
         message::{CosetQueryResult, LeavesType, OracleIndex, ProverRoundMessageInfo},
-        oracles::{SuccinctRoundMessage, VirtualOracle},
+        oracles::SuccinctRoundMessage,
     },
     prelude::MsgRoundRef,
 };
