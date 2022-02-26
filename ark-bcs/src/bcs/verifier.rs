@@ -1,10 +1,6 @@
 use crate::{
-    bcs::{prover::BCSProof, transcript::SimulationTranscript, MTHashParameters},
-    iop::{
-        bookkeeper::NameSpace,
-        message::MessagesCollection,
-        verifier::{IOPVerifier, IOPVerifierWithNoOracleRefs},
-    },
+    bcs::{prover::BCSProof, simulation_transcript::SimulationTranscript, MTHashParameters},
+    iop::{bookkeeper::NameSpace, message::MessagesCollection, verifier::IOPVerifier},
     ldt::{NoLDT, LDT},
     Error,
 };
@@ -43,7 +39,7 @@ where
         hash_params: MTHashParameters<MT>,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifierWithNoOracleRefs<S, F>,
+        V: IOPVerifier<S, F>,
         L: LDT<F>,
         S: CryptographicSponge,
     {
@@ -75,7 +71,7 @@ where
             .clone()
             .into_iter()
             .map(|x| {
-                transcript.prover_messages_info[x.index]
+                transcript.expected_prover_messages_info[x.index]
                     .reed_solomon_code_degree_bound
                     .len()
             })
@@ -98,10 +94,16 @@ where
         // start query phase
 
         // prover message view helps record verify query
+        assert_eq!(
+            proof.prover_iop_messages_by_round.len(),
+            transcript.expected_prover_messages_info.len(),
+            "incorrect rounds in commit phase"
+        );
         let prover_message_view = proof
             .prover_iop_messages_by_round
             .iter()
-            .map(|m| m.get_view())
+            .zip(transcript.expected_prover_messages_info.iter())
+            .map(|(m, info)| m.get_view(info.clone()))
             .collect::<Vec<_>>();
 
         let mut transcript_messages = MessagesCollection::new(
@@ -109,7 +111,7 @@ where
             transcript
                 .registered_virtual_oracles
                 .into_iter()
-                .map(|x| Some(x))
+                .map(Some)
                 .collect(),
             transcript.reconstructed_verifier_messages,
             transcript.bookkeeper,
@@ -131,7 +133,6 @@ where
             root_namespace,
             verifier_parameter,
             public_input,
-            &(),
             &mut sponge,
             &mut transcript_messages,
         )?;
@@ -158,7 +159,7 @@ where
                     round_oracle.underlying_message.queried_cosets.len(),
                     "insufficient queries in verifier code"
                 );
-                let mt_root = if round_oracle.coset_queries.len() > 0 {
+                let mt_root = if !round_oracle.coset_queries.is_empty() {
                     mt_root
                         .as_ref()
                         .expect("round oracle has query but has no mt_root")
@@ -177,7 +178,7 @@ where
                             path.verify(
                                 &hash_params.leaf_hash_param,
                                 &hash_params.inner_hash_param,
-                                &mt_root,
+                                mt_root,
                                 // flatten by concatenating cosets of all oracles
                                 coset
                                     .clone()
@@ -205,7 +206,7 @@ where
         hash_params: MTHashParameters<MT>,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifier<S, F> + IOPVerifierWithNoOracleRefs<S, F>,
+        V: IOPVerifier<S, F>,
         S: CryptographicSponge,
     {
         Self::verify::<V, NoLDT<_>, S>(
@@ -232,7 +233,7 @@ where
         ldt_codeword_localization_parameter: usize,
     ) -> Result<V::VerifierOutput, Error>
     where
-        V: IOPVerifier<S, F> + IOPVerifierWithNoOracleRefs<S, F>,
+        V: IOPVerifier<S, F>,
         S: CryptographicSponge,
     {
         Self::verify::<V, NoLDT<_>, S>(

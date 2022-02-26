@@ -2,7 +2,7 @@ use crate::{
     bcs::{transcript::Transcript, MTHashParameters},
     iop::{
         bookkeeper::NameSpace, message::MessagesCollection, oracles::SuccinctRoundMessage,
-        prover::IOPProverWithNoOracleRefs, verifier::IOPVerifierForProver, ProverParam,
+        prover::IOPProver, verifier::IOPVerifierForProver, ProverParam,
     },
     ldt::{NoLDT, LDT},
     Error,
@@ -32,7 +32,6 @@ where
     /// element correspond to the same coset of different oracles.
     pub prover_iop_messages_by_round: Vec<SuccinctRoundMessage<F>>,
 
-    // BCS data below: maybe combine
     /// Merkle tree roots for all prover messages (including main prover and ldt
     /// prover).
     pub prover_messages_mt_root: Vec<Option<MT::InnerDigest>>,
@@ -48,10 +47,8 @@ where
     F: PrimeField + Absorb,
     MT::InnerDigest: Absorb,
 {
-    /// Generate proof
-    /// This function requires that IOPProver and IOPVerifier is not a
-    /// subprotocol, which essentially means that `OracleRefs` for both agent
-    /// needs to be `()`.
+    /// Generate proof from any IOPProver and IOPVerifier with consistent
+    /// parameter and public input.
     pub fn generate<V, P, L, S>(
         sponge: S,
         public_input: &P::PublicInput,
@@ -62,7 +59,7 @@ where
     ) -> Result<Self, Error>
     where
         L: LDT<F>,
-        P: IOPProverWithNoOracleRefs<F>,
+        P: IOPProver<F>,
         V: IOPVerifierForProver<S, F, P>,
         S: CryptographicSponge,
     {
@@ -72,9 +69,9 @@ where
         let mut transcript = {
             Transcript::new(
                 sponge,
-                hash_params.clone(),
-                L::codeword_domain(&ldt_params),
-                L::localization_param(&ldt_params),
+                hash_params,
+                L::codeword_domain(ldt_params),
+                L::localization_param(ldt_params),
                 iop_trace!("BCS Proof Generation"),
             )
         };
@@ -85,7 +82,6 @@ where
         // This is not a subprotocol, so we use root namespace (/).
         P::prove(
             root_namespace,
-            &(),
             public_input,
             private_input,
             &mut transcript,
@@ -129,7 +125,7 @@ where
 
         L::query_and_decide(
             ldt_namespace,
-            &ldt_params,
+            ldt_params,
             &mut sponge,
             &codewords,
             &mut transcript_messages,
@@ -141,7 +137,6 @@ where
             NameSpace::root(iop_trace!("BCS Proof Generation: Query and Decision Phase")),
             &verifier_parameter,
             public_input,
-            &(),
             &mut sponge,
             &mut transcript_messages,
         )?;
@@ -202,7 +197,7 @@ where
     ) -> Result<Self, Error>
     where
         V: IOPVerifierForProver<S, F, P>,
-        P: IOPProverWithNoOracleRefs<F>,
+        P: IOPProver<F>,
         S: CryptographicSponge,
     {
         Self::generate::<V, P, NoLDT<F>, _>(
@@ -228,7 +223,7 @@ where
     ) -> Result<Self, Error>
     where
         V: IOPVerifierForProver<S, F, P>,
-        P: IOPProverWithNoOracleRefs<F>,
+        P: IOPProver<F>,
         S: CryptographicSponge,
     {
         Self::generate::<V, P, NoLDT<F>, _>(

@@ -1,7 +1,7 @@
 use crate::{
     iop::{
         bookkeeper::{BookkeeperContainer, MessageBookkeeper, ToMsgRoundRef},
-        message::{MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
+        message::{CosetQueryResult, MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
     },
     tracer::TraceInfo,
 };
@@ -10,7 +10,7 @@ use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use ark_std::{borrow::Borrow, vec::Vec};
 
-use super::oracles::{SuccinctRoundOracleVar, VirtualOracleVar};
+use super::oracles::{SuccinctRoundOracleVar, VirtualOracleVarWithInfo};
 
 impl<F: PrimeField> R1CSVar<F> for VerifierMessageVar<F> {
     type Value = VerifierMessage<F>;
@@ -39,7 +39,7 @@ impl<F: PrimeField> R1CSVar<F> for VerifierMessageVar<F> {
 pub struct MessagesCollectionVar<'a, F: PrimeField> {
     pub(crate) real_oracles: Vec<SuccinctRoundOracleVar<'a, F>>,
     #[allow(unused)]
-    pub(crate) virtual_oracles: Vec<Option<VirtualOracleVar<F>>>,
+    pub(crate) virtual_oracles: Vec<Option<VirtualOracleVarWithInfo<F>>>,
     pub(crate) verifier_messages: Vec<Vec<VerifierMessageVar<F>>>,
     pub(crate) bookkeeper: MessageBookkeeper,
 }
@@ -53,7 +53,7 @@ impl<'a, F: PrimeField> BookkeeperContainer for MessagesCollectionVar<'a, F> {
 impl<'a, F: PrimeField> MessagesCollectionVar<'a, F> {
     pub(crate) fn new(
         real_oracles: Vec<SuccinctRoundOracleVar<'a, F>>,
-        virtual_oracles: Vec<Option<VirtualOracleVar<F>>>,
+        virtual_oracles: Vec<Option<VirtualOracleVarWithInfo<F>>>,
         verifier_messages: Vec<Vec<VerifierMessageVar<F>>>,
         bookkeeper: MessageBookkeeper,
     ) -> Self {
@@ -80,7 +80,7 @@ impl<'a, F: PrimeField> MessagesCollectionVar<'a, F> {
     /// Take a virtual oracle and return a shadow `self` that can be used by
     /// virtual oracle. Current `self` will be temporarily unavailable when
     /// querying to prevent circular dependency.
-    fn take_virtual_oracle(&mut self, round: MsgRoundRef) -> (VirtualOracleVar<F>, Self) {
+    fn take_virtual_oracle(&mut self, round: MsgRoundRef) -> (VirtualOracleVarWithInfo<F>, Self) {
         assert!(round.is_virtual);
 
         // move a virtual oracle, and make it temporarily available when querying to
@@ -107,7 +107,7 @@ impl<'a, F: PrimeField> MessagesCollectionVar<'a, F> {
         &mut self,
         shadow_self: Self,
         round: MsgRoundRef,
-        vo: VirtualOracleVar<F>,
+        vo: VirtualOracleVarWithInfo<F>,
     ) {
         self.real_oracles = shadow_self.real_oracles;
         self.virtual_oracles = shadow_self.virtual_oracles;
@@ -169,7 +169,7 @@ impl<'a, 'b, F: PrimeField> AtProverRoundVar<'a, 'b, F> {
         &mut self,
         positions: &[Vec<Boolean<F>>],
         _tracer: TraceInfo,
-    ) -> Result<Vec<Vec<Vec<FpVar<F>>>>, SynthesisError> {
+    ) -> Result<CosetQueryResult<FpVar<F>>, SynthesisError> {
         let round = self.round;
         let _self = &mut self._self;
         if !round.is_virtual {
@@ -254,21 +254,21 @@ impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {
                     .map(|x| FpVar::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::FieldElements(var?))
-            }
+            },
             VerifierMessage::Bits(bits) => {
                 let var: Result<Vec<_>, _> = bits
                     .iter()
                     .map(|x| Boolean::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bits(var?))
-            }
+            },
             VerifierMessage::Bytes(bytes) => {
                 let var: Result<Vec<_>, _> = bytes
                     .iter()
                     .map(|x| UInt8::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bytes(var?))
-            }
+            },
         }
     }
 }

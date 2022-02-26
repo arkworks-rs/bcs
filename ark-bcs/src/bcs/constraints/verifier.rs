@@ -5,7 +5,6 @@ use crate::{
     iop::{
         bookkeeper::NameSpace,
         constraints::{message::MessagesCollectionVar, IOPVerifierWithGadget},
-        verifier::IOPVerifierWithNoOracleRefs,
     },
     ldt::{constraints::LDTWithGadget, NoLDT},
 };
@@ -47,12 +46,12 @@ where
         sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
         public_input: &V::PublicInputVar,
-        verifier_parameter: &V::VerifierParameter,
+        verifier_parameter: &V::VerifierParameterVar,
         ldt_params: &L::LDTParameters,
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
+        V: IOPVerifierWithGadget<S, CF>,
         L: LDTWithGadget<CF>,
         S: SpongeWithGadget<CF>,
     {
@@ -84,7 +83,7 @@ where
             .clone()
             .into_iter()
             .map(|x| {
-                transcript.prover_messages_info[x.index]
+                transcript.expected_prover_messages_info[x.index]
                     .reed_solomon_code_degree_bound
                     .len()
             })
@@ -107,10 +106,17 @@ where
         // ends commit phase
         // start query phase
 
+        // prover message view helps record verify query
+        assert_eq!(
+            proof.prover_iop_messages_by_round.len(),
+            transcript.expected_prover_messages_info.len(),
+            "incorrect rounds in commit phase"
+        );
         let prover_message_view = proof
             .prover_iop_messages_by_round
             .iter()
-            .map(|m| m.get_view())
+            .zip(transcript.expected_prover_messages_info.iter())
+            .map(|(m, info)| m.get_view(info.clone()))
             .collect::<Vec<_>>();
 
         let mut transcript_messages = MessagesCollectionVar::new(
@@ -141,7 +147,6 @@ where
             NameSpace::root(iop_trace!("BCS Verify")),
             verifier_parameter,
             public_input,
-            &(), // protocol used for BCS should not contain any oracle refs
             &mut sponge,
             &mut transcript_messages,
         )?;
@@ -212,11 +217,11 @@ where
         sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
         public_input: &V::PublicInputVar,
-        verifier_parameter: &V::VerifierParameter,
+        verifier_parameter: &V::VerifierParameterVar,
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
+        V: IOPVerifierWithGadget<S, CF>,
         S: SpongeWithGadget<CF>,
     {
         Self::verify::<V, NoLDT<CF>, S>(
@@ -239,13 +244,13 @@ where
         sponge: S::Var,
         proof: &BCSProofVar<MT, MTG, CF>,
         public_input: &V::PublicInputVar,
-        verifier_parameter: &V::VerifierParameter,
+        verifier_parameter: &V::VerifierParameterVar,
         hash_params: &MTHashParametersVar<CF, MT, MTG>,
         ldt_codeword_domain: Radix2CosetDomain<CF>,
         ldt_codeword_localization_parameter: usize,
     ) -> Result<V::VerifierOutputVar, SynthesisError>
     where
-        V: IOPVerifierWithGadget<S, CF> + IOPVerifierWithNoOracleRefs<S, CF>,
+        V: IOPVerifierWithGadget<S, CF>,
         S: SpongeWithGadget<CF>,
     {
         Self::verify::<V, NoLDT<CF>, S>(

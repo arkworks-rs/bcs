@@ -1,68 +1,70 @@
+use ark_crypto_primitives::merkle_tree::Config as MTConfig;
+use ark_ff::PrimeField;
+use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
+use ark_std::vec::Vec;
+use tracing::info;
+
 use crate::{
-    bcs::{constraints::proof::BCSProofVar, transcript::LDTInfo},
+    bcs::{prover::BCSProof, transcript::LDTInfo},
     iop::{
         bookkeeper::{MessageBookkeeper, NameSpace},
-        constraints::{
-            message::VerifierMessageVar,
-            oracles::{VirtualOracleVar, VirtualOracleVarWithInfo},
-        },
-        message::{LeavesType, MsgRoundRef, ProverRoundMessageInfo},
+        message::{LeavesType, MsgRoundRef, ProverRoundMessageInfo, VerifierMessage},
+        oracles::{VirtualOracle, VirtualOracleWithInfo},
     },
     tracer::TraceInfo,
 };
-use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
-use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_r1cs_std::fields::fp::FpVar;
-use ark_relations::r1cs::SynthesisError;
-use ark_sponge::{
-    constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
-    Absorb,
-};
-use ark_std::{boxed::Box, mem::take, vec::Vec};
+use ark_std::{boxed::Box, mem::take};
 
-/// R1CS Variable for simulation transcript used by verifier.
-pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>
-where
+/// A wrapper for BCS proof, so that verifier can reconstruct verifier messages
+/// by simulating commit phase easily.
+/// TODO: add virtual oracle here
+pub struct SimulationTranscript<
+    'a,
+    P: MTConfig<Leaf = [F]>,
+    S: CryptographicSponge,
     F: PrimeField + Absorb,
-    MT: Config,
-    MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
-    S: SpongeWithGadget<F>,
-    MT::InnerDigest: Absorb,
-    F: Absorb,
-    MTG::InnerDigest: AbsorbGadget<F>,
+> where
+    P::InnerDigest: Absorb,
 {
+    /// prover round message info expected by verifier
     pub(crate) expected_prover_messages_info: Vec<ProverRoundMessageInfo>,
 
-    pub(crate) proof: &'a BCSProofVar<MT, MTG, F>,
+    // /// For each round submit, absorb merkle tree root first
+    // prover_mt_roots: &'a [Option<P::InnerDigest>],
+    // /// After absorb merkle tree root for this round, absorb the short messages
+    // /// in entirety
+    // prover_short_messages: Vec<&'a Vec<Vec<F>>>,
+    pub(crate) proof: &'a BCSProof<P, F>,
 
-    pub(crate) sponge: S::Var,
+    /// sponge is used to sample verifier message
+    pub(crate) sponge: S,
+    /// the next prover round message to absorb
     pub(crate) current_prover_round: usize,
-    pub(crate) reconstructed_verifier_messages: Vec<Vec<VerifierMessageVar<F>>>,
 
-    pending_verifier_messages: Vec<VerifierMessageVar<F>>,
+    /// Those reconstructed messages will be used in query and decision phase
+    pub(crate) reconstructed_verifier_messages: Vec<Vec<VerifierMessage<F>>>,
+
+    pending_verifier_messages: Vec<VerifierMessage<F>>,
     pub(crate) bookkeeper: MessageBookkeeper,
 
     pub(crate) ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
     pub(crate) ldt_localization_parameter: Option<usize>,
 
-    /// Virtual oracle registered during commit phase simulation
-    pub(crate) registered_virtual_oracles: Vec<VirtualOracleVarWithInfo<F>>,
+    /// Virtual oracle registered during commit phase simulation.
+    pub(crate) registered_virtual_oracles: Vec<VirtualOracleWithInfo<F>>,
 }
 
-impl<'a, F, MT, MTG, S> SimulationTranscriptVar<'a, F, MT, MTG, S>
+impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
+    SimulationTranscript<'a, P, S, F>
 where
-    F: PrimeField + Absorb,
-    MT: Config,
-    MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
-    S: SpongeWithGadget<F>,
-    MT::InnerDigest: Absorb,
-    F: Absorb,
-    MTG::InnerDigest: AbsorbGadget<F>,
+    P::InnerDigest: Absorb,
 {
+    /// Returns a wrapper for BCS proof so that verifier can reconstruct
+    /// verifier messages by simulating commit phase easily.
     pub(crate) fn new_transcript(
-        bcs_proof: &'a BCSProofVar<MT, MTG, F>,
-        sponge: S::Var,
+        bcs_proof: &'a BCSProof<P, F>,
+        sponge: S,
         ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
         ldt_localization_parameter: Option<usize>,
         trace: TraceInfo,
@@ -81,12 +83,12 @@ where
         }
     }
 
-    /// Create a new namespace in this transcript
+    /// Create a new namespace in bookkeeper.
     pub fn new_namespace(&mut self, current_namespace: NameSpace, trace: TraceInfo) -> NameSpace {
         self.bookkeeper.new_namespace(trace, current_namespace.id)
     }
 
-    /// Number of submitted rounds in the transcript
+    /// Returns the number of prover rounds that prover have submitted.
     pub fn num_prover_rounds_submitted(&self) -> usize {
         self.current_prover_round
     }
@@ -105,8 +107,12 @@ where
         ns: NameSpace,
         expected_message_info: ProverRoundMessageInfo,
         trace: TraceInfo,
-    ) -> Result<MsgRoundRef, SynthesisError> {
-        if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
+    ) -> MsgRoundRef {
+        info!("prover round: {}", trace);
+        if !expected_message_info
+            .reed_solomon_code_degree_bound
+            .is_empty()
+        {
             // LDT is used. This prover round must not use custom domain.
             assert_eq!(expected_message_info.leaves_type, LeavesType::UseCodewordDomain,
                        "This round contains low-degree oracle, but custom length and localization parameter is used. ");
@@ -166,7 +172,10 @@ where
             trace_info
         );
         // check 4: if there are rs-codes, LeavesType should be UseCodewordDomain
-        if expected_message_info.reed_solomon_code_degree_bound.len() > 0 {
+        if !expected_message_info
+            .reed_solomon_code_degree_bound
+            .is_empty()
+        {
             assert_eq!(
                 expected_message_info.leaves_type,
                 LeavesType::UseCodewordDomain,
@@ -222,20 +231,20 @@ where
 
         // absorb merkle tree root, if any
         self.sponge
-            .absorb(&self.proof.prover_messages_mt_root[index])?;
+            .absorb(&self.proof.prover_messages_mt_root[index]);
         // absorb short messages for this round, if any
         self.proof.prover_iop_messages_by_round[index]
             .short_messages
             .iter()
-            .try_for_each(|msg| self.sponge.absorb(msg))?;
+            .for_each(|msg| self.sponge.absorb(msg));
         // attach prover info to transcript
         self.expected_prover_messages_info
             .push(expected_message_info);
-        Ok(self.attach_latest_prover_round_to_namespace(ns, false, trace))
+        self.attach_latest_prover_round_to_namespace(ns, false, trace)
     }
 
-    /// register a virtual oracle constraints specified by coset evaluator
-    pub fn register_prover_virtual_round<VO: VirtualOracleVar<F>>(
+    /// Register a virtual oracle specified by coset evaluator.
+    pub fn register_prover_virtual_round<VO: VirtualOracle<F>>(
         &mut self,
         ns: NameSpace,
         oracle: VO,
@@ -243,12 +252,15 @@ where
         constraint_bound: Vec<usize>,
         trace: TraceInfo,
     ) -> MsgRoundRef {
+        info!("Register prover virtual oracle: {}", trace);
+        // make sure that no virtual oracle is registered when we are halfway sampling
+        // verifier round
+        assert!(!self.is_pending_message_available());
         let (codeword_domain, localization_param) = (
             self.codeword_domain(),
             self.codeword_localization_parameter(),
         );
-        assert!(!self.is_pending_message_available());
-        let virtual_oracle = VirtualOracleVarWithInfo::new(
+        let virtual_oracle = VirtualOracleWithInfo::new(
             Box::new(oracle),
             codeword_domain,
             localization_param,
@@ -260,12 +272,13 @@ where
         self.attach_latest_prover_round_to_namespace(ns, true, trace)
     }
 
-    /// Submit all verification messages in this round
+    /// Submit all verifier messages in this round.
     pub fn submit_verifier_current_round(
         &mut self,
         namespace: NameSpace,
         trace: TraceInfo,
     ) -> MsgRoundRef {
+        info!("verifier round (sim): {}", trace);
         let pending_message = take(&mut self.pending_verifier_messages);
         self.reconstructed_verifier_messages.push(pending_message);
         self.attach_latest_verifier_round_to_namespace(namespace, trace)
@@ -277,18 +290,12 @@ where
     /// stored in transcript and will be later given to verifier in query
     /// and decision phase.
     ///
-    /// **Note**: Since we are not running the actual prover code, verifier
-    /// message is not used `reconstructed_verifer_messages`, so this
-    /// function returns nothing. TODO: current limitation: sponge
-    /// constraints does not support squeeze native elements with size
-    pub fn squeeze_verifier_field_elements(
-        &mut self,
-        num_elements: usize,
-    ) -> Result<(), SynthesisError> {
-        let msg = self.sponge.squeeze_field_elements(num_elements)?;
+    /// **Note**: In original IOP paper, verifier do not use sampled element in
+    /// commit phase. So in this implementation, this function returns nothing.
+    pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) {
+        let msg = self.sponge.squeeze_field_elements_with_sizes(field_size);
         self.pending_verifier_messages
-            .push(VerifierMessageVar::FieldElements(msg));
-        Ok(())
+            .push(VerifierMessage::FieldElements(msg));
     }
 
     /// Squeeze sampled verifier message as bytes. The squeezed bytes is
@@ -297,14 +304,17 @@ where
     /// in transcript and will be later given to verifier in query and
     /// decision phase.
     ///
-    /// **Note**: Since we are not running the actual prover code, verifier
-    /// message is not used `reconstructed_verifer_messages`, so this
-    /// function returns nothing.
-    pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) -> Result<(), SynthesisError> {
-        let msg = self.sponge.squeeze_bytes(num_bytes)?;
+    /// **Note**: In original IOP paper, verifier do not use sampled element in
+    /// commit phase. However, this implementation allows verifier to have
+    /// access to sampled elements in `register_iop_structure` to
+    /// add flexibility.
+    /// User may need to check if this flexibility will affect soundness
+    /// analysis in a case-to-case basis.
+    pub fn squeeze_verifier_field_bytes(&mut self, num_bytes: usize) -> Vec<u8> {
+        let msg = self.sponge.squeeze_bytes(num_bytes);
         self.pending_verifier_messages
-            .push(VerifierMessageVar::Bytes(msg));
-        Ok(())
+            .push(VerifierMessage::Bytes(msg.clone()));
+        msg
     }
 
     /// Squeeze sampled verifier message as bytes. The squeezed bytes is
@@ -313,14 +323,17 @@ where
     /// in transcript and will be later given to verifier in query and
     /// decision phase.
     ///
-    /// **Note**: Since we are not running the actual prover code, verifier
-    /// message is not used `reconstructed_verifer_messages`, so this
-    /// function returns nothing.
-    pub fn squeeze_verifier_field_bits(&mut self, num_bits: usize) -> Result<(), SynthesisError> {
-        let msg = self.sponge.squeeze_bits(num_bits)?;
+    /// **Note**: In original IOP paper, verifier do not use sampled element in
+    /// commit phase. However, this implementation allows verifier to have
+    /// access to sampled elements in `register_iop_structure` to
+    /// add flexibility.
+    /// User may need to check if this flexibility will affect soundness
+    /// analysis in a case-to-case basis.
+    pub fn squeeze_verifier_field_bits(&mut self, num_bits: usize) -> Vec<bool> {
+        let msg = self.sponge.squeeze_bits(num_bits);
         self.pending_verifier_messages
-            .push(VerifierMessageVar::Bits(msg));
-        Ok(())
+            .push(VerifierMessage::Bits(msg.clone()));
+        msg
     }
 
     /// Returns if there is a verifier message for the transcript.
@@ -356,34 +369,16 @@ where
     }
 }
 
-impl<'a, F, MT, MTG, S> LDTInfo<F> for SimulationTranscriptVar<'a, F, MT, MTG, S>
+impl<'a, P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb> LDTInfo<F>
+    for SimulationTranscript<'a, P, S, F>
 where
-    F: PrimeField + Absorb,
-    MT: Config,
-    MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,
-    S: SpongeWithGadget<F>,
-    MT::InnerDigest: Absorb,
-    F: Absorb,
-    MTG::InnerDigest: AbsorbGadget<F>,
+    P::InnerDigest: Absorb,
 {
-    /// Return the codeword domain used by LDT.
-    ///
-    /// **Any low degree oracle will use this domain as evaluation domain.**
-    ///
-    /// ## Panics
-    /// This function panics if LDT is not enabled.
     fn codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")
     }
 
-    /// Return the localization parameter used by LDT. Localization parameter is
-    /// the size of query coset of the codeword.
-    ///
-    /// ## Panics
-    /// This function panics if LDT is not enabled or localization parameter is
-    /// not supported by LDT.
     fn codeword_localization_parameter(&self) -> usize {
-        self.ldt_localization_parameter
-            .expect("LDT not enabled or localization parameter is not supported by LDT")
+        self.ldt_localization_parameter.expect("LDT not enabled")
     }
 }

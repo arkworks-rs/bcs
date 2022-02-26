@@ -96,9 +96,8 @@ impl MessageBookkeeper {
     pub(crate) fn dump_all_prover_messages_in_order(&self) -> Vec<MsgRoundRef> {
         self.messages_store
             .values()
-            .map(|v| v.prover_rounds.iter())
-            .flatten()
-            .map(|v| *v)
+            .flat_map(|v| v.prover_rounds.iter())
+            .copied()
             .collect()
     }
 
@@ -120,7 +119,7 @@ impl MessageBookkeeper {
         *self
             .ns_details
             .get(&subspace_id)
-            .expect(&ark_std::format!("Invalid Subspace ID: {}", subspace_id).clone())
+            .unwrap_or_else(|| panic!("Invalid Subspace ID: {}", subspace_id))
     }
 
     pub(crate) fn attach_prover_round_to_namespace(
@@ -163,22 +162,13 @@ impl MessageBookkeeper {
 }
 
 /// contains indices of current protocol messages.
-#[derive(Clone, Derivative)]
+#[derive(Clone, Derivative, Default)]
 #[derivative(Debug)]
 pub struct MessageIndices {
     /// Indices of prover message round oracles in this namespace.
     pub prover_rounds: Vec<MsgRoundRef>,
     /// Indices of verifier round oracles in this namespace.
     pub verifier_messages: Vec<MsgRoundRef>,
-}
-
-impl Default for MessageIndices {
-    fn default() -> Self {
-        Self {
-            prover_rounds: Default::default(),
-            verifier_messages: Default::default(),
-        }
-    }
 }
 
 /// Cam be converted to `MsgRoundRef`

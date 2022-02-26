@@ -6,7 +6,7 @@ use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge};
 
 use crate::{
-    bcs::transcript::{SimulationTranscript, Transcript},
+    bcs::{simulation_transcript::SimulationTranscript, transcript::Transcript},
     iop::{
         bookkeeper::NameSpace,
         message::{MessagesCollection, MsgRoundRef},

@@ -1,6 +1,10 @@
-use ark_std::borrow::Borrow;
-
-use crate::iop::{message::ProverRoundMessageInfo, oracles::SuccinctRoundMessage};
+use crate::{
+    iop::{
+        message::{CosetQueryResult, LeavesType, OracleIndex, ProverRoundMessageInfo},
+        oracles::SuccinctRoundMessage,
+    },
+    prelude::MsgRoundRef,
+};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_r1cs_std::{
@@ -11,15 +15,13 @@ use ark_r1cs_std::{
     select::CondSelectGadget,
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
-use ark_std::{boxed::Box, vec::Vec};
+use ark_std::{borrow::Borrow, boxed::Box, collections::BTreeSet, mem::take, vec, vec::Vec};
 
 use super::message::MessagesCollectionVar;
 
 #[derive(Clone)]
 /// Round oracle variable that contains only queried leaves.
 pub struct SuccinctRoundMessageVar<F: PrimeField> {
-    /// Oracle Info
-    pub info: ProverRoundMessageInfo,
     /// Leaves at query indices.
     pub queried_cosets: Vec<Vec<Vec<FpVar<F>>>>,
     // note that queries will be provided by verifier instead
@@ -30,8 +32,9 @@ pub struct SuccinctRoundMessageVar<F: PrimeField> {
 impl<F: PrimeField> SuccinctRoundMessageVar<F> {
     /// Return a view of succinct round oracle var. View contains a reference to
     /// the oracle, as well as recorded queries and position pointer.
-    pub fn get_view(&self) -> SuccinctRoundOracleVar<F> {
+    pub fn get_view(&self, info: ProverRoundMessageInfo) -> SuccinctRoundOracleVar<F> {
         SuccinctRoundOracleVar {
+            info,
             oracle: &self,
             coset_queries: Vec::new(),
             current_query_pos: 0,
@@ -48,7 +51,6 @@ impl<F: PrimeField> AllocVar<SuccinctRoundMessage<F>, F> for SuccinctRoundMessag
         let cs = cs.into();
         let native = f()?;
         let native = native.borrow();
-        let info = native.info.clone();
         let queried_cosets = native
             .queried_cosets
             .iter()
@@ -69,7 +71,6 @@ impl<F: PrimeField> AllocVar<SuccinctRoundMessage<F>, F> for SuccinctRoundMessag
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            info,
             queried_cosets,
             short_messages,
         })
@@ -81,6 +82,8 @@ impl<F: PrimeField> AllocVar<SuccinctRoundMessage<F>, F> for SuccinctRoundMessag
 /// query position.
 pub struct SuccinctRoundOracleVar<'a, F: PrimeField> {
     pub(crate) oracle: &'a SuccinctRoundMessageVar<F>,
+    /// Round Message Info expected by Verifier
+    pub info: ProverRoundMessageInfo,
     /// queries calculated by the verifier
     pub coset_queries: Vec<Vec<Boolean<F>>>,
     current_query_pos: usize,
@@ -95,8 +98,8 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVar<'a, F> {
     ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
-        let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
-        let log_oracle_length = ark_std::log2(self.oracle.info.oracle_length) as usize;
+        let log_num_cosets = ark_std::log2(self.oracle_length()) as usize - log_coset_size;
+        let log_oracle_length = ark_std::log2(self.oracle_length()) as usize;
         assert_eq!(log_oracle_length, log_coset_size + log_num_cosets);
         // pad position to appropriate length
         let position = position
@@ -115,14 +118,14 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVar<'a, F> {
     /// Return the queried coset at `coset_index` of all oracles.
     /// `result[i][j][k]` is coset index `i` -> oracle index `j` -> element `k`
     /// in this coset.
-    pub fn query_coset(&mut self, coset_index: &[Vec<Boolean<F>>]) -> Vec<Vec<Vec<FpVar<F>>>> {
+    pub fn query_coset(&mut self, coset_index: &[Vec<Boolean<F>>]) -> CosetQueryResult<FpVar<F>> {
         self.query_coset_without_tracer(coset_index)
     }
 
     fn query_coset_without_tracer(
         &mut self,
         coset_index: &[Vec<Boolean<F>>],
-    ) -> Vec<Vec<Vec<FpVar<F>>>> {
+    ) -> CosetQueryResult<FpVar<F>> {
         self.coset_queries.extend_from_slice(coset_index);
         assert!(
             self.current_query_pos + coset_index.len() <= self.oracle.queried_cosets.len(),
@@ -132,23 +135,23 @@ impl<'a, F: PrimeField> SuccinctRoundOracleVar<'a, F> {
             [self.current_query_pos..self.current_query_pos + coset_index.len()]
             .to_vec();
         self.current_query_pos += coset_index.len();
-        result
+        result.into()
     }
 
     /// Number of reed_solomon_codes oracles in this round.
     pub fn num_reed_solomon_codes_oracles(&self) -> usize {
-        self.get_info().reed_solomon_code_degree_bound.len()
+        self.info.reed_solomon_code_degree_bound.len()
     }
 
     /// length of each oracle
     pub fn oracle_length(&self) -> usize {
-        self.get_info().oracle_length
+        self.info.length
     }
 
     /// Get oracle info, including number of oracles for each type and degree
     /// bound of each RS code oracle.
-    pub fn get_info(&self) -> &ProverRoundMessageInfo {
-        &self.oracle.info
+    pub fn get_info(&self) -> ProverRoundMessageInfo {
+        self.info.clone()
     }
 
     /// Get degree bound of all reed-solomon codes in this round.
@@ -178,38 +181,26 @@ fn point_query_to_coset_query<F: PrimeField>(
 }
 
 fn coset_query_response_to_point_query_response<F: PrimeField>(
-    queried_coset: Vec<Vec<Vec<FpVar<F>>>>,
+    queried_coset: CosetQueryResult<FpVar<F>>,
     element_index_in_coset: Vec<Vec<Boolean<F>>>,
 ) -> Result<Vec<Vec<FpVar<F>>>, SynthesisError> {
     queried_coset.into_iter()
-            .zip(element_index_in_coset.into_iter())
-            .map(|(coset_for_all_oracles, element_index)|{
-                coset_for_all_oracles.into_iter()
-                    // number of constraints here is O(Log(coset size))
-                    .map(|coset|
-                        // `conditionally_select_power_of_two_vector` need big endian position
-                        FpVar::conditionally_select_power_of_two_vector(&element_index.clone().into_iter().rev().collect::<Vec<_>>(),
-                                                                        &coset))
-                    .collect::<Result<Vec<FpVar<_>>, _>>()
-            }).collect::<Result<Vec<Vec<FpVar<_>>>, _>>()
+        .zip(element_index_in_coset.into_iter())
+        .map(|(coset_for_all_oracles, element_index)| {
+            coset_for_all_oracles.into_iter()
+                // number of constraints here is O(Log(coset size))
+                .map(|coset|
+                    // `conditionally_select_power_of_two_vector` need big endian position
+                    FpVar::conditionally_select_power_of_two_vector(&element_index.clone().into_iter().rev().collect::<Vec<_>>(),
+                                                                    &coset))
+                .collect::<Result<Vec<FpVar<_>>, _>>()
+        }).collect::<Result<Vec<Vec<FpVar<_>>>, _>>()
 }
-
-/// The constraints for coset evaluator defined by user, which takes a query
-/// position (as index and coset) and use constituent oracles in iop messages to
-/// build up responses.
-pub type CosetVarEvaluator<CF> = Box<
-    dyn Fn(
-            &mut MessagesCollectionVar<CF>, // iop messages
-            &[Vec<Boolean<CF>>],            // coset queries
-            &[Radix2DomainVar<CF>],         // query cosets
-        ) -> Result<Vec<Vec<Vec<FpVar<CF>>>>, SynthesisError>
-        + 'static,
->;
 
 /// A virtual oracle variable who make query to other virtual or non-virtual
 /// oracles.
-pub struct VirtualOracleVar<CF: PrimeField> {
-    coset_evaluator: CosetVarEvaluator<CF>,
+pub struct VirtualOracleVarWithInfo<CF: PrimeField> {
+    coset_evaluator: Box<dyn VirtualOracleVar<CF>>,
     pub(crate) codeword_domain: Radix2CosetDomain<CF>,
     pub(crate) localization_param: usize,
     pub(crate) test_bound: Vec<usize>,
@@ -217,11 +208,11 @@ pub struct VirtualOracleVar<CF: PrimeField> {
     pub(crate) constraint_bound: Vec<usize>,
 }
 
-impl<CF: PrimeField> VirtualOracleVar<CF> {
+impl<CF: PrimeField> VirtualOracleVarWithInfo<CF> {
     /// Create a new virtual round given a coset evaluator. Note that one
     /// virtual round can have multiple virtual oracles.
     pub fn new(
-        coset_evaluator: CosetVarEvaluator<CF>,
+        coset_evaluator: Box<dyn VirtualOracleVar<CF>>,
         codeword_domain: Radix2CosetDomain<CF>,
         localization_param: usize,
         test_bound: Vec<usize>,
@@ -244,7 +235,7 @@ impl<CF: PrimeField> VirtualOracleVar<CF> {
     ) -> Result<Vec<Vec<FpVar<CF>>>, SynthesisError> {
         // convert the position to coset_index
         let log_coset_size = self.get_info().localization_parameter;
-        let log_num_cosets = ark_std::log2(self.get_info().oracle_length) as usize - log_coset_size;
+        let log_num_cosets = ark_std::log2(self.get_info().length) as usize - log_coset_size;
 
         let (coset_index, element_index_in_coset) =
             point_query_to_coset_query(positions, log_num_cosets);
@@ -260,35 +251,72 @@ impl<CF: PrimeField> VirtualOracleVar<CF> {
         &self,
         coset_index: &[Vec<Boolean<CF>>],
         iop_messages: &mut MessagesCollectionVar<CF>,
-    ) -> Result<Vec<Vec<Vec<FpVar<CF>>>>, SynthesisError> {
+    ) -> Result<CosetQueryResult<FpVar<CF>>, SynthesisError> {
+        let constituent_oracle_handles = self.coset_evaluator.constituent_oracle_handles();
         let codeword_domain_var = Radix2DomainVar::new(
             self.codeword_domain.gen(),
             self.codeword_domain.dim() as u64,
             FpVar::Constant(self.codeword_domain.offset),
         )?;
+        let constituent_oracles = constituent_oracle_handles // TODO: has bug here
+            .into_iter()
+            .map(|(round, idxes)| {
+                // check idxes have unique elements
+                debug_assert!(
+                    idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
+                    "idxes must be unique"
+                );
+                let query_responses = iop_messages.prover_round(round).query_coset(
+                    &coset_index,
+                    iop_trace!("constituent oracle for virtual oracle"),
+                )?;
 
-        // convert coset index to cosets
+                Ok(query_responses.into_iter() // iterate over cosets
+                    .map(|mut c| { // shape (num_oracles_in_this_round, num_elements_in_coset)
+                        idxes.iter().map(|idx| take(&mut c[idx.idx])).collect::<Vec<_>>() // shape (num_oracles_needed_for_this_round, num_elements_in_coset)
+                    }).collect::<Vec<_>>())
+                // shape: (num_cosets, num_oracles_needed_for_this_round,
+                // num_elements_in_coset)
+            })
+            .collect::<Result<Vec<_>, SynthesisError>>()?
+            .into_iter()
+            .fold(vec![vec![]; coset_index.len()], |mut acc, r| {
+                // shape of r is (num_cosets, num_oracles_needed_for_this_round,
+                // num_elements_in_coset) result shape: (num_cosets,
+                // num_oracles_needed_for_all_rounds, num_elements_in_coset)
+                acc.iter_mut().zip(r).for_each(|(a, r)| {
+                    a.extend(r);
+                });
+                acc
+            });
+        // shape: (num_cosets, num_oracles_needed_for_all_rounds, num_elements_in_coset)
+
         let queried_cosets = coset_index
             .iter()
-            .map(|idx| {
-                Ok(codeword_domain_var
-                    .query_position_to_coset(idx.as_slice(), self.localization_param as u64)?)
+            .map(|i| {
+                codeword_domain_var.query_position_to_coset(&i[..], self.localization_param as u64)
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, SynthesisError>>()?;
 
-        (self.coset_evaluator)(iop_messages, coset_index, &queried_cosets)
+        let query_result = constituent_oracles
+            .into_iter()
+            .zip(queried_cosets)
+            .map(|(cons, coset)| self.coset_evaluator.evaluate_var(coset, &cons))
+            .collect::<Result<Vec<Vec<_>>, SynthesisError>>()?;
+
+        Ok(CosetQueryResult::from_single_oracle_result(query_result))
     }
 
     /// Get oracle info, including number of oracles for each type and degree
     /// bound of each RS code oracle.
     pub fn get_info(&self) -> ProverRoundMessageInfo {
-        ProverRoundMessageInfo::new(
-            self.test_bound.clone(),
-            0,
-            0,
+        ProverRoundMessageInfo::make(
+            LeavesType::UseCodewordDomain,
             self.codeword_domain.size(),
             self.localization_param,
         )
+        .with_reed_solomon_codes_degree_bounds(self.test_bound.clone())
+        .build()
     }
 }
 
@@ -303,4 +331,20 @@ fn fit_bits_to_length<F: PrimeField>(bits: &[Boolean<F>], length: usize) -> Vec<
     } else {
         (&bits[0..length]).to_vec()
     }
+}
+
+/// An extension trait for `VirtualOracle`, which adds supports for R1CS
+/// constraints.
+pub trait VirtualOracleVar<CF: PrimeField>: 'static {
+    /// query constituent oracles as a message round handle, and the indices of
+    /// oracles needed in that round
+    fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
+
+    /// generate new constraints to evaluate this virtual oracle, using
+    /// evaluations of constituent oracles on `coset_domain`
+    fn evaluate_var(
+        &self,
+        coset_domain: Radix2DomainVar<CF>,
+        constituent_oracles: &[Vec<FpVar<CF>>],
+    ) -> Result<Vec<FpVar<CF>>, SynthesisError>;
 }

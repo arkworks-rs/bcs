@@ -18,17 +18,20 @@ extern crate derivative;
 #[macro_use]
 pub mod tracer;
 
-/// A public coin, leaf handling, interactive oracle proof protocol.
+/// A public coin interactive oracle proof protocol.
 /// Prover sends out messages that can be encoded to field elements. Verifier
-/// sample field element as message.
+/// sample messages using random oracle defined in `ark-sponge`.
 pub mod iop;
 
 /// A compiler to convert any public coin IOP to non-interactive one using BCS
 /// transform. Source: [BCS16](https://eprint.iacr.org/2016/116)
 pub mod bcs;
-/// Defines trait for performing LDT.
+/// Low-degree test for RS-IOP. This implementation compiles LDT round function,
+/// defined in `ark-ldt` to an IOP.
 pub mod ldt;
 
+/// Some handy imports for users.
+pub mod prelude;
 #[cfg(test)]
 pub(crate) mod test_utils;
 

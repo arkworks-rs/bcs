@@ -7,8 +7,8 @@ pub(crate) mod mock;
 use crate::{
     bcs::{
         prover::BCSProof,
+        simulation_transcript::SimulationTranscript,
         tests::mock::{MockTest1Verifier, MockTestProver},
-        transcript::SimulationTranscript,
         verifier::BCSVerifier,
         MTHashParameters,
     },
