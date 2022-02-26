@@ -207,7 +207,7 @@ impl<F: PrimeField> SuccinctRoundMessage<F> {
     pub fn get_view(&self, info: ProverRoundMessageInfo) -> SuccinctRoundOracle<F> {
         SuccinctRoundOracle {
             info,
-            underlying_message: &self,
+            underlying_message: self,
             coset_queries: Vec::new(),
             current_query_pos: 0,
         }
@@ -324,7 +324,7 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
                     "idxes must be unique"
                 );
                 let query_responses = iop_messages.prover_round(round).query_coset(
-                    &coset_index,
+                    coset_index,
                     iop_trace!("constituent oracle for virtual oracle"),
                 );
 
@@ -367,7 +367,7 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
 
     /// Get information about this oracle.
     pub fn get_info(&self) -> ProverRoundMessageInfo {
-        ProverRoundMessageInfo::new(
+        ProverRoundMessageInfo::make(
             LeavesType::UseCodewordDomain,
             self.codeword_domain.size(),
             self.localization_param,

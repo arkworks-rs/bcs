@@ -312,7 +312,7 @@ impl<CF: PrimeField> VirtualOracleVarWithInfo<CF> {
     /// Get oracle info, including number of oracles for each type and degree
     /// bound of each RS code oracle.
     pub fn get_info(&self) -> ProverRoundMessageInfo {
-        ProverRoundMessageInfo::new(
+        ProverRoundMessageInfo::make(
             LeavesType::UseCodewordDomain,
             self.codeword_domain.size(),
             self.localization_param,

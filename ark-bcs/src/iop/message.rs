@@ -303,6 +303,11 @@ impl<T: Clone> CosetQueryResult<T> {
         self.0.len()
     }
 
+    /// whether query result is empty
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Return `self` query_result of a single oracle.
     /// `query_result[i][j]` is coset index `i` -> element `j`. The shape of
     /// returned result will be `(num_cosets, 1, coset_size)`
@@ -383,7 +388,7 @@ impl ProverRoundMessageInfo {
     /// * `leaves_options`: `UseCodewordDomain | Custom`
     /// * `length`: length of codeword
     /// * `localization_parameter`: localization parameter
-    pub fn new(
+    pub fn make(
         leaves_options: LeavesType,
         length: usize,
         localization_parameter: usize,
@@ -407,7 +412,7 @@ impl ProverRoundMessageInfo {
     {
         let length = transcript.codeword_domain().size();
         let localization_parameter = transcript.codeword_localization_parameter();
-        Self::new(UseCodewordDomain, length, localization_parameter)
+        Self::make(UseCodewordDomain, length, localization_parameter)
     }
 
     /// Builds prover round message info using custom length and localization.
@@ -415,12 +420,13 @@ impl ProverRoundMessageInfo {
         length: usize,
         localization_parameter: usize,
     ) -> ProverRoundMessageInfoBuilder {
-        Self::new(Custom, length, localization_parameter)
+        Self::make(Custom, length, localization_parameter)
     }
 }
 
 impl ProverRoundMessageInfoBuilder {
     /// Degree bounds of oracle evaluations, in order.
+    #[must_use]
     pub fn with_reed_solomon_codes_degree_bounds(mut self, degrees: Vec<usize>) -> Self {
         if self.leaves_type == Custom {
             panic!("Cannot set oracle with degree bounds when leaves_options is Custom");
@@ -430,12 +436,14 @@ impl ProverRoundMessageInfoBuilder {
     }
     /// Number of message oracles without degree bound. Those oracles will not
     /// be processed by LDT.
+    #[must_use]
     pub fn with_num_message_oracles(mut self, num: usize) -> Self {
         self.num_message_oracles = num;
         self
     }
     /// Number of short messages. Those messages will be included in proof in
     /// entirety.
+    #[must_use]
     pub fn with_num_short_messages(mut self, num: usize) -> Self {
         self.num_short_messages = num;
         self

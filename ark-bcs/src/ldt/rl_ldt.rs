@@ -105,8 +105,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
             .collect::<Vec<_>>();
 
         codewords
-            .into_iter()
-            .map(|round| {
+            .iter()
+            .flat_map(|round| {
                 let degrees_bounds = transcript
                     .get_previously_sent_prover_round_info(*round)
                     .reed_solomon_code_degree_bound;
@@ -118,7 +118,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                     .all(|degree_bound| *degree_bound <= param.tested_degree as usize));
                 rs_codes.into_iter().zip(degrees_bounds)
             })
-            .flatten()
             .zip(random_coefficients.iter())
             .for_each(|((oracle, degree), coeff)| {
                 assert_eq!(oracle.len(), result_codewords.len());
@@ -285,6 +284,8 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         );
     }
 
+    #[allow(clippy::needless_collect)]
+    // otherwise we have lifetime issue
     fn query_and_decide<S: CryptographicSponge, O: RoundOracle<F>>(
         namespace: NameSpace,
         param: &Self::LDTParameters,
@@ -335,7 +336,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
 
                 codewords
                     .iter()
-                    .map(|oracle| {
+                    .flat_map(|oracle| {
                         let query_responses = transcript_messages
                             .prover_round(*oracle)
                             .query_coset(&[query_indices[0]], iop_trace!("rl_ldt query codewords"))
@@ -347,7 +348,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                             .reed_solomon_code_degree_bound;
                         query_responses.zip(degrees.into_iter())
                     })
-                    .flatten()
                     .zip(random_coefficients.iter())
                     .for_each(|((msg, degree_bound), coeff)| {
                         assert_eq!(codewords_oracle_responses.len(), msg.len());

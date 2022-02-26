@@ -41,9 +41,9 @@ impl<F: PrimeField + Absorb> Default for PendingMessage<F> {
 }
 
 /// A communication protocol for IOP prover.
-pub struct Transcript<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
-where
-    P::InnerDigest: Absorb,
+pub struct Transcript<P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeField + Absorb>
+    where
+        P::InnerDigest: Absorb,
 {
     /// merkle tree hash parameters
     pub hash_params: MTHashParameters<P>,
@@ -74,11 +74,11 @@ where
 }
 
 impl<P, S, F> Transcript<P, S, F>
-where
-    P: MTConfig<Leaf = [F]>,
-    S: CryptographicSponge,
-    F: PrimeField + Absorb,
-    P::InnerDigest: Absorb,
+    where
+        P: MTConfig<Leaf=[F]>,
+        S: CryptographicSponge,
+        F: PrimeField + Absorb,
+        P::InnerDigest: Absorb,
 {
     /// Return a new BCS transcript.
     pub fn new(
@@ -170,7 +170,7 @@ where
         let oracle_handles = vo.constituent_oracle_handles();
         let constituent_oracles = oracle_handles
             .into_iter()
-            .map(|(round, idxes)| {
+            .flat_map(|(round, idxes)| {
                 debug_assert!(
                     idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
                     "Duplicate oracle index"
@@ -181,7 +181,6 @@ where
                     .map(|idx| self.get_previously_sent_prover_oracle(round, idx).to_vec())
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .collect::<Vec<_>>();
         debug_assert!(constituent_oracles
             .iter()
@@ -214,8 +213,8 @@ where
     ) -> &[F] {
         let msg_ref = at.to_prover_msg_round_ref(&self.bookkeeper);
         if msg_ref.is_virtual {
-            assert_eq!(
-                index.bounded, true,
+            assert!(
+                index.bounded,
                 "virtual round does not have oracles without degree bound"
             );
             assert_eq!(index.idx, 0, "virtual round only has one oracle per round");
@@ -334,10 +333,7 @@ where
 
     /// Returns if there is a pending message for the transcript.
     pub fn is_pending_message_available(&self) -> bool {
-        if let PendingMessage::None = self.pending_message_for_current_round {
-            return false;
-        }
-        return true;
+        !matches!(self.pending_message_for_current_round, PendingMessage::None)
     }
 
     #[allow(unused)]
@@ -400,11 +396,11 @@ where
 
 /// An temporary struct to hold the message for current round.
 pub struct PendingProverMessage<'a, P, S, F>
-where
-    P: MTConfig<Leaf = [F]>,
-    S: CryptographicSponge,
-    F: PrimeField + Absorb,
-    P::InnerDigest: Absorb,
+    where
+        P: MTConfig<Leaf=[F]>,
+        S: CryptographicSponge,
+        F: PrimeField + Absorb,
+        P::InnerDigest: Absorb,
 {
     /// Oracle evaluations with a degree bound. For now, it is required that all
     /// `reed_solomon_codes` have the same domain as codeword domain.
@@ -421,20 +417,21 @@ where
 }
 
 impl<'a, P, S, F> PendingProverMessage<'a, P, S, F>
-where
-    P: MTConfig<Leaf = [F]>,
-    S: CryptographicSponge,
-    F: PrimeField + Absorb,
-    P::InnerDigest: Absorb,
+    where
+        P: MTConfig<Leaf=[F]>,
+        S: CryptographicSponge,
+        F: PrimeField + Absorb,
+        P::InnerDigest: Absorb,
 {
     /// Send Reed-Solomon codes of a polynomial.
     /// For now, it is required that all `reed_solomon_codes` have LDT codeword
     /// domain. # Panics
     /// - Panics if current round is using custom length and localization.
     /// - Panics if message length is not equal to domain size.
+    #[must_use]
     pub fn send_oracle_evaluations_with_degree_bound(
         mut self,
-        msg: impl IntoIterator<Item = F>,
+        msg: impl IntoIterator<Item=F>,
         degree_bound: usize,
     ) -> Self {
         assert_eq!(
@@ -453,9 +450,10 @@ where
     /// # Panics
     ///  Panics if the length of oracle message is not equal to length for
     /// current round.
+    #[must_use]
     pub fn send_oracle_message_without_degree_bound(
         mut self,
-        msg: impl IntoIterator<Item = F>,
+        msg: impl IntoIterator<Item=F>,
     ) -> Self {
         let oracle: Vec<_> = msg.into_iter().collect();
         assert_eq!(oracle.len(), self.oracle_length);
@@ -466,7 +464,8 @@ where
     /// Send short message that does not need to be an oracle. The entire
     /// message will be included in BCS proof, and no merkle tree will be
     /// generated. There is no constraint on the length of the messages.
-    pub fn send_short_message(mut self, msg: impl IntoIterator<Item = F>) -> Self {
+    #[must_use]
+    pub fn send_short_message(mut self, msg: impl IntoIterator<Item=F>) -> Self {
         let msg: Vec<_> = msg.into_iter().collect();
         self.short_messages.push(msg);
         self
@@ -477,6 +476,7 @@ where
     ///
     /// # Panics
     /// This function panics if polynomial's degree is larger than degree bound.
+    #[must_use]
     pub fn send_univariate_polynomial(
         self,
         poly: &DensePolynomial<F>,
@@ -519,6 +519,7 @@ where
     /// For example, if the coset is `[3,6,9]` and we have 2 oracles, then the
     /// leaf will be `[oracle[0][3], oracle[0][6], oracle[0][9],
     /// oracle[1][3], oracle[1][6], oracle[1][9]]`
+    #[allow(clippy::type_complexity)]
     fn into_merkle_tree_and_recording_oracle(
         self, // all RS-codes, all message oracles
     ) -> Result<
@@ -533,7 +534,7 @@ where
         let all_coset_elements = self.generate_all_cosets();
         let flattened_leaves = all_coset_elements
             .iter()
-            .map(|oracles| oracles.iter().flatten().map(|x| *x).collect::<Vec<_>>());
+            .map(|oracles| oracles.iter().flatten().copied().collect::<Vec<_>>());
         let mt = if self.has_oracle() {
             Some(MerkleTree::new(
                 &hash_params.leaf_hash_param,
@@ -598,10 +599,10 @@ where
     }
 }
 
-impl<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb> LDTInfo<F>
-    for Transcript<P, S, F>
-where
-    P::InnerDigest: Absorb,
+impl<P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeField + Absorb> LDTInfo<F>
+for Transcript<P, S, F>
+    where
+        P::InnerDigest: Absorb,
 {
     fn codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")

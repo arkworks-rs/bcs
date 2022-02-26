@@ -111,7 +111,7 @@ where
             transcript
                 .registered_virtual_oracles
                 .into_iter()
-                .map(|x| Some(x))
+                .map(Some)
                 .collect(),
             transcript.reconstructed_verifier_messages,
             transcript.bookkeeper,
@@ -159,7 +159,7 @@ where
                     round_oracle.underlying_message.queried_cosets.len(),
                     "insufficient queries in verifier code"
                 );
-                let mt_root = if round_oracle.coset_queries.len() > 0 {
+                let mt_root = if !round_oracle.coset_queries.is_empty() {
                     mt_root
                         .as_ref()
                         .expect("round oracle has query but has no mt_root")
@@ -178,7 +178,7 @@ where
                             path.verify(
                                 &hash_params.leaf_hash_param,
                                 &hash_params.inner_hash_param,
-                                &mt_root,
+                                mt_root,
                                 // flatten by concatenating cosets of all oracles
                                 coset
                                     .clone()

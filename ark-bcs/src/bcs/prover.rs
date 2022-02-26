@@ -69,9 +69,9 @@ where
         let mut transcript = {
             Transcript::new(
                 sponge,
-                hash_params.clone(),
-                L::codeword_domain(&ldt_params),
-                L::localization_param(&ldt_params),
+                hash_params,
+                L::codeword_domain(ldt_params),
+                L::localization_param(ldt_params),
                 iop_trace!("BCS Proof Generation"),
             )
         };
@@ -125,7 +125,7 @@ where
 
         L::query_and_decide(
             ldt_namespace,
-            &ldt_params,
+            ldt_params,
             &mut sponge,
             &codewords,
             &mut transcript_messages,
