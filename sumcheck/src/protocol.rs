@@ -1,3 +1,5 @@
+use alloc::vec;
+use alloc::vec::Vec;
 use crate::{
     vp::{DivVanishingPoly, VanishingPoly},
     UnivariateSumcheck,
@@ -228,8 +230,6 @@ pub(crate) mod tests {
         let expected_sum = (0..summation_domain.size())
             .map(|i| f.evaluate(&summation_domain.element(i)))
             .sum::<Fr>();
-        println!("degree of h: {}", h.degree());
-        println!("degree of g: {}", g.degree());
         assert_eq!(actual_sum, expected_sum);
     }
 

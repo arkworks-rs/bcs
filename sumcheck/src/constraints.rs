@@ -1,3 +1,5 @@
+use alloc::vec;
+use alloc::vec::Vec;
 use crate::UnivariateSumcheck;
 use ark_bcs::{
     bcs::constraints::transcript::SimulationTranscriptVar,
@@ -136,6 +138,8 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+    use core::borrow::Borrow;
     use crate::{
         protocol::tests::{FieldMTConfig, MockProtocol, MockProverParam, MockVerifierParam},
         test_util::poseidon_parameters,
@@ -181,7 +185,6 @@ mod tests {
         Absorb, CryptographicSponge,
     };
     use ark_std::test_rng;
-    use std::borrow::Borrow;
 
     #[derive(Clone, Debug)]
     pub struct MockVerifierParamVar {
