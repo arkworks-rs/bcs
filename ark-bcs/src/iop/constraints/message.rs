@@ -254,21 +254,21 @@ impl<F: PrimeField> AllocVar<VerifierMessage<F>, F> for VerifierMessageVar<F> {
                     .map(|x| FpVar::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::FieldElements(var?))
-            }
+            },
             VerifierMessage::Bits(bits) => {
                 let var: Result<Vec<_>, _> = bits
                     .iter()
                     .map(|x| Boolean::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bits(var?))
-            }
+            },
             VerifierMessage::Bytes(bytes) => {
                 let var: Result<Vec<_>, _> = bytes
                     .iter()
                     .map(|x| UInt8::new_variable(cs.clone(), || Ok(*x), mode))
                     .collect();
                 Ok(VerifierMessageVar::Bytes(var?))
-            }
+            },
         }
     }
 }

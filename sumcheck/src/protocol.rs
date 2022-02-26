@@ -2,8 +2,7 @@ use crate::{
     vp::{DivVanishingPoly, VanishingPoly},
     UnivariateSumcheck,
 };
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use ark_bcs::{
     bcs::transcript::{LDTInfo, Transcript},
     iop::{bookkeeper::NameSpace, message::OracleIndex, oracles::VirtualOracle},
@@ -226,7 +225,7 @@ pub(crate) mod tests {
         let summation_domain = Radix2CosetDomain::new_radix2_coset(64, Fr::from(123u64));
         let sumcheck = UnivariateSumcheck { summation_domain };
         let f = DensePolynomial::rand(100, &mut rng);
-        let (h, g, actual_sum) = sumcheck.calculate_h_g_and_actual_sum(&f);
+        let (_, _, actual_sum) = sumcheck.calculate_h_g_and_actual_sum(&f);
         let expected_sum = (0..summation_domain.size())
             .map(|i| f.evaluate(&summation_domain.element(i)))
             .sum::<Fr>();

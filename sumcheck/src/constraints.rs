@@ -1,6 +1,5 @@
 use crate::UnivariateSumcheck;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use ark_bcs::{
     bcs::constraints::transcript::SimulationTranscriptVar,
     iop::{bookkeeper::NameSpace, constraints::oracles::VirtualOracleVar, message::OracleIndex},
