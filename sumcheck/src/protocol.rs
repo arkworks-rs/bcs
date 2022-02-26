@@ -1,9 +1,9 @@
-use alloc::vec;
-use alloc::vec::Vec;
 use crate::{
     vp::{DivVanishingPoly, VanishingPoly},
     UnivariateSumcheck,
 };
+use alloc::vec;
+use alloc::vec::Vec;
 use ark_bcs::{
     bcs::transcript::{LDTInfo, Transcript},
     iop::{bookkeeper::NameSpace, message::OracleIndex, oracles::VirtualOracle},

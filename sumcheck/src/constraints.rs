@@ -1,6 +1,6 @@
+use crate::UnivariateSumcheck;
 use alloc::vec;
 use alloc::vec::Vec;
-use crate::UnivariateSumcheck;
 use ark_bcs::{
     bcs::constraints::transcript::SimulationTranscriptVar,
     iop::{bookkeeper::NameSpace, constraints::oracles::VirtualOracleVar, message::OracleIndex},
@@ -138,13 +138,12 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
-    use core::borrow::Borrow;
     use crate::{
         protocol::tests::{FieldMTConfig, MockProtocol, MockProverParam, MockVerifierParam},
         test_util::poseidon_parameters,
         UnivariateSumcheck,
     };
+    use alloc::vec;
     use ark_bcs::{
         bcs::{
             constraints::{
@@ -185,6 +184,7 @@ mod tests {
         Absorb, CryptographicSponge,
     };
     use ark_std::test_rng;
+    use core::borrow::Borrow;
 
     #[derive(Clone, Debug)]
     pub struct MockVerifierParamVar {
