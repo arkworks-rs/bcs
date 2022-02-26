@@ -17,7 +17,10 @@ use crate::{
         },
         MTHashParameters,
     },
-    iop::{bookkeeper::NameSpace, constraints::IOPVerifierWithGadget},
+    iop::{
+        bookkeeper::NameSpace,
+        constraints::{IOPVerifierWithGadget, Nothing},
+    },
     ldt::{
         rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
         LDT,
@@ -34,7 +37,6 @@ use ark_sponge::{
     CryptographicSponge,
 };
 use ark_std::{vec, One};
-use crate::iop::constraints::Nothing;
 
 mod mock;
 

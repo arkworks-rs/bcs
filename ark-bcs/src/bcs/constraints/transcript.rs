@@ -19,7 +19,7 @@ use ark_sponge::{
     constraints::{AbsorbGadget, CryptographicSpongeVar, SpongeWithGadget},
     Absorb,
 };
-use ark_std::{mem::take, vec::Vec, boxed::Box};
+use ark_std::{boxed::Box, mem::take, vec::Vec};
 
 /// R1CS Variable for simulation transcript used by verifier.
 pub struct SimulationTranscriptVar<'a, F, MT, MTG, S>

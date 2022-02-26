@@ -109,7 +109,10 @@ where
         trace: TraceInfo,
     ) -> MsgRoundRef {
         info!("prover round: {}", trace);
-        if !expected_message_info.reed_solomon_code_degree_bound.is_empty() {
+        if !expected_message_info
+            .reed_solomon_code_degree_bound
+            .is_empty()
+        {
             // LDT is used. This prover round must not use custom domain.
             assert_eq!(expected_message_info.leaves_type, LeavesType::UseCodewordDomain,
                        "This round contains low-degree oracle, but custom length and localization parameter is used. ");
@@ -169,7 +172,10 @@ where
             trace_info
         );
         // check 4: if there are rs-codes, LeavesType should be UseCodewordDomain
-        if !expected_message_info.reed_solomon_code_degree_bound.is_empty(){
+        if !expected_message_info
+            .reed_solomon_code_degree_bound
+            .is_empty()
+        {
             assert_eq!(
                 expected_message_info.leaves_type,
                 LeavesType::UseCodewordDomain,

@@ -7,9 +7,11 @@ use crate::{
         bookkeeper::NameSpace,
         constraints::{
             message::MessagesCollectionVar, oracles::VirtualOracleVar, IOPVerifierWithGadget,
+            Nothing,
         },
-        message::ProverRoundMessageInfo,
+        message::{OracleIndex, ProverRoundMessageInfo},
     },
+    prelude::MsgRoundRef,
 };
 use ark_crypto_primitives::merkle_tree::{constraints::ConfigGadget, Config};
 use ark_ff::PrimeField;
@@ -28,14 +30,11 @@ use ark_sponge::{
     Absorb,
 };
 use ark_std::{test_rng, vec, vec::Vec};
-use crate::iop::constraints::Nothing;
-use crate::iop::message::OracleIndex;
-use crate::prelude::MsgRoundRef;
 
 impl<F: PrimeField> VirtualOracleVar<F> for BCSTestVirtualOracle<F> {
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)> {
         vec![(self.round, vec![(0, true).into()])] // take first oracle with
-        // degree bound
+                                                   // degree bound
     }
 
     fn evaluate_var(
