@@ -4,7 +4,7 @@
 
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use std::{collections::BTreeSet, mem::take};
+use ark_std::{collections::BTreeSet, mem::take};
 
 use super::message::{MessagesCollection, ProverRoundMessageInfo};
 use crate::{
@@ -12,7 +12,7 @@ use crate::{
     prelude::MsgRoundRef,
 };
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
-use ark_std::{boxed::Box, vec::Vec};
+use ark_std::{boxed::Box, vec::Vec, vec};
 
 /// A trait for all oracle messages (including RS-code oracles, Non RS-code
 /// oracles, and IP short messages) sent in one round. Those oracles (except IP

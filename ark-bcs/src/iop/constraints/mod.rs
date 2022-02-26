@@ -6,8 +6,8 @@ use ark_sponge::{
     constraints::{AbsorbGadget, SpongeWithGadget},
     Absorb,
 };
-use std::borrow::Borrow;
-use std::ops::Deref;
+use ark_std::borrow::Borrow;
+use ark_std::ops::Deref;
 
 use crate::{bcs::constraints::transcript::SimulationTranscriptVar, iop::verifier::IOPVerifier};
 

@@ -1,8 +1,7 @@
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::PrimeField;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
-use ark_std::vec::Vec;
-use std::collections::BTreeSet;
+use ark_std::{boxed::Box, collections::BTreeSet, vec, vec::Vec};
 use tracing::info;
 
 use crate::{

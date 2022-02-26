@@ -1,6 +1,5 @@
 use ark_std::borrow::Borrow;
-use std::{collections::BTreeSet, mem::take};
-
+use ark_std::{collections::BTreeSet, mem::take};
 use crate::{
     iop::{
         message::{CosetQueryResult, LeavesType, OracleIndex, ProverRoundMessageInfo},
@@ -18,7 +17,7 @@ use ark_r1cs_std::{
     select::CondSelectGadget,
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
-use ark_std::{boxed::Box, vec::Vec};
+use ark_std::{boxed::Box, vec::Vec, vec};
 
 use super::message::MessagesCollectionVar;
 

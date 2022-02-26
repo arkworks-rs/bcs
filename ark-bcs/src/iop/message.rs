@@ -1,7 +1,7 @@
 use crate::{iop::bookkeeper::MessageBookkeeper, tracer::TraceInfo};
 use ark_ff::PrimeField;
-use ark_std::vec::Vec;
-use std::iter::FromIterator;
+use ark_std::{vec::Vec, vec};
+use ark_std::iter::FromIterator;
 
 use crate::{
     bcs::transcript::LDTInfo,

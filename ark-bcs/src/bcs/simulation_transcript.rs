@@ -14,7 +14,7 @@ use crate::{
     tracer::TraceInfo,
 };
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_std::mem::take;
+use ark_std::{boxed::Box, mem::take};
 
 /// A wrapper for BCS proof, so that verifier can reconstruct verifier messages
 /// by simulating commit phase easily.
