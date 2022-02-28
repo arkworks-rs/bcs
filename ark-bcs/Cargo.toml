@@ -27,7 +27,6 @@ ark-r1cs-std = { version = "^0.3.1", default-features = false, optional = true }
 
 tracing = { version = "0.1", default-features = false, features = ["attributes"] }
 derivative = { version = "2.0", features = ["use_core"] }
-hashbrown = "0.11.2"
 
 [dev-dependencies]
 ark-ed-on-bls12-381 = { version = "^0.3.0", default-features = false }

@@ -2,6 +2,7 @@
 members = [
     "ark-bcs",
     "sumcheck",
+    "lincheck"
 ]
 
 [profile.release]

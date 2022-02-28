@@ -1,5 +1,5 @@
 [package]
-name = "uni_sumcheck"
+name = "lincheck"
 version = "0.3.0"
 authors = [
     "Tom Shen"
@@ -26,6 +26,7 @@ ark-bcs = { path = "../ark-bcs", default-features = false }
 
 tracing = { version = "0.1", default-features = false, features = ["attributes"] }
 derivative = { version = "2.0", features = ["use_core"] }
+hashbrown = "0.11.2"
 rayon = { version = "1.5", optional = true }
 
 [dev-dependencies]
