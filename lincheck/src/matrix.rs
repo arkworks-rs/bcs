@@ -1,8 +1,8 @@
 //! Some utilities for working with matrices. Those matrices are used for both native and constraints.
 
 use ark_ff::PrimeField;
-use std::iter::FromIterator;
-
+use ark_std::iter::FromIterator;
+use ark_std::vec::Vec;
 /// Specification for matrix.
 pub trait MatrixSpec {
     // TODO: can matrix itself be variable?

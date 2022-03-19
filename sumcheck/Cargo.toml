@@ -1,5 +1,5 @@
 [package]
-name = "uni_sumcheck"
+name = "ark-uni-sumcheck"
 version = "0.3.0"
 authors = [
     "Tom Shen"

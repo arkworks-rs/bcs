@@ -291,11 +291,12 @@ where
     /// and decision phase.
     ///
     /// **Note**: In original IOP paper, verifier do not use sampled element in
-    /// commit phase. So in this implementation, this function returns nothing.
-    pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) {
+    /// commit phase. However, ark-bcs allows verifier to do so, to allow local computation in virtual oracle.
+    pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) -> Vec<F> {
         let msg = self.sponge.squeeze_field_elements_with_sizes(field_size);
         self.pending_verifier_messages
-            .push(VerifierMessage::FieldElements(msg));
+            .push(VerifierMessage::FieldElements(msg.clone()));
+        msg
     }
 
     /// Squeeze sampled verifier message as bytes. The squeezed bytes is

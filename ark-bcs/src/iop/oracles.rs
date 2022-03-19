@@ -315,7 +315,7 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
 
         // constituent_oracles[i][j][k] is coset_index[i] -> oracle_index[j] ->
         // element_index[k]
-        let constituent_oracles = constituent_oracle_handles
+        let mut constituent_oracles = constituent_oracle_handles
             .into_iter()
             .map(|(round, idxes)| {
                 // check idxes have unique elements
@@ -347,14 +347,26 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
         // shape: (num_cosets, num_oracles_needed_for_all_rounds, num_elements_in_coset)
 
         // convert coset index to cosets
-        let queried_cosets = coset_index
+        let (query_positions, queried_cosets) = coset_index
             .iter()
             .map(|&i| {
                 self.codeword_domain
                     .query_position_to_coset(i, self.localization_param)
-                    .1
             })
-            .collect::<Vec<_>>();
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+
+        // append local oracle evaluations to each coset query result
+        assert_eq!(constituent_oracles.len(), query_positions.len());
+        let local_oracles = self.coset_evaluator.local_constituent_oracles();
+        for (constituent_oracles_at_one_coset, query_positions_for_one_coset) in
+            constituent_oracles.iter_mut().zip(query_positions)
+        {
+            let local_oracles_at_this_coset = local_oracles
+                .iter()
+                .map(|v| query_positions_for_one_coset.iter().map(|&i| v[i]).collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            constituent_oracles_at_one_coset.extend_from_slice(&local_oracles_at_this_coset);
+        }
 
         let query_result = constituent_oracles
             .into_iter()
@@ -383,8 +395,12 @@ pub trait VirtualOracle<F: PrimeField>: 'static {
     /// query constituent oracles as a message round handle, and the indices of
     /// oracles needed in that round
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
+    /// local oracles that can be constructed by verifier locally. This function return the evaluation of local oracles on codeword domain.
+    fn local_constituent_oracles(&self) -> Vec<Vec<F>> {
+        vec![]
+    }
     /// evaluate this virtual oracle, using evaluations of constituent oracles
-    /// on `coset_domain`
+    /// on `coset_domain`. `constituent_oracles` will have query oracles coming first, and then local oracles.
     fn evaluate(
         &self,
         coset_domain: Radix2CosetDomain<F>,

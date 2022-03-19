@@ -40,14 +40,13 @@ impl MsgRoundRef {
 
 /// A Message Round can contain multiple oracles with same evaluation domain.
 /// The oracle index represents the position of the oracle in that message
-/// round. Oracles with degree bound come first and oracles with degree bound
-/// come last.
+/// round.
 ///
 /// For example, if in one round user first add bounded oracle A, unbounded
 /// oracle B and then bounded oracle C, then
 /// * the index of `A` will be `{0, bounded}`
-/// * the index of `B` will be `{1, unbounded}`
-/// * the index of `C` will be `{2, bounded}`
+/// * the index of `B` will be `{0, unbounded}`
+/// * the index of `C` will be `{1, bounded}`
 #[derive(Derivative, Debug, Copy, Clone, Default)]
 #[derivative(PartialEq, Eq, PartialOrd, Ord)]
 pub struct OracleIndex {

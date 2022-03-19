@@ -94,6 +94,7 @@ impl<F: PrimeField> VirtualOracleVar<F> for SumcheckPOracleVar<F> {
 }
 
 impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
+
     pub fn register_sumcheck_commit_phase_var<
         MT: Config,
         MTG: ConfigGadget<MT, F, Leaf = [FpVar<F>]>,

@@ -16,3 +16,9 @@ pub mod vp;
 pub struct UnivariateSumcheck<F: PrimeField + Absorb> {
     pub summation_domain: Radix2CosetDomain<F>,
 }
+
+impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
+    pub fn new(summation_domain: Radix2CosetDomain<F>) -> Self {
+        UnivariateSumcheck { summation_domain }
+    }
+}
