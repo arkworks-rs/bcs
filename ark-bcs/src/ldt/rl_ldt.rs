@@ -80,6 +80,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
     where
         MT::InnerDigest: Absorb,
     {
+
         let span = tracing::span!(Level::INFO, "LDT Prove");
         let _enter = span.enter();
         let param = &param.fri_parameters;
@@ -114,8 +115,10 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 assert_eq!(rs_codes.len(), degrees_bounds.len());
                 // make sure degree_bounds degree is less than or equal to tested_degree
                 assert!(degrees_bounds
-                    .iter()
-                    .all(|degree_bound| *degree_bound <= param.tested_degree as usize));
+                            .iter()
+                            .all(|degree_bound| *degree_bound <= param.tested_degree as usize),
+                        "Tested Degree should be greater than all degree_bounds: degree bounds: {:?}, tested degree: {}",
+                        degrees_bounds, param.tested_degree);
                 rs_codes.into_iter().zip(degrees_bounds)
             })
             .zip(random_coefficients.iter())
@@ -222,6 +225,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
     ) where
         MT::InnerDigest: Absorb,
     {
+
         let span = tracing::span!(Level::INFO, "ldt register");
         let _enter = span.enter();
         transcript.squeeze_verifier_field_elements(
@@ -313,13 +317,13 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         )
             .map(|vm| {
                 assert_eq!(vm.len(), 1);
-                let vm_curr = vm[0] // each round have one message 
+                let vm_curr = vm[0] // each round have one message
                     .clone()
                     .try_into_field_elements()
                     .unwrap();
                 assert_eq!(vm_curr.len(), 1);
                 vm_curr[0]
-            }) // each message is only one field element (alpha) 
+            }) // each message is only one field element (alpha)
             .collect::<Vec<_>>();
 
         query_indices
@@ -428,7 +432,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 );
 
                 // TODO: do not panic. Use customized error
-                assert!(result);
+                assert!(result, "LDT verification failed: namespace {:?}", namespace);
 
                 Ok(())
             })

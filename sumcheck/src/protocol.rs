@@ -124,7 +124,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
     /// * `is_f_bounded`: whether `f` has degree bound
     /// # Panics
     /// Panics if there is a pending message not sent.
-    pub fn send_sumcheck_prover_message<P: Config<Leaf = [F]>, S: CryptographicSponge>(
+    pub fn prove<P: Config<Leaf = [F]>, S: CryptographicSponge>(
         &self,
         transcript: &mut Transcript<P, S, F>,
         ns: NameSpace,
@@ -162,7 +162,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
     }
 
     /// Register sumcheck message via transcript
-    pub fn register_sumcheck_commit_phase<P: Config<Leaf = [F]>, S: CryptographicSponge>(
+    pub fn register<P: Config<Leaf = [F]>, S: CryptographicSponge>(
         &self,
         transcript: &mut SimulationTranscript<P, S, F>,
         ns: NameSpace,
@@ -273,6 +273,8 @@ pub(crate) mod tests {
         assert!(p_coeff.degree() > summation_domain.size() - 2);
     }
 
+    const POLY_DEG: usize = 100;
+
     pub(crate) struct MockProtocol;
 
     #[derive(Clone, Debug)]
@@ -319,18 +321,18 @@ pub(crate) mod tests {
                 .evaluate(&prover_parameter.poly);
             let poly_handle = transcript
                 .add_prover_round_with_codeword_domain()
-                .send_oracle_message_without_degree_bound(poly_eval)
+                .send_univariate_polynomial(&prover_parameter.poly, POLY_DEG + 1)
                 .submit(namespace, iop_trace!("poly to sum"))?;
             // just invoke sumcheck
             let sumcheck = UnivariateSumcheck {
                 summation_domain: prover_parameter.summation_domain,
             };
             let sumcheck_ns = transcript.new_namespace(namespace, iop_trace!("sumcheck"));
-            sumcheck.send_sumcheck_prover_message(
+            sumcheck.prove(
                 transcript,
                 sumcheck_ns,
                 &prover_parameter.poly,
-                (poly_handle, OracleIndex::new(0, false)),
+                (poly_handle, OracleIndex::new(0, true)),
                 prover_parameter.claimed_sum,
             );
             Ok(())
@@ -350,7 +352,7 @@ pub(crate) mod tests {
             MT::InnerDigest: Absorb,
         {
             let poly_info = ProverRoundMessageInfo::new_using_codeword_domain(transcript)
-                .with_num_message_oracles(1)
+                .with_reed_solomon_codes_degree_bounds(vec![POLY_DEG + 1])
                 .build();
             let poly_handle = transcript.receive_prover_current_round(
                 namespace,
@@ -361,7 +363,7 @@ pub(crate) mod tests {
                 summation_domain: verifier_parameter.summation_domain,
             };
             let sumcheck_ns = transcript.new_namespace(namespace, iop_trace!("sumcheck"));
-            sumcheck.register_sumcheck_commit_phase(
+            sumcheck.register(
                 transcript,
                 sumcheck_ns,
                 (poly_handle, OracleIndex::new(0, false)),
@@ -397,6 +399,12 @@ pub(crate) mod tests {
 
     #[test]
     fn test_sumcheck_end_to_end() {
+        // seems that LDT fails to verify multiple low-degree oracles. There may
+        // be some problem in random linear coefficients etc.
+        // update 4/16: LDT prove think there are 2 oracles, but LDT verify think there
+        // are 3 oracles, causing mismatch in linear coefficients update 4/16:
+        // bug fixed. TODO: fix same thing in constraints.
+
         let mut rng = test_rng();
         let sponge = PoseidonSponge::new(&poseidon_parameters());
 
@@ -404,7 +412,7 @@ pub(crate) mod tests {
         let ldt_param = LinearCombinationLDTParameters::new(128, vec![1, 2, 1], codeword_domain, 5);
         let summation_domain = Radix2CosetDomain::new_radix2_coset(32, Fr::from(0x6789));
 
-        let poly = DensePolynomial::rand(100, &mut rng);
+        let poly = DensePolynomial::rand(POLY_DEG, &mut rng);
 
         let claimed_sum = summation_domain.evaluate(&poly).into_iter().sum::<Fr>();
 

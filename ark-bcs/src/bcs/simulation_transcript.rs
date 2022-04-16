@@ -291,7 +291,8 @@ where
     /// and decision phase.
     ///
     /// **Note**: In original IOP paper, verifier do not use sampled element in
-    /// commit phase. However, ark-bcs allows verifier to do so, to allow local computation in virtual oracle.
+    /// commit phase. However, ark-bcs allows verifier to do so, to allow local
+    /// computation in virtual oracle.
     pub fn squeeze_verifier_field_elements(&mut self, field_size: &[FieldElementSize]) -> Vec<F> {
         let msg = self.sponge.squeeze_field_elements_with_sizes(field_size);
         self.pending_verifier_messages

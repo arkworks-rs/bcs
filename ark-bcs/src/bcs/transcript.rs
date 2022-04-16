@@ -41,9 +41,9 @@ impl<F: PrimeField + Absorb> Default for PendingMessage<F> {
 }
 
 /// A communication protocol for IOP prover.
-pub struct Transcript<P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeField + Absorb>
-    where
-        P::InnerDigest: Absorb,
+pub struct Transcript<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb>
+where
+    P::InnerDigest: Absorb,
 {
     /// merkle tree hash parameters
     pub hash_params: MTHashParameters<P>,
@@ -74,11 +74,11 @@ pub struct Transcript<P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeFie
 }
 
 impl<P, S, F> Transcript<P, S, F>
-    where
-        P: MTConfig<Leaf=[F]>,
-        S: CryptographicSponge,
-        F: PrimeField + Absorb,
-        P::InnerDigest: Absorb,
+where
+    P: MTConfig<Leaf = [F]>,
+    S: CryptographicSponge,
+    F: PrimeField + Absorb,
+    P::InnerDigest: Absorb,
 {
     /// Return a new BCS transcript.
     pub fn new(
@@ -169,21 +169,21 @@ impl<P, S, F> Transcript<P, S, F>
         // first, get all the oracles needed
         let oracle_handles = vo.constituent_oracle_handles();
         let local_oracles = vo.local_constituent_oracles();
-        let constituent_query_oracles = oracle_handles
-            .into_iter()
-            .flat_map(|(round, idxes)| {
-                debug_assert!(
-                    idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
-                    "Duplicate oracle index"
-                );
+        let constituent_query_oracles = oracle_handles.into_iter().flat_map(|(round, idxes)| {
+            debug_assert!(
+                idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
+                "Duplicate oracle index"
+            );
 
-                idxes
-                    .into_iter()
-                    .map(|idx| self.get_previously_sent_prover_oracle(round, idx).to_vec())
-                    .collect::<Vec<_>>()
-            });
+            idxes
+                .into_iter()
+                .map(|idx| self.get_previously_sent_prover_oracle(round, idx).to_vec())
+                .collect::<Vec<_>>()
+        });
 
-        let constituent_oracles = constituent_query_oracles.chain(local_oracles.into_iter()).collect::<Vec<_>>();
+        let constituent_oracles = constituent_query_oracles
+            .chain(local_oracles.into_iter())
+            .collect::<Vec<_>>();
         debug_assert!(constituent_oracles
             .iter()
             .all(|o| o.len() == self.codeword_domain().size()));
@@ -398,11 +398,11 @@ impl<P, S, F> Transcript<P, S, F>
 
 /// An temporary struct to hold the message for current round.
 pub struct PendingProverMessage<'a, P, S, F>
-    where
-        P: MTConfig<Leaf=[F]>,
-        S: CryptographicSponge,
-        F: PrimeField + Absorb,
-        P::InnerDigest: Absorb,
+where
+    P: MTConfig<Leaf = [F]>,
+    S: CryptographicSponge,
+    F: PrimeField + Absorb,
+    P::InnerDigest: Absorb,
 {
     /// Oracle evaluations with a degree bound. For now, it is required that all
     /// `reed_solomon_codes` have the same domain as codeword domain.
@@ -419,11 +419,11 @@ pub struct PendingProverMessage<'a, P, S, F>
 }
 
 impl<'a, P, S, F> PendingProverMessage<'a, P, S, F>
-    where
-        P: MTConfig<Leaf=[F]>,
-        S: CryptographicSponge,
-        F: PrimeField + Absorb,
-        P::InnerDigest: Absorb,
+where
+    P: MTConfig<Leaf = [F]>,
+    S: CryptographicSponge,
+    F: PrimeField + Absorb,
+    P::InnerDigest: Absorb,
 {
     /// Send Reed-Solomon codes of a polynomial.
     /// For now, it is required that all `reed_solomon_codes` have LDT codeword
@@ -433,7 +433,7 @@ impl<'a, P, S, F> PendingProverMessage<'a, P, S, F>
     #[must_use]
     pub fn send_oracle_evaluations_with_degree_bound(
         mut self,
-        msg: impl IntoIterator<Item=F>,
+        msg: impl IntoIterator<Item = F>,
         degree_bound: usize,
     ) -> Self {
         assert_eq!(
@@ -455,7 +455,7 @@ impl<'a, P, S, F> PendingProverMessage<'a, P, S, F>
     #[must_use]
     pub fn send_oracle_message_without_degree_bound(
         mut self,
-        msg: impl IntoIterator<Item=F>,
+        msg: impl IntoIterator<Item = F>,
     ) -> Self {
         let oracle: Vec<_> = msg.into_iter().collect();
         assert_eq!(oracle.len(), self.oracle_length);
@@ -467,7 +467,7 @@ impl<'a, P, S, F> PendingProverMessage<'a, P, S, F>
     /// message will be included in BCS proof, and no merkle tree will be
     /// generated. There is no constraint on the length of the messages.
     #[must_use]
-    pub fn send_short_message(mut self, msg: impl IntoIterator<Item=F>) -> Self {
+    pub fn send_short_message(mut self, msg: impl IntoIterator<Item = F>) -> Self {
         let msg: Vec<_> = msg.into_iter().collect();
         self.short_messages.push(msg);
         self
@@ -601,10 +601,10 @@ impl<'a, P, S, F> PendingProverMessage<'a, P, S, F>
     }
 }
 
-impl<P: MTConfig<Leaf=[F]>, S: CryptographicSponge, F: PrimeField + Absorb> LDTInfo<F>
-for Transcript<P, S, F>
-    where
-        P::InnerDigest: Absorb,
+impl<P: MTConfig<Leaf = [F]>, S: CryptographicSponge, F: PrimeField + Absorb> LDTInfo<F>
+    for Transcript<P, S, F>
+where
+    P::InnerDigest: Absorb,
 {
     fn codeword_domain(&self) -> Radix2CosetDomain<F> {
         self.ldt_codeword_domain.expect("LDT not enabled")

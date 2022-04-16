@@ -45,7 +45,7 @@ pub trait IOPVerifier<S: CryptographicSponge, F: PrimeField + Absorb> {
     /// When writing test, use `transcript.check_correctness` after calling this
     /// method to verify the correctness of this method.
     fn register_iop_structure<MT: MTConfig<Leaf = [F]>>(
-        namespace: NameSpace,
+        ns: NameSpace,
         transcript: &mut SimulationTranscript<MT, S, F>,
         verifier_parameter: &Self::VerifierParameter,
     ) where

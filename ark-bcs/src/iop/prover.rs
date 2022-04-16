@@ -21,7 +21,7 @@ pub trait IOPProver<F: PrimeField + Absorb> {
     /// parameter. If the prover involves a subprotocol, consider create a
     /// separate namespace for them.
     fn prove<MT: MTConfig<Leaf = [F]>, S: CryptographicSponge>(
-        namespace: NameSpace,
+        ns: NameSpace,
         public_input: &Self::PublicInput,
         private_input: &Self::PrivateInput,
         transcript: &mut Transcript<MT, S, F>,

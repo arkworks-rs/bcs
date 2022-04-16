@@ -363,7 +363,12 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
         {
             let local_oracles_at_this_coset = local_oracles
                 .iter()
-                .map(|v| query_positions_for_one_coset.iter().map(|&i| v[i]).collect::<Vec<_>>())
+                .map(|v| {
+                    query_positions_for_one_coset
+                        .iter()
+                        .map(|&i| v[i])
+                        .collect::<Vec<_>>()
+                })
                 .collect::<Vec<_>>();
             constituent_oracles_at_one_coset.extend_from_slice(&local_oracles_at_this_coset);
         }
@@ -395,12 +400,14 @@ pub trait VirtualOracle<F: PrimeField>: 'static {
     /// query constituent oracles as a message round handle, and the indices of
     /// oracles needed in that round
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
-    /// local oracles that can be constructed by verifier locally. This function return the evaluation of local oracles on codeword domain.
+    /// local oracles that can be constructed by verifier locally. This function
+    /// return the evaluation of local oracles on codeword domain.
     fn local_constituent_oracles(&self) -> Vec<Vec<F>> {
         vec![]
     }
     /// evaluate this virtual oracle, using evaluations of constituent oracles
-    /// on `coset_domain`. `constituent_oracles` will have query oracles coming first, and then local oracles.
+    /// on `coset_domain`. `constituent_oracles` will have query oracles coming
+    /// first, and then local oracles.
     fn evaluate(
         &self,
         coset_domain: Radix2CosetDomain<F>,

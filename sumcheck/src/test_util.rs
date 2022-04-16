@@ -29,6 +29,3 @@ pub(crate) fn poseidon_parameters() -> PoseidonParameters<ark_bls12_381::Fr> {
         1,
     )
 }
-
-#[cfg(feature = "r1cs")]
-mod constraints {}

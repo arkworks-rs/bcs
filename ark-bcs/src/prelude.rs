@@ -8,4 +8,4 @@ pub use crate::iop::message::{MessagesCollection, MsgRoundRef, ProverRoundMessag
 pub use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 
 // export sponge
-pub use ark_sponge::{CryptographicSponge, SpongeExt, Absorb};
+pub use ark_sponge::{Absorb, CryptographicSponge, SpongeExt};

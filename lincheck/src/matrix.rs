@@ -1,9 +1,9 @@
-//! Some utilities for working with matrices. Those matrices are used for both native and constraints.
+//! Some utilities for working with matrices. Those matrices are used for both
+//! native and constraints.
 
-use core::fmt::Debug;
 use ark_ff::PrimeField;
-use ark_std::iter::FromIterator;
-use ark_std::vec::Vec;
+use ark_std::{iter::FromIterator, vec::Vec};
+use core::fmt::Debug;
 use derivative::Derivative;
 /// Specification for matrix.
 pub trait MatrixSpec {
@@ -33,7 +33,7 @@ pub trait MatrixSpec {
             .collect()
     }
 
-    fn transpose(input: &[Vec<Self::MatrixField>]) -> Vec<Vec<Self::MatrixField>>{
+    fn transpose(input: &[Vec<Self::MatrixField>]) -> Vec<Vec<Self::MatrixField>> {
         let num_rows = input.len();
         let num_cols = input[0].len();
         let mut output = Vec::with_capacity(num_cols);
@@ -71,7 +71,12 @@ impl<F: PrimeField> MatrixSpec for NativeMatrixSpec<F> {
 }
 
 #[derive(Derivative)]
-#[derivative(PartialEq(bound = "S::MatrixField: PartialEq"), Eq(bound = "S::MatrixField: PartialEq"), Debug)]
+#[derivative(
+    PartialEq(bound = "S::MatrixField: PartialEq"),
+    Eq(bound = "S::MatrixField: PartialEq"),
+    Debug,
+    Clone
+)]
 pub struct Matrix<S: MatrixSpec> {
     rows: usize,
     cols: usize,
@@ -118,39 +123,82 @@ impl<S: MatrixSpec> FromIterator<Vec<S::MatrixField>> for Matrix<S> {
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
+    use crate::{Matrix, NativeMatrixSpec};
     use alloc::vec;
     use ark_bls12_381::Fr;
     use ark_ff::field_new;
-    use crate::{Matrix, NativeMatrixSpec};
 
     #[test]
-    fn mul_vector(){
+    fn mul_vector() {
         let mat = Matrix::<NativeMatrixSpec<_>>::new(vec![
-            vec![field_new!(Fr, "1"), field_new!(Fr, "2"), field_new!(Fr, "3")],
-            vec![field_new!(Fr, "4"), field_new!(Fr, "5"), field_new!(Fr, "6")],
-            vec![field_new!(Fr, "7"), field_new!(Fr, "8"), field_new!(Fr, "9")],
+            vec![
+                field_new!(Fr, "1"),
+                field_new!(Fr, "2"),
+                field_new!(Fr, "3"),
+            ],
+            vec![
+                field_new!(Fr, "4"),
+                field_new!(Fr, "5"),
+                field_new!(Fr, "6"),
+            ],
+            vec![
+                field_new!(Fr, "7"),
+                field_new!(Fr, "8"),
+                field_new!(Fr, "9"),
+            ],
         ]);
-        let v = vec![field_new!(Fr, "1"), field_new!(Fr, "2"), field_new!(Fr, "3")];
+        let v = vec![
+            field_new!(Fr, "1"),
+            field_new!(Fr, "2"),
+            field_new!(Fr, "3"),
+        ];
 
-        let expected = vec![field_new!(Fr, "14"), field_new!(Fr, "32"), field_new!(Fr, "50")];
+        let expected = vec![
+            field_new!(Fr, "14"),
+            field_new!(Fr, "32"),
+            field_new!(Fr, "50"),
+        ];
         let actual = mat.mul_vector(&v);
 
         assert_eq!(expected, actual);
-
     }
 
     #[test]
-    fn transpose(){
+    fn transpose() {
         let mat = Matrix::<NativeMatrixSpec<_>>::new(vec![
-            vec![field_new!(Fr, "1"), field_new!(Fr, "2"), field_new!(Fr, "3")],
-            vec![field_new!(Fr, "4"), field_new!(Fr, "5"), field_new!(Fr, "6")],
-            vec![field_new!(Fr, "7"), field_new!(Fr, "8"), field_new!(Fr, "9")],
+            vec![
+                field_new!(Fr, "1"),
+                field_new!(Fr, "2"),
+                field_new!(Fr, "3"),
+            ],
+            vec![
+                field_new!(Fr, "4"),
+                field_new!(Fr, "5"),
+                field_new!(Fr, "6"),
+            ],
+            vec![
+                field_new!(Fr, "7"),
+                field_new!(Fr, "8"),
+                field_new!(Fr, "9"),
+            ],
         ]);
         let expected = Matrix::<NativeMatrixSpec<_>>::new(vec![
-            vec![field_new!(Fr, "1"), field_new!(Fr, "4"), field_new!(Fr, "7")],
-            vec![field_new!(Fr, "2"), field_new!(Fr, "5"), field_new!(Fr, "8")],
-            vec![field_new!(Fr, "3"), field_new!(Fr, "6"), field_new!(Fr, "9")],
+            vec![
+                field_new!(Fr, "1"),
+                field_new!(Fr, "4"),
+                field_new!(Fr, "7"),
+            ],
+            vec![
+                field_new!(Fr, "2"),
+                field_new!(Fr, "5"),
+                field_new!(Fr, "8"),
+            ],
+            vec![
+                field_new!(Fr, "3"),
+                field_new!(Fr, "6"),
+                field_new!(Fr, "9"),
+            ],
         ]);
 
         let actual = mat.transpose();

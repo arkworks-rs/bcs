@@ -62,6 +62,8 @@ where
         );
 
         let codewords = transcript.bookkeeper.dump_all_prover_messages_in_order();
+        #[cfg(all(feature="std", debug_assertions))]
+        eprintln!("Oracles used for verify: {:#?}", codewords);
 
         let ldt_namespace = transcript.new_namespace(root_namespace, iop_trace!("LDT"));
 
@@ -70,12 +72,17 @@ where
         let num_rs_oracles = codewords
             .clone()
             .into_iter()
+            .filter(|round|!round.is_virtual) // skip virtual rounds
             .map(|x| {
                 transcript.expected_prover_messages_info[x.index]
                     .reed_solomon_code_degree_bound
                     .len()
             })
             .sum::<usize>();
+
+        #[cfg(all(feature="std", debug_assertions))]
+        eprintln!("Expected Constituent Oracles: {:#?}", transcript.expected_prover_messages_info);
+
         let num_virtual_oracles = transcript.registered_virtual_oracles.len(); // TODO: change to sum of number of oracle in each virtual round
 
         L::register_iop_structure(
