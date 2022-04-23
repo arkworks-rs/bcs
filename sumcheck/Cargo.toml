@@ -37,6 +37,7 @@ ark-bls12-377 = { version = "^0.3.0", default-features = false, features = ["cur
 default = ["std", "parallel"]
 std = ["ark-serialize/std", "ark-ff/std", "ark-poly/std", "ark-sponge/std", "ark-crypto-primitives/std",
     "ark-std/std", "ark-relations/std", "ark-r1cs-std/std", "ark-ldt/std", "ark-bcs/std"]
+print-oracles = ["std", "ark-bcs/print-oracles"]
 r1cs = ["ark-relations", "ark-r1cs-std", "ark-sponge/r1cs", "ark-crypto-primitives/r1cs", "ark-ldt/r1cs", "ark-bcs/r1cs"]
 parallel = ["std", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon"]
 

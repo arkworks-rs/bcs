@@ -273,7 +273,7 @@ pub(crate) mod tests {
         assert!(p_coeff.degree() > summation_domain.size() - 2);
     }
 
-    const POLY_DEG: usize = 100;
+    pub(crate) const POLY_DEG: usize = 100;
 
     pub(crate) struct MockProtocol;
 
@@ -316,9 +316,6 @@ pub(crate) mod tests {
         where
             MT::InnerDigest: Absorb,
         {
-            let poly_eval = transcript
-                .codeword_domain()
-                .evaluate(&prover_parameter.poly);
             let poly_handle = transcript
                 .add_prover_round_with_codeword_domain()
                 .send_univariate_polynomial(&prover_parameter.poly, POLY_DEG + 1)

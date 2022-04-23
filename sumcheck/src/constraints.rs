@@ -184,6 +184,7 @@ mod tests {
     };
     use ark_std::test_rng;
     use core::borrow::Borrow;
+    use crate::protocol::tests::POLY_DEG;
 
     #[derive(Clone, Debug)]
     pub struct MockVerifierParamVar {
@@ -223,7 +224,7 @@ mod tests {
             MTG::InnerDigest: AbsorbGadget<Fr>,
         {
             let poly_info = ProverRoundMessageInfo::new_using_codeword_domain(transcript)
-                .with_num_message_oracles(1)
+                .with_reed_solomon_codes_degree_bounds(vec![POLY_DEG + 1])
                 .build();
             let poly_handle = transcript.receive_prover_current_round(
                 namespace,
@@ -291,7 +292,7 @@ mod tests {
 
         let mt_hash_param_var = MTHashParametersVar::<Fr, FieldMTConfig, FieldMTConfig> {
             leaf_params: poseidon_param_var.clone(),
-            inner_params: poseidon_param_var.clone(),
+            inner_params: poseidon_param_var,
         };
 
         let prover_param = MockProverParam {
@@ -306,12 +307,12 @@ mod tests {
                 .unwrap();
 
         let proof = BCSProof::generate::<MockProtocol, MockProtocol, LinearCombinationLDT<Fr>, _>(
-            sponge.clone(),
+            sponge,
             &(),
             &(),
             &prover_param,
             &ldt_param,
-            mt_hash_param.clone(),
+            mt_hash_param,
         )
         .unwrap();
         let proof_var = BCSProofVar::new_witness(ns!(cs, "proof"), || Ok(proof)).unwrap();
@@ -328,5 +329,7 @@ mod tests {
             &mt_hash_param_var,
         )
         .unwrap();
+
+        assert!(cs.is_satisfied().unwrap());
     }
 }

@@ -62,8 +62,11 @@ where
         );
 
         let codewords = transcript.bookkeeper.dump_all_prover_messages_in_order();
-        #[cfg(all(feature="std", debug_assertions))]
+        #[cfg(feature = "print-oracles")]
         eprintln!("Oracles used for verify: {:#?}", codewords);
+
+        #[cfg(feature = "print-oracles")]
+        eprintln!("Expected Constituent Oracles: {:#?}", transcript.expected_prover_messages_info);
 
         let ldt_namespace = transcript.new_namespace(root_namespace, iop_trace!("LDT"));
 
@@ -79,9 +82,6 @@ where
                     .len()
             })
             .sum::<usize>();
-
-        #[cfg(all(feature="std", debug_assertions))]
-        eprintln!("Expected Constituent Oracles: {:#?}", transcript.expected_prover_messages_info);
 
         let num_virtual_oracles = transcript.registered_virtual_oracles.len(); // TODO: change to sum of number of oracle in each virtual round
 

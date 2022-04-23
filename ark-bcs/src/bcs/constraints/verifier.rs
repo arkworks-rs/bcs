@@ -61,9 +61,9 @@ where
             sponge,
             L::codeword_domain(ldt_params),
             L::localization_param(ldt_params),
-            iop_trace!("BCS root"),
+            iop_trace!("IOP Root: BCS Proof verify"),
         );
-        let root_namespace = NameSpace::root(iop_trace!("IOP Root: BCS Proof Verify"));
+        let root_namespace = NameSpace::root(iop_trace!("BCS Verify: commit phase"));
 
         V::register_iop_structure_var(
             NameSpace::root(iop_trace!("BCS Verify")),
@@ -76,18 +76,25 @@ where
         );
 
         let codewords = transcript.bookkeeper.dump_all_prover_messages_in_order();
+        #[cfg(feature="print-oracles")]
+        eprintln!("Oracles used for verify: {:#?}", codewords);
+
+        #[cfg(feature = "print-oracles")]
+        eprintln!("Expected Constituent Oracles: {:#?}", transcript.expected_prover_messages_info);
 
         let ldt_namespace = transcript.new_namespace(root_namespace, iop_trace!("LDT"));
 
         let num_rs_oracles = codewords
             .clone()
             .into_iter()
+            .filter(|round|!round.is_virtual)
             .map(|x| {
                 transcript.expected_prover_messages_info[x.index]
                     .reed_solomon_code_degree_bound
                     .len()
             })
             .sum::<usize>();
+
         let num_virtual_oracles = transcript.registered_virtual_oracles.len();
 
         // simulate LDT prove: reconstruct LDT verifier messages to restore verifier
