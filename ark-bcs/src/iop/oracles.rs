@@ -355,7 +355,7 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
                 self.codeword_domain,
                 OracleQuery::Coset {
                     idx: *this_coset_index,
-                    localization_parameter: self.localization_param,
+                    localization_param: self.localization_param,
                 },
             );
             constituent_oracles_at_one_coset.extend_from_slice(&local_oracles_at_this_coset);
@@ -364,11 +364,9 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
         let query_result = constituent_oracles
             .into_iter()
             .zip(coset_index)
-            // TODO: inside `evaluate` use self.codeword_domain.query_position_to_coset(i, self.localization_param)
-            // TODO: idx `local_constituent_oracles` and `evaluate` in transcript and simulation transcript
             .map(|(cons, this_coset_index)| self.coset_evaluator.evaluate(self.codeword_domain, OracleQuery::Coset {
                 idx: *this_coset_index,
-                localization_parameter: self.localization_param,
+                localization_param: self.localization_param,
             },&cons))
             .collect::<Vec<Vec<_>>>();
 
@@ -398,7 +396,7 @@ pub enum OracleQuery {
         /// Index of the coset
         idx: usize,
         /// Localization parameter of the coset, which is log2(size of the coset)
-        localization_parameter: usize,
+        localization_param: usize,
     },
 }
 
@@ -409,7 +407,7 @@ impl OracleQuery {
             OracleQuery::Full => codeword_domain,
             OracleQuery::Coset {
                 idx,
-                localization_parameter,
+                localization_param: localization_parameter,
             } => codeword_domain.query_position_to_coset(idx, localization_parameter).1,
         }
     }
@@ -422,7 +420,9 @@ pub trait VirtualOracle<F: PrimeField>: 'static {
     /// oracles needed in that round
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
     /// local oracles that can be constructed by verifier locally. This function
-    /// return the evaluation of local oracles on the query domain,
+    /// return the evaluation of local oracles on the query domain.
+    /// The return value is a vector of vectors, where each vector is the evaluation
+    /// of one local oracle on the query domain.
     fn local_constituent_oracles(
         &self,
         codeword_domain: Radix2CosetDomain<F>,

@@ -3,9 +3,9 @@
 extern crate alloc;
 extern crate core;
 
-pub mod matrix;
 #[cfg(feature = "r1cs")]
 pub mod constraints;
+pub mod matrix;
 
 use crate::matrix::{Matrix, NativeMatrixSpec};
 use ark_bcs::{
@@ -16,10 +16,11 @@ use ark_bcs::{
 };
 use ark_ff::PrimeField;
 
+use ark_bcs::iop::oracles::OracleQuery;
 use ark_ldt::domain::Radix2CosetDomain;
+use ark_poly::univariate::DensePolynomial;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize::Full};
 use ark_std::{vec, vec::Vec};
-use ark_bcs::iop::oracles::OracleQuery;
 use ark_uni_sumcheck::UnivariateSumcheck;
 
 /// Lincheck Protocol
@@ -36,15 +37,50 @@ pub struct Lincheck<F: PrimeField + Absorb> {
 
 /// virtual oracle for lincheck
 pub struct LincheckVO<F: PrimeField> {
-    pub constraint_domain: Radix2CosetDomain<F>,
-    pub variable_domain: Radix2CosetDomain<F>,
-    pub codeword_domain: Radix2CosetDomain<F>,
-    /// r on constraint domain
-    pub rx: Vec<F>,
-    /// M^T r on variable domain
-    pub mtrx: Vec<F>,
-    pub fmz_handle: (MsgRoundRef, OracleIndex),
-    pub fz_handle: (MsgRoundRef, OracleIndex),
+    fmz_handle: (MsgRoundRef, OracleIndex),
+    fz_handle: (MsgRoundRef, OracleIndex),
+    /// mtrx, interpolated using summation domain (the constraint domain)
+    mtrx_coeff: DensePolynomial<F>,
+    /// rx, interpolated using constraint domain
+    rx_coeff: DensePolynomial<F>,
+}
+
+impl<F: PrimeField> LincheckVO<F> {
+    pub fn new(
+        constraint_domain: Radix2CosetDomain<F>,
+        variable_domain: Radix2CosetDomain<F>,
+        rx: &[F],
+        mtrx: &[F],
+        fmz_handle: (MsgRoundRef, OracleIndex),
+        fz_handle: (MsgRoundRef, OracleIndex),
+    ) -> Self {
+        // in this context we assume variable domain is a subset of constraint domain
+        // check if this is true
+        // h1 is constraint domain, h2 is variable domain
+        assert!(constraint_domain.size() >= variable_domain.size());
+        let (h2_positions_in_h1, expected_variable_domain) =
+            constraint_domain.query_position_to_coset(0, variable_domain.dim());
+        assert_eq!(expected_variable_domain, variable_domain);
+        // summation domain = H_1 U H_2 = H_1 because H_2 is a subset of H_1
+        let summation_domain = constraint_domain;
+        // for mtrx, we need to make sure the local oracle evaluates to zero at H1 - H2
+        assert_eq!(h2_positions_in_h1.len(), mtrx.len());
+        let mut mtrx_on_h1 = (0..summation_domain.size())
+            .map(|_| F::zero())
+            .collect::<Vec<_>>();
+        for (i, x) in h2_positions_in_h1.iter().zip(mtrx.iter()) {
+            mtrx_on_h1[*i] = *x;
+        }
+        let mtrx_coeff = summation_domain.interpolate(mtrx_on_h1);
+        let rx_coeff = constraint_domain.interpolate(rx.to_vec());
+
+        Self {
+            fmz_handle,
+            fz_handle,
+            mtrx_coeff,
+            rx_coeff,
+        }
+    }
 }
 
 impl<F: PrimeField> VirtualOracle<F> for LincheckVO<F> {
@@ -55,38 +91,15 @@ impl<F: PrimeField> VirtualOracle<F> for LincheckVO<F> {
         ]
     }
 
-    // TODO: local_constituent_oracles should have a coset parameter so that R1CS constraints version are possible
     fn local_constituent_oracles(
         &self,
         codeword_domain: Radix2CosetDomain<F>,
         query: OracleQuery,
     ) -> Vec<Vec<F>> {
         let query_domain = query.domain(codeword_domain);
-        // TODO: precompute some of them if possible
-        // in this context we assume variable domain is a subset of constraint domain
-        // check if this is true
-        // h1 is constraint domain, h2 is variable domain
-        assert!(self.constraint_domain.size() >= self.variable_domain.size());
-        let (h2_positions_in_h1, expected_variable_domain) = self
-            .constraint_domain
-            .query_position_to_coset(0, self.variable_domain.dim());
-        assert_eq!(expected_variable_domain, self.variable_domain);
-
-        // summation domain = H_1 U H_2 = H_1 because H_2 is a subset of H_1
-        let summation_domain = self.constraint_domain;
-        let rx_cd = query_domain
-            .evaluate(&self.constraint_domain.interpolate(self.rx.clone()));
-        // for mtrx, we need to make sure the local oracle evaluates to zero at H1 - H2
-        assert_eq!(h2_positions_in_h1.len(), self.mtrx.len());
-        let mut mtrx_on_h1 = (0..summation_domain.size())
-            .map(|_| F::zero())
-            .collect::<Vec<_>>();
-        for (i, x) in h2_positions_in_h1.iter().zip(self.mtrx.iter()) {
-            mtrx_on_h1[*i] = *x;
-        }
-        let mtrx = query_domain
-            .evaluate(&summation_domain.interpolate(mtrx_on_h1));
-        vec![rx_cd, mtrx]
+        let rx_eval = query_domain.evaluate(&self.rx_coeff);
+        let mtrx_eval = query_domain.evaluate(&self.mtrx_coeff);
+        vec![rx_eval, mtrx_eval]
     }
 
     fn evaluate(
@@ -172,15 +185,14 @@ impl<F: PrimeField + Absorb> Lincheck<F> {
 
         let mtrx = mat.transpose().mul_vector(&rx); // mt_rx on variable domain
 
-        let vo = LincheckVO {
-            codeword_domain,
-            constraint_domain: self.constraint_domain,
-            variable_domain: self.variable_domain,
-            rx,
-            mtrx,
-            fmz_handle: f_mz_oracle,
-            fz_handle: f_z_oracle,
-        };
+        let vo = LincheckVO::new(
+            self.constraint_domain,
+            self.variable_domain,
+            &rx,
+            &mtrx,
+            f_mz_oracle,
+            f_z_oracle,
+        );
 
         let lincheck_vo = transcript.register_prover_virtual_round(
             ns,
@@ -190,13 +202,11 @@ impl<F: PrimeField + Absorb> Lincheck<F> {
             iop_trace!("Lincheck virtual_oracle"),
         );
 
-
         let lincheck_vo_cd = transcript
             .get_previous_sent_prover_rs_codes(lincheck_vo)
             .pop()
             .unwrap();
         let lincheck_vo_coeff = codeword_domain.interpolate(lincheck_vo_cd);
-
 
         // sanity check: lincheck_vo evaluated at constraint domain sum to 0
         if cfg!(debug_assertions) {
@@ -239,7 +249,6 @@ impl<F: PrimeField + Absorb> Lincheck<F> {
         // checked in virtual oracle)
         assert!(self.variable_domain.size() < self.constraint_domain.size());
 
-        let codeword_domain = transcript.codeword_domain();
 
         // sample alpha
         let alpha = transcript
@@ -255,15 +264,14 @@ impl<F: PrimeField + Absorb> Lincheck<F> {
 
         let mt_rx = mat.transpose().mul_vector(&r); // mt_rx on variable domain
 
-        let vo = LincheckVO {
-            codeword_domain,
-            constraint_domain: self.constraint_domain,
-            variable_domain: self.variable_domain,
-            rx: r,
-            mtrx: mt_rx,
-            fmz_handle: f_mz,
-            fz_handle: f_z,
-        };
+        let vo = LincheckVO::new(
+            self.constraint_domain,
+            self.variable_domain,
+            &r,
+            &mt_rx,
+            f_mz,
+            f_z,
+        );
 
         let lincheck_vo = transcript.register_prover_virtual_round(
             ns,
@@ -317,12 +325,14 @@ mod tests {
 
     use ark_bcs::{
         bcs::{prover::BCSProof, transcript::LDTInfo, verifier::BCSVerifier, MTHashParameters},
-        iop::{bookkeeper::NameSpace, prover::IOPProver, verifier::IOPVerifier, ProverParam},
+        iop::{
+            bookkeeper::NameSpace, oracles::OracleQuery, prover::IOPProver, verifier::IOPVerifier,
+            ProverParam,
+        },
         iop_trace,
         ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
         Error,
     };
-    use ark_bcs::iop::oracles::OracleQuery;
 
     #[test]
     fn test_vo() {
@@ -377,15 +387,14 @@ mod tests {
 
         assert_eq!(sum1, sum2);
 
-        let vo = LincheckVO {
-            codeword_domain,
+        let vo = LincheckVO::new(
             constraint_domain,
             variable_domain,
-            rx,
-            mtrx,
-            fmz_handle: (MsgRoundRef::default(), (0, false).into()),
-            fz_handle: (MsgRoundRef::default(), (0, false).into()),
-        };
+            &rx,
+            &mtrx,
+            (MsgRoundRef::default(), (0, false).into()),
+            (MsgRoundRef::default(), (0, false).into()),
+        );
 
         let local_oracles = vo.local_constituent_oracles(codeword_domain, OracleQuery::Full);
 
@@ -663,7 +672,6 @@ mod tests {
             mt_hash_param,
         )
         .unwrap();
-
     }
 
     pub(crate) fn poseidon_parameters() -> PoseidonParameters<Fr> {
