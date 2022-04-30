@@ -17,6 +17,7 @@ use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::{marker::PhantomData, test_rng, vec, vec::Vec};
 use tracing::Level;
+use crate::iop::oracles::OracleQuery;
 
 pub(crate) struct MockTestProver<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
@@ -45,13 +46,15 @@ impl<F: PrimeField> VirtualOracle<F> for BCSTestVirtualOracle<F> {
 
     fn evaluate(
         &self,
-        coset_domain: Radix2CosetDomain<F>,
+        codeword_domain: Radix2CosetDomain<F>,
+        query: OracleQuery,
         constituent_oracles: &[Vec<F>],
     ) -> Vec<F> {
         // calculate f(x) * (x^2 + 2x + 1)
+        let query_domain = query.domain(codeword_domain);
         let msg2_points = &constituent_oracles[0];
         let poly = DensePolynomial::from_coefficients_vec(vec![F::one(), F::from(2u64), F::one()]);
-        let eval = coset_domain.evaluate(&poly);
+        let eval = query_domain.evaluate(&poly);
         assert_eq!(msg2_points.len(), eval.len());
         msg2_points.iter().zip(eval).map(|(&x, y)| x * y).collect()
     }

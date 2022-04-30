@@ -14,6 +14,7 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge};
+use ark_bcs::iop::oracles::OracleQuery;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SumcheckPOracle<F: PrimeField> {
@@ -55,9 +56,11 @@ impl<F: PrimeField> VirtualOracle<F> for SumcheckPOracle<F> {
 
     fn evaluate(
         &self,
-        coset_domain: Radix2CosetDomain<F>,
+        codeword_domain: Radix2CosetDomain<F>,
+        query: OracleQuery,
         constituent_oracles: &[Vec<F>],
     ) -> Vec<F> {
+        let coset_domain = query.domain(codeword_domain);
         let h_eval = &constituent_oracles[0];
         let f_eval = &constituent_oracles[1];
         let mut cur_x_inv = coset_domain.offset.inverse().unwrap();
@@ -241,11 +244,6 @@ pub(crate) mod tests {
         let (h, _, actual_sum) = sumcheck.calculate_h_g_and_actual_sum(&f);
 
         let codeword_domain = Radix2CosetDomain::new_radix2_coset(128, Fr::from(256u64));
-        // let expected_g_eval_over_h = codeword_domain
-        //     .evaluate(&g)
-        //     .iter()
-        //     .map(|x| *x * Fr::from(summation_domain.size() as
-        // u64).inverse().unwrap()).collect::<Vec<_>>();
 
         let dummy_handle = (MsgRoundRef::default(), OracleIndex::default());
 
@@ -255,7 +253,7 @@ pub(crate) mod tests {
 
         let g_oracle =
             SumcheckPOracle::new(summation_domain, actual_sum, dummy_handle, dummy_handle);
-        let p = g_oracle.evaluate(codeword_domain, &cons);
+        let p = g_oracle.evaluate(codeword_domain, OracleQuery::Full,&cons);
 
         let p_coeff = codeword_domain.interpolate(p);
         assert_eq!(p_coeff.degree(), summation_domain.size() - 2);
@@ -267,7 +265,7 @@ pub(crate) mod tests {
             dummy_handle,
             dummy_handle,
         );
-        let p = wrong_g_oracle.evaluate(codeword_domain, &cons);
+        let p = wrong_g_oracle.evaluate(codeword_domain,OracleQuery::Full, &cons);
 
         let p_coeff = codeword_domain.interpolate(p);
         assert!(p_coeff.degree() > summation_domain.size() - 2);
@@ -396,11 +394,6 @@ pub(crate) mod tests {
 
     #[test]
     fn test_sumcheck_end_to_end() {
-        // seems that LDT fails to verify multiple low-degree oracles. There may
-        // be some problem in random linear coefficients etc.
-        // update 4/16: LDT prove think there are 2 oracles, but LDT verify think there
-        // are 3 oracles, causing mismatch in linear coefficients update 4/16:
-        // bug fixed. TODO: fix same thing in constraints.
 
         let mut rng = test_rng();
         let sponge = PoseidonSponge::new(&poseidon_parameters());

@@ -7,7 +7,6 @@ use core::fmt::Debug;
 use derivative::Derivative;
 /// Specification for matrix.
 pub trait MatrixSpec {
-    // TODO: can matrix itself be variable?
     type MatrixField: Clone + Debug + 'static;
     type Field: Clone + Debug + 'static;
 

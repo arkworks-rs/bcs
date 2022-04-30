@@ -4,6 +4,8 @@ extern crate alloc;
 extern crate core;
 
 pub mod matrix;
+#[cfg(feature = "r1cs")]
+pub mod constraints;
 
 use crate::matrix::{Matrix, NativeMatrixSpec};
 use ark_bcs::{
@@ -17,6 +19,7 @@ use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize::Full};
 use ark_std::{vec, vec::Vec};
+use ark_bcs::iop::oracles::OracleQuery;
 use ark_uni_sumcheck::UnivariateSumcheck;
 
 /// Lincheck Protocol
@@ -52,7 +55,14 @@ impl<F: PrimeField> VirtualOracle<F> for LincheckVO<F> {
         ]
     }
 
-    fn local_constituent_oracles(&self) -> Vec<Vec<F>> {
+    // TODO: local_constituent_oracles should have a coset parameter so that R1CS constraints version are possible
+    fn local_constituent_oracles(
+        &self,
+        codeword_domain: Radix2CosetDomain<F>,
+        query: OracleQuery,
+    ) -> Vec<Vec<F>> {
+        let query_domain = query.domain(codeword_domain);
+        // TODO: precompute some of them if possible
         // in this context we assume variable domain is a subset of constraint domain
         // check if this is true
         // h1 is constraint domain, h2 is variable domain
@@ -64,8 +74,7 @@ impl<F: PrimeField> VirtualOracle<F> for LincheckVO<F> {
 
         // summation domain = H_1 U H_2 = H_1 because H_2 is a subset of H_1
         let summation_domain = self.constraint_domain;
-        let rx_cd = self
-            .codeword_domain
+        let rx_cd = query_domain
             .evaluate(&self.constraint_domain.interpolate(self.rx.clone()));
         // for mtrx, we need to make sure the local oracle evaluates to zero at H1 - H2
         assert_eq!(h2_positions_in_h1.len(), self.mtrx.len());
@@ -75,17 +84,18 @@ impl<F: PrimeField> VirtualOracle<F> for LincheckVO<F> {
         for (i, x) in h2_positions_in_h1.iter().zip(self.mtrx.iter()) {
             mtrx_on_h1[*i] = *x;
         }
-        let mtrx = self
-            .codeword_domain
+        let mtrx = query_domain
             .evaluate(&summation_domain.interpolate(mtrx_on_h1));
         vec![rx_cd, mtrx]
     }
 
     fn evaluate(
         &self,
-        _coset_domain: Radix2CosetDomain<F>,
+        codeword_domain: Radix2CosetDomain<F>,
+        query: OracleQuery,
         constituent_oracles: &[Vec<F>],
     ) -> Vec<F> {
+        let _ = (codeword_domain, query); // `evaluate` only have some point-wise manipulations of `constituent_oracles`
         let f_mz = &constituent_oracles[0];
         let f_z = &constituent_oracles[1];
         let r = &constituent_oracles[2];
@@ -312,6 +322,7 @@ mod tests {
         ldt::rl_ldt::{LinearCombinationLDT, LinearCombinationLDTParameters},
         Error,
     };
+    use ark_bcs::iop::oracles::OracleQuery;
 
     #[test]
     fn test_vo() {
@@ -376,10 +387,11 @@ mod tests {
             fz_handle: (MsgRoundRef::default(), (0, false).into()),
         };
 
-        let local_oracles = vo.local_constituent_oracles();
+        let local_oracles = vo.local_constituent_oracles(codeword_domain, OracleQuery::Full);
 
         let eval_of_vo_on_codeword_domain = vo.evaluate(
             codeword_domain,
+            OracleQuery::Full,
             &[
                 f_mz.clone(),
                 f_z.clone(),

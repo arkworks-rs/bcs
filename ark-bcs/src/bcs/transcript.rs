@@ -25,6 +25,7 @@ use ark_crypto_primitives::MerkleTree;
 use ark_ldt::domain::Radix2CosetDomain;
 use ark_poly::{univariate::DensePolynomial, Polynomial};
 use ark_std::mem::take;
+use crate::iop::oracles::OracleQuery;
 
 #[allow(variant_size_differences)]
 /// Pending message for current transcript. We allow `variant_size_differences`
@@ -168,7 +169,7 @@ where
         // evaluate the virtual oracle on codeword domain
         // first, get all the oracles needed
         let oracle_handles = vo.constituent_oracle_handles();
-        let local_oracles = vo.local_constituent_oracles();
+        let local_oracles = vo.local_constituent_oracles(codeword_domain, OracleQuery::Full);
         let constituent_query_oracles = oracle_handles.into_iter().flat_map(|(round, idxes)| {
             debug_assert!(
                 idxes.iter().collect::<BTreeSet<_>>().len() == idxes.len(),
@@ -187,7 +188,7 @@ where
         debug_assert!(constituent_oracles
             .iter()
             .all(|o| o.len() == self.codeword_domain().size()));
-        let vo_evaluations = vo.evaluate(self.codeword_domain(), &constituent_oracles);
+        let vo_evaluations = vo.evaluate(self.codeword_domain(), OracleQuery::Full, &constituent_oracles);
 
         let virtual_oracle = VirtualOracleWithInfo::new(
             Box::new(vo),

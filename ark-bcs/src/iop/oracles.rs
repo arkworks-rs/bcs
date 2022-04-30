@@ -346,37 +346,30 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
             });
         // shape: (num_cosets, num_oracles_needed_for_all_rounds, num_elements_in_coset)
 
-        // convert coset index to cosets
-        let (query_positions, queried_cosets) = coset_index
-            .iter()
-            .map(|&i| {
-                self.codeword_domain
-                    .query_position_to_coset(i, self.localization_param)
-            })
-            .unzip::<_, _, Vec<_>, Vec<_>>();
-
         // append local oracle evaluations to each coset query result
-        assert_eq!(constituent_oracles.len(), query_positions.len());
-        let local_oracles = self.coset_evaluator.local_constituent_oracles();
-        for (constituent_oracles_at_one_coset, query_positions_for_one_coset) in
-            constituent_oracles.iter_mut().zip(query_positions)
+
+        for (constituent_oracles_at_one_coset, this_coset_index) in
+            constituent_oracles.iter_mut().zip(coset_index)
         {
-            let local_oracles_at_this_coset = local_oracles
-                .iter()
-                .map(|v| {
-                    query_positions_for_one_coset
-                        .iter()
-                        .map(|&i| v[i])
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
+            let local_oracles_at_this_coset = self.coset_evaluator.local_constituent_oracles(
+                self.codeword_domain,
+                OracleQuery::Coset {
+                    idx: *this_coset_index,
+                    localization_parameter: self.localization_param,
+                },
+            );
             constituent_oracles_at_one_coset.extend_from_slice(&local_oracles_at_this_coset);
         }
 
         let query_result = constituent_oracles
             .into_iter()
-            .zip(queried_cosets)
-            .map(|(cons, coset)| self.coset_evaluator.evaluate(coset, &cons))
+            .zip(coset_index)
+            // TODO: inside `evaluate` use self.codeword_domain.query_position_to_coset(i, self.localization_param)
+            // TODO: idx `local_constituent_oracles` and `evaluate` in transcript and simulation transcript
+            .map(|(cons, this_coset_index)| self.coset_evaluator.evaluate(self.codeword_domain, OracleQuery::Coset {
+                idx: *this_coset_index,
+                localization_parameter: self.localization_param,
+            },&cons))
             .collect::<Vec<Vec<_>>>();
 
         CosetQueryResult::from_single_oracle_result(query_result)
@@ -394,6 +387,34 @@ impl<F: PrimeField> VirtualOracleWithInfo<F> {
     }
 }
 
+/// Domain Used for query virtual oracle.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum OracleQuery {
+    /// The query domain is the codeword domain.
+    Full,
+    /// The query domain is a multiplicative coset of the codeword domain, with
+    /// the given coset index and localization parameter.
+    Coset {
+        /// Index of the coset
+        idx: usize,
+        /// Localization parameter of the coset, which is log2(size of the coset)
+        localization_parameter: usize,
+    },
+}
+
+impl OracleQuery {
+    /// Get the query domain.
+    pub fn domain<F: PrimeField>(self, codeword_domain: Radix2CosetDomain<F>) -> Radix2CosetDomain<F> {
+        match self {
+            OracleQuery::Full => codeword_domain,
+            OracleQuery::Coset {
+                idx,
+                localization_parameter,
+            } => codeword_domain.query_position_to_coset(idx, localization_parameter).1,
+        }
+    }
+}
+
 /// evaluator for virtual oracle
 /// It is enforced that implementors do not contain any reference with lifetime.
 pub trait VirtualOracle<F: PrimeField>: 'static {
@@ -401,8 +422,13 @@ pub trait VirtualOracle<F: PrimeField>: 'static {
     /// oracles needed in that round
     fn constituent_oracle_handles(&self) -> Vec<(MsgRoundRef, Vec<OracleIndex>)>;
     /// local oracles that can be constructed by verifier locally. This function
-    /// return the evaluation of local oracles on codeword domain.
-    fn local_constituent_oracles(&self) -> Vec<Vec<F>> {
+    /// return the evaluation of local oracles on the query domain,
+    fn local_constituent_oracles(
+        &self,
+        codeword_domain: Radix2CosetDomain<F>,
+        query: OracleQuery,
+    ) -> Vec<Vec<F>> {
+        let _ = (codeword_domain, query);
         vec![]
     }
     /// evaluate this virtual oracle, using evaluations of constituent oracles
@@ -410,7 +436,8 @@ pub trait VirtualOracle<F: PrimeField>: 'static {
     /// first, and then local oracles.
     fn evaluate(
         &self,
-        coset_domain: Radix2CosetDomain<F>,
+        codeword_domain: Radix2CosetDomain<F>,
+        query: OracleQuery,
         constituent_oracles: &[Vec<F>],
     ) -> Vec<F>;
 }
