@@ -142,7 +142,6 @@ mod tests {
         test_util::poseidon_parameters,
         UnivariateSumcheck,
     };
-    use alloc::vec;
     use ark_bcs::{
         bcs::{
             constraints::{
@@ -168,7 +167,7 @@ mod tests {
         merkle_tree::{constraints::ConfigGadget, Config, IdentityDigestConverter},
     };
     use ark_ldt::domain::Radix2CosetDomain;
-    use ark_poly::{univariate::DensePolynomial, UVPolynomial};
+    use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
     use ark_r1cs_std::{
         alloc::{AllocVar, AllocationMode},
         fields::fp::FpVar,
@@ -183,6 +182,7 @@ mod tests {
         Absorb, CryptographicSponge,
     };
     use ark_std::test_rng;
+    use ark_std::vec;
     use core::borrow::Borrow;
 
     #[derive(Clone, Debug)]

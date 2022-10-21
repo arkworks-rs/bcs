@@ -11,7 +11,7 @@ use crate::{
     iop::message::{CosetQueryResult, LeavesType, OracleIndex},
     prelude::MsgRoundRef,
 };
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{boxed::Box, vec, vec::Vec};
 
 /// A trait for all oracle messages (including RS-code oracles, Non RS-code

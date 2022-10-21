@@ -12,7 +12,7 @@ use ark_bcs::{
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_poly::{univariate::DensePolynomial, UVPolynomial};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge};
 
 #[derive(Debug, Clone, Copy)]
