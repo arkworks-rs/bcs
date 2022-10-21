@@ -181,8 +181,7 @@ mod tests {
         poseidon::{constraints::PoseidonSpongeVar, PoseidonSponge},
         Absorb, CryptographicSponge,
     };
-    use ark_std::test_rng;
-    use ark_std::vec;
+    use ark_std::{test_rng, vec};
     use core::borrow::Borrow;
 
     #[derive(Clone, Debug)]
