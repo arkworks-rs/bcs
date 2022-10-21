@@ -15,7 +15,7 @@ use ark_ldt::{
     domain::Radix2CosetDomain,
     fri::{prover::FRIProver, verifier::FRIVerifier, FRIParameters},
 };
-use ark_poly::{univariate::DensePolynomial, Polynomial, UVPolynomial};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::{marker::PhantomData, vec::Vec};
 use tracing::Level;
@@ -284,7 +284,6 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
         );
     }
 
-    #[allow(clippy::needless_collect)]
     // otherwise we have lifetime issue
     fn query_and_decide<S: CryptographicSponge, O: RoundOracle<F>>(
         namespace: NameSpace,
@@ -497,8 +496,8 @@ mod tests {
     use ark_bls12_381::Fr;
     use ark_ldt::{domain::Radix2CosetDomain, fri::FRIParameters};
     use ark_poly::{
-        domain::Radix2EvaluationDomain, polynomial::univariate::DensePolynomial, EvaluationDomain,
-        UVPolynomial,
+        domain::Radix2EvaluationDomain, polynomial::univariate::DensePolynomial, DenseUVPolynomial,
+        EvaluationDomain,
     };
     use ark_sponge::{poseidon::PoseidonSponge, CryptographicSponge};
     use ark_std::{test_rng, vec, vec::Vec, One, Zero};

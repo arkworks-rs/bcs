@@ -13,7 +13,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::Config as MTConfig;
 use ark_ff::{PrimeField, ToConstraintField};
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_poly::{univariate::DensePolynomial, UVPolynomial};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_sponge::{Absorb, CryptographicSponge, FieldElementSize};
 use ark_std::{marker::PhantomData, test_rng, vec, vec::Vec};
 use tracing::Level;

@@ -275,7 +275,7 @@ mod tests {
     use crate::ldt::constraints::rl_ldt::degree_raise_poly_query;
     use ark_bls12_381::Fr;
     use ark_ldt::domain::Radix2CosetDomain;
-    use ark_poly::{polynomial::univariate::DensePolynomial, UVPolynomial};
+    use ark_poly::{polynomial::univariate::DensePolynomial, DenseUVPolynomial};
     use ark_r1cs_std::{alloc::AllocVar, boolean::Boolean, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{vec, vec::Vec, One, Zero};

@@ -1,25 +1,22 @@
-use ark_ff::{FpParameters, PrimeField};
-use ark_sponge::poseidon::{find_poseidon_ark_and_mds, PoseidonParameters};
-#[allow(unused)]
-use ark_std::{str::FromStr, vec, One, Zero};
+use ark_bls12_381::Fr;
+use ark_ff::PrimeField;
+use ark_sponge::poseidon::{find_poseidon_ark_and_mds, PoseidonConfig};
 
-type F = ark_bls12_381::Fr;
-
-pub(crate) fn poseidon_parameters() -> PoseidonParameters<ark_bls12_381::Fr> {
+pub(crate) fn poseidon_parameters() -> PoseidonConfig<Fr> {
     let full_rounds = 8;
     let partial_rounds = 31;
     let alpha = 5;
     let rate = 2;
 
-    let (ark, mds) = find_poseidon_ark_and_mds::<F>(
-        <F as PrimeField>::Params::MODULUS_BITS as u64,
+    let (ark, mds) = find_poseidon_ark_and_mds::<Fr>(
+        Fr::MODULUS_BIT_SIZE as u64,
         rate,
         full_rounds,
         partial_rounds,
         0,
     );
 
-    PoseidonParameters::new(
+    PoseidonConfig::new(
         full_rounds as usize,
         partial_rounds as usize,
         alpha,

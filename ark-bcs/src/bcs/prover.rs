@@ -10,7 +10,7 @@ use crate::{
 use ark_crypto_primitives::{merkle_tree::Config as MTConfig, Path};
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_sponge::{Absorb, CryptographicSponge};
 use ark_std::vec::Vec;
 

@@ -1,6 +1,6 @@
 use ark_ff::PrimeField;
 use ark_ldt::domain::Radix2CosetDomain;
-use ark_poly::{univariate::DensePolynomial, Polynomial, UVPolynomial};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
 use ark_std::{ops::Mul, vec, vec::Vec, Zero};
 
 /// Vanishing polynomial for a multiplicative coset H where |H| is a power of 2.
