@@ -82,14 +82,14 @@ impl From<(usize, bool)> for OracleIndex {
 /// This struct is used by verifier to access prover message oracles and
 /// verifier messages.
 pub struct MessagesCollection<F: PrimeField, O: RoundOracle<F>> {
-    pub(crate) real_oracles: Vec<O>,
-    pub(crate) virtual_oracles: Vec<Option<VirtualOracleWithInfo<F>>>,
-    pub(crate) verifier_messages: Vec<Vec<VerifierMessage<F>>>,
-    pub(crate) bookkeeper: MessageBookkeeper,
+    pub real_oracles: Vec<O>,
+    pub virtual_oracles: Vec<Option<VirtualOracleWithInfo<F>>>,
+    pub verifier_messages: Vec<Vec<VerifierMessage<F>>>,
+    pub bookkeeper: MessageBookkeeper,
 }
 
 impl<F: PrimeField, O: RoundOracle<F>> MessagesCollection<F, O> {
-    pub(crate) fn new(
+    pub fn new(
         real_oracles: Vec<O>,
         virtual_oracles: Vec<Option<VirtualOracleWithInfo<F>>>,
         verifier_messages: Vec<Vec<VerifierMessage<F>>>,

@@ -56,7 +56,7 @@ where
     pub prover_message_oracles: Vec<RecordingRoundOracle<F>>,
     /// Virtual oracle registered during commit phase simulation. Each virtual
     /// oracle will only have one round.
-    pub(crate) registered_virtual_oracles: Vec<(VirtualOracleWithInfo<F>, Vec<F>)>,
+    pub registered_virtual_oracles: Vec<(VirtualOracleWithInfo<F>, Vec<F>)>,
     /// Each element `merkle_tree_for_each_round[i]` corresponds to the merkle
     /// tree for `prover_message_oracles[i]`. If no oracle messages in this
     /// round, merkle tree will be `None`.
@@ -69,8 +69,8 @@ where
     /// Random Oracle to sample verifier messages.
     pub sponge: S,
     pending_message_for_current_round: PendingMessage<F>,
-    pub(crate) ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
-    pub(crate) ldt_localization_parameter: Option<usize>,
+    pub ldt_codeword_domain: Option<Radix2CosetDomain<F>>,
+    pub ldt_localization_parameter: Option<usize>,
 }
 
 impl<P, S, F> Transcript<P, S, F>
