@@ -65,7 +65,7 @@ where
     /// verifier can send multiple messages.
     pub verifier_messages: Vec<Vec<VerifierMessage<F>>>,
     /// bookkeepers for messages in different subprotocols
-    pub(crate) bookkeeper: MessageBookkeeper,
+    pub bookkeeper: MessageBookkeeper,
     /// Random Oracle to sample verifier messages.
     pub sponge: S,
     pending_message_for_current_round: PendingMessage<F>,

@@ -82,7 +82,7 @@ impl<F: PrimeField> VirtualOracle<F> for SumcheckPOracle<F> {
 
 impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
     /// Given a polynomial `f` to sum at domain `H`, return the actual sum, and
-    /// polynomial `h` and `g` such that `p = h * Z_H + g * x + sum / |H|` where
+    /// polynomial `h` and `g` such that `f = h * Z_H + g * x + sum / |H|` where
     /// `Z_H` is the vanishing polynomial of `H`.
     ///
     /// # Returns
@@ -106,7 +106,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
     }
 
     /// Given a polynomial `f` to sum at domain `H`, return the actual sum, and
-    /// polynomial `h` and `g` such that `p = h * Z_H + g * x + sum / |H|` where
+    /// polynomial `h` and `g` such that `f = h * Z_H + g * x + sum / |H|` where
     /// `Z_H` is the vanishing polynomial of `H`.
     ///
     /// # Returns
@@ -119,7 +119,7 @@ impl<F: PrimeField + Absorb> UnivariateSumcheck<F> {
     /// Send sumcheck message via transcript
     ///
     /// * `f`: coefficient of polynomial `f` to sum at domain `H`
-    /// * `f_handlet`: where is `f` in transcript, represented as a round
+    /// * `f_handle`: where is `f` in transcript, represented as a round
     ///   reference and an oracle index in that round
     /// * `is_f_bounded`: whether `f` has degree bound
     /// # Panics

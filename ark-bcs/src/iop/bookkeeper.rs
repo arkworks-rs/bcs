@@ -56,7 +56,7 @@ pub struct MessageBookkeeper {
 }
 
 impl MessageBookkeeper {
-    pub(crate) fn new(trace: TraceInfo) -> Self {
+    pub fn new(trace: TraceInfo) -> Self {
         let mut result = Self {
             messages_store: BTreeMap::default(),
             ns_map: BTreeMap::default(),
@@ -71,7 +71,7 @@ impl MessageBookkeeper {
         result
     }
 
-    pub(crate) fn new_namespace(&mut self, trace: TraceInfo, parent_id: u64) -> NameSpace {
+    pub fn new_namespace(&mut self, trace: TraceInfo, parent_id: u64) -> NameSpace {
         let ns = NameSpace::new(self.next_namespace_index, trace, parent_id);
         // add new namespace details
         self.ns_details.insert(ns.id, ns);
@@ -93,7 +93,7 @@ impl MessageBookkeeper {
     }
 
     /// Return all prover message reference sent at this point, in order.
-    pub(crate) fn dump_all_prover_messages_in_order(&self) -> Vec<MsgRoundRef> {
+    pub fn dump_all_prover_messages_in_order(&self) -> Vec<MsgRoundRef> {
         self.messages_store
             .values()
             .flat_map(|v| v.prover_rounds.iter())
@@ -103,7 +103,7 @@ impl MessageBookkeeper {
 
     /// Get the id the subspace that got created at the `index`th call to the
     /// `new_subspace`
-    pub(crate) fn get_subspace_id(&self, namespace_id: u64, index: usize) -> u64 {
+    pub fn get_subspace_id(&self, namespace_id: u64, index: usize) -> u64 {
         *self
             .ns_map
             .get(&namespace_id)
@@ -114,7 +114,7 @@ impl MessageBookkeeper {
 
     /// Get the subspace that got created at the `index`th call to the
     /// `new_subspace`
-    pub(crate) fn get_subspace(&self, namespace: NameSpace, index: usize) -> NameSpace {
+    pub fn get_subspace(&self, namespace: NameSpace, index: usize) -> NameSpace {
         let subspace_id = self.get_subspace_id(namespace.id, index);
         *self
             .ns_details
@@ -122,7 +122,7 @@ impl MessageBookkeeper {
             .unwrap_or_else(|| panic!("Invalid Subspace ID: {}", subspace_id))
     }
 
-    pub(crate) fn attach_prover_round_to_namespace(
+    pub fn attach_prover_round_to_namespace(
         &mut self,
         namespace: NameSpace,
         round_index: usize,
@@ -138,7 +138,7 @@ impl MessageBookkeeper {
         oracle_ref
     }
 
-    pub(crate) fn attach_verifier_round_to_namespace(
+    pub fn attach_verifier_round_to_namespace(
         &mut self,
         namespace: NameSpace,
         round_index: usize,
@@ -154,7 +154,7 @@ impl MessageBookkeeper {
     }
 
     /// Return the message indices for current namespace.
-    pub(crate) fn get_message_indices(&self, namespace: NameSpace) -> &MessageIndices {
+    pub fn get_message_indices(&self, namespace: NameSpace) -> &MessageIndices {
         self.messages_store
             .get(&namespace.id)
             .expect("message indices not exist")

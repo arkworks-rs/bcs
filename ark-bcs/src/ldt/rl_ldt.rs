@@ -25,7 +25,7 @@ use tracing::Level;
 ///
 /// Each oracle message can have different degree bound, as long as its degree
 /// bound <= tested_degree in FRI parameter. To enforce individual bound, this protocol follows [SCRSVP19](https://eprint.iacr.org/2018/) section 8, such that we
-/// multiply each oracle by monimial x^{degree_to_raise} and take random linear
+/// multiply each oracle by monomial x^{degree_to_raise} and take random linear
 /// combination.
 pub struct LinearCombinationLDT<F: PrimeField + Absorb> {
     _field: PhantomData<F>,
@@ -98,7 +98,7 @@ impl<F: PrimeField + Absorb> LDT<F> for LinearCombinationLDT<F> {
                 .map(|_| FieldElementSize::Full)
                 .collect::<Vec<_>>(),
         );
-        transcript.submit_verifier_current_round(namespace, iop_trace!("ldt random coefficeints"));
+        transcript.submit_verifier_current_round(namespace, iop_trace!("ldt random coefficients"));
 
         let mut result_codewords = (0..param.domain.size())
             .map(|_| F::zero())
